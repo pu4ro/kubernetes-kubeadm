@@ -4,9 +4,12 @@
     src: kube-flannel.yml.j2
     dest: /etc/kubernetes/manifests/kube-flannel.yml
   become: yes
+  
+- name: Apply kube-flannel configuration
+  command: kubectl apply -f /etc/kubernetes/manifests/kube-flannel.yml
+  when: inventory_hostname == groups['masters'][0]
 
-
-  - name: Wait for all flannel pods to be ready
+- name: Wait for all flannel pods to be ready
   shell: >
     kubectl get pods -n kube-system -o custom-columns=:status.phase --no-headers | grep -v Running || true
   register: not_running_flannel_pods

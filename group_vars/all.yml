@@ -1,9 +1,16 @@
 ---
-kubernetes_version: '1.23.3'
+# kubeadm-init.yaml create
+kubernetes_version: '1.23.17'
+dns_domain: cluster.local
+service_subnet: 10.96.0.0/12
+pod_subnet: 10.244.0.0/16
 
+# helm command && OS package repo
 repo_url:
   centos: "http://192.168.0.21/repo"
   ubuntu: "http://your-web-server.com/ubuntu/"
+
+helm_repo_ip: "192.168.0.21"
 
 # Docker 관련 변수
 insecure_registries:

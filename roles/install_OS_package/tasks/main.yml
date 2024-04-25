@@ -13,4 +13,3 @@
     state: present
   loop: "{{ centos_packages }}"
   when: ansible_os_family == "RedHat"
-EOF

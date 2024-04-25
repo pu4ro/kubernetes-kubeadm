@@ -1,15 +1,32 @@
 ---
-- name: Add Helm repository for cert-manager
+- name: Check if cert-manager is already installed
+  community.kubernetes.helm_info:
+    name: cert-manager
+    namespace: cert-manager
+  register: cert_manager_info
+
+- name: Add Helm repository for cert-manager if not installed
   community.kubernetes.helm_repository:
     name: jetstack
-    repo_url: https://charts.jetstack.io
+    repo_url: http://{{ helm_repo_ip }}/cert-manager
     state: present
+  when: cert_manager_info.status is undefined or ('failed' in cert_manager_info.status)
 
-- name: Install cert-manager
+- name: Install cert-manager if not installed
   community.kubernetes.helm:
     name: cert-manager
     chart_ref: jetstack/cert-manager
     release_namespace: cert-manager
     create_namespace: true
-    version: "{{ cert_manager_version }}"
+    chart_version: "{{ cert_manager_version }}"
     values: "{{ cert_manager_values }}"
+  when: cert_manager_info.status is undefined or ('failed' in cert_manager_info.status)
+
+- name: Wait for all cert-manager pods to be ready
+  shell: >
+    kubectl get pods -n cert-manager -l -o custom-columns=:status.phase --no-headers | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 30
+  become: true

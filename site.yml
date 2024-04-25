@@ -1,18 +1,16 @@
 ---
 - hosts: all
   roles:
-    - common
-    - configure_repo
+#    - common
+#    - configure_repo
+#    - configure_sysctl
 #    - install_OS_package
 #    - install_docker
-#
-#- hosts: installs
+#    - install_kubernetes
+
+- hosts: installs
+  roles:
+#    - install_flannel
 #    - install_tools
-#
-#- hosts: masters
-#  roles:
-#    - master
-#
-#- hosts: workers
-#  roles:
-#    - worker
+#    - remove_master_taint
+    - install_cert_manager
