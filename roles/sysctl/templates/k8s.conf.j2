@@ -1,0 +1,4 @@
+# sysctl settings for Kubernetes networking
+net.bridge.bridge-nf-call-iptables  = {{ bridge_nf_call_iptables | default(1) }}
+net.bridge.bridge-nf-call-ip6tables = {{ bridge_nf_call_ip6tables | default(1) }}
+net.ipv4.ip_forward                 = {{ ip_forward | default(1) }}

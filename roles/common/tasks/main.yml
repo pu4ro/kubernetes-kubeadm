@@ -1,1 +1,38 @@
 ---
+- name: Ensure the modules-load.d directory exists
+  file:
+    path: /etc/modules-load.d
+    state: directory
+    mode: '0755'
+
+- name: Add required kernel modules to load at boot
+  copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      br_netfilter
+      ip_vs
+      ip_vs_rr
+      ip_vs_wrr
+      ip_vs_sh
+      overlay
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload systemd-modules-load
+
+- name: Load kernel modules
+  modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - br_netfilter
+    - ip_vs
+    - ip_vs_rr
+    - ip_vs_wrr
+    - ip_vs_sh
+    - overlay
+    systemd:
+      name: systemd-modules-load.service
+      state: restarted
+      enabled: yes
+

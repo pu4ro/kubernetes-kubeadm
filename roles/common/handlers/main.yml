@@ -1,1 +1,6 @@
 ---
+- name: reload systemd-modules-load
+  systemd:
+    name: systemd-modules-load.service
+    state: restarted
+    enabled: yes
