@@ -1,0 +1,55 @@
+---
+kubernetes_version: '1.23.3'
+
+repo_url:
+  centos: "http://192.168.0.21/repo"
+  ubuntu: "http://your-web-server.com/ubuntu/"
+
+# Docker 관련 변수
+insecure_registries:
+  - "harbor.makina.onboarding-1.com"
+  - "cr.makina.rocks"
+
+# Master Node remove taint
+remove_master_taint: true
+
+rook_ceph_values:
+  cephClusterSpec:
+    dataDirHostPath: /var/lib/rook
+    mon:
+      count: 3
+    storage:
+      useAllNodes: true
+      useAllDevices: true
+    dashboard:
+      enabled: true
+  operatorNamespace: rook-ceph
+
+helm_repo_url: "http://get.helm.sh/helm-v3.5.4-linux-amd64.tar.gz"
+k9s_repo_url: "http://github.com/derailed/k9s/releases/download/v0.24.10/k9s_Linux_x86_64.tar.gz"
+
+remove_master_taint: true
+
+# cert Manager 
+cert_manager_version: "v1.11.0"
+cert_manager_values:
+  installCRDs: true
+  prometheus:
+    enabled: false
+
+# harbor
+harbor_values:
+  expose:
+    tls:
+      enabled: false
+    type: clusterIP
+  externalURLs:
+    - "http://harbor.makina.onboarding-1.com"
+    - "http://harbor.makina.onboarding-2.com"
+  persistence:
+    enabled: true
+    persistentVolumeClaim:
+      registry:
+        size: "50Gi"
+  trivy:
+    enabled: false

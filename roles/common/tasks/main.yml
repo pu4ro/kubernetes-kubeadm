@@ -1,4 +1,35 @@
 ---
+- name: Disable firewalld (CentOS/RHEL)
+  service:
+    name: firewalld
+    state: stopped
+    enabled: no
+  when: ansible_os_family == "RedHat"
+
+- name: Disable SELinux (CentOS/RHEL)
+  selinux:
+    state: disabled
+  when: ansible_os_family == "RedHat"
+
+- name: Disable ufw (Ubuntu)
+  service:
+    name: ufw
+    state: stopped
+    enabled: no
+  when: ansible_os_family == "Debian"
+
+- name: Gather facts from all hosts
+  setup:
+
+- name: Configure /etc/hosts
+  template:
+    src: hosts.j2
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: '0644'
+
+
 - name: Ensure the modules-load.d directory exists
   file:
     path: /etc/modules-load.d
@@ -31,8 +62,3 @@
     - ip_vs_wrr
     - ip_vs_sh
     - overlay
-    systemd:
-      name: systemd-modules-load.service
-      state: restarted
-      enabled: yes
-

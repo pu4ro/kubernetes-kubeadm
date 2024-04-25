@@ -1,0 +1,20 @@
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "2000m",
+    "max-file": "1"
+  },
+  "storage-driver": "overlay2",
+  "storage-opts": [
+    "overlay2.override_kernel_check=true"
+  ],
+  "insecure-registries": {{ insecure_registries | to_json }},
+  "default-ulimits": {
+    "nofile": {
+      "Name": "nofile",
+      "Hard": 300000,
+      "Soft": 300000
+    }
+  }
+}

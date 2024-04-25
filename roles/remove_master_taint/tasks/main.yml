@@ -1,0 +1,12 @@
+- name: Check taint status on master nodes
+  shell: kubectl describe node {{ item }} | grep -q 'node-role.kubernetes.io/master:NoSchedule'
+  register: taint_status
+  loop: "{{ groups['masters'] }}"
+  ignore_errors: true
+  changed_when: false
+
+- name: Remove master taint if present
+  command: kubectl taint nodes {{ item }} node-role.kubernetes.io/master:NoSchedule-
+  loop: "{{ groups['masters'] }}"
+  when: taint_status.results | selectattr('rc', 'equalto', 1) | list | count > 0
+  become: true

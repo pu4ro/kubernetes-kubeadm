@@ -1,0 +1,21 @@
+---
+ubuntu_packages:
+  - docker.io
+  - containerd
+  - kubelet
+  - kubeadm
+  - kubectl
+  - nfs-common
+  - nfs-kernel-server
+  - tree
+  - bash-completion
+
+centos_packages:
+  - docker-ce
+  - containerd.io
+  - kubelet
+  - kubeadm
+  - kubectl
+  - nfs-utils
+  - tree
+  - bash-completion

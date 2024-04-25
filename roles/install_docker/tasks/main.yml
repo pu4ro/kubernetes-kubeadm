@@ -1,0 +1,57 @@
+---
+- name: Install Docker
+  package:
+    name: docker-ce
+    state: present
+  when: ansible_os_family == "Debian" or ansible_os_family == "RedHat"
+
+- name: Ensure Docker config directory exists
+  file:
+    path: /etc/docker
+    state: directory
+    mode: '0755'
+
+- name: Configure Docker daemon
+  template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart docker
+
+- name: Install Docker (CentOS)
+  yum:
+    name: docker-ce
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Install Docker (Ubuntu)
+  apt:
+    name: docker.io
+    state: present
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+
+- name: Ensure Docker service is enabled and running
+  service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Configure Docker daemon
+  template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+
+- name: Reload Docker to apply new configuration
+  systemd:
+    name: docker
+    enabled: yes
+    state: restarted
+
+- name: Ensure kubelet is enabled and running
+  systemd:
+    name: kubelet
+    enabled: yes
+    state: started

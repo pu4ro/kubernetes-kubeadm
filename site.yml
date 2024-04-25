@@ -2,11 +2,17 @@
 - hosts: all
   roles:
     - common
-
-- hosts: masters
-  roles:
-    - master
-
-- hosts: workers
-  roles:
-    - worker
+    - configure_repo
+#    - install_OS_package
+#    - install_docker
+#
+#- hosts: installs
+#    - install_tools
+#
+#- hosts: masters
+#  roles:
+#    - master
+#
+#- hosts: workers
+#  roles:
+#    - worker

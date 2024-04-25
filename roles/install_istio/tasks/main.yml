@@ -1,0 +1,55 @@
+- name: Create istio-system namespace
+  community.kubernetes.k8s:
+    name: istio-system
+    api_version: v1
+    kind: Namespace
+    state: present
+
+- name: Install istio-base
+  community.kubernetes.helm:
+    name: istio-base
+    chart_ref: helm/istio/base
+    release_namespace: istio-system
+    create_namespace: true
+
+- name: Install istiod
+  community.kubernetes.helm:
+    name: istiod
+    chart_ref: helm/istio/istiod
+    release_namespace: istio-system
+
+- name: Install istio-ingressgateway
+  community.kubernetes.helm:
+    name: istio-ingressgateway
+    chart_ref: helm/istio/gateway
+    release_namespace: istio-system
+    values:
+      service:
+        type: LoadBalancer
+
+- name: Wait for istio-ingressgateway deployment
+  community.kubernetes.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    namespace: istio-system
+    name: istio-ingressgateway
+  register: ingress_gateway
+  until: ingress_gateway.resources[0].status.readyReplicas is defined and ingress_gateway.resources[0].status.readyReplicas == ingress_gateway.resources[0].status.replicas
+  retries: 30
+  delay: 10
+
+- name: Patch istio-ingressgateway deployment to set imagePullPolicy to IfNotPresent
+  community.kubernetes.k8s:
+    api_version: apps/v1
+    kind: Deployment
+    namespace: istio-system
+    name: istio-ingressgateway
+    merge_type:
+      - strategic-merge
+    definition:
+      spec:
+        template:
+          spec:
+            containers:
+              - name: istio-proxy
+                imagePullPolicy: IfNotPresent

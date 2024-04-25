@@ -1,0 +1,29 @@
+---
+- name: Install Helm (CentOS & Ubuntu)
+  get_url:
+    url: "{{ helm_repo_url }}"
+    dest: "/tmp/helm-v3.5.4-linux-amd64.tar.gz"
+    mode: '0755'
+  register: helm_download
+
+- name: Unarchive Helm
+  unarchive:
+    src: "/tmp/helm-v3.5.4-linux-amd64.tar.gz"
+    dest: "/usr/local/bin"
+    remote_src: yes
+    extra_opts: [--strip-components=1]
+  when: helm_download.changed
+
+- name: Install k9s (CentOS & Ubuntu)
+  get_url:
+    url: "{{ k9s_repo_url }}"
+    dest: "/tmp/k9s.tar.gz"
+    mode: '0755'
+  register: k9s_download
+
+- name: Unarchive k9s
+  unarchive:
+    src: "/tmp/k9s.tar.gz"
+    dest: "/usr/local/bin"
+    remote_src: yes
+    creates: "/usr/local/bin/k9s"

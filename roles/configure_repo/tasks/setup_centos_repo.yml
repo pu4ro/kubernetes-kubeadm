@@ -1,0 +1,12 @@
+---
+- name: Configure CentOS local repo
+  copy:
+    content: |
+      [centos-local]
+      name=CentOS Local Repository
+      baseurl={{ repo_url.centos }}
+      enabled=1
+      gpgcheck=0
+    dest: /etc/yum.repos.d/centos-local.repo
+
+

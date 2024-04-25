@@ -1,0 +1,31 @@
+---
+- name: Add Rook repository to Helm
+  community.kubernetes.helm_repository:
+    name: rook-release
+    repo_url: https://charts.rook.io/release
+
+- name: Install Rook-Ceph Operator Helm Chart
+  community.kubernetes.helm:
+    name: rook-ceph
+    chart_ref: rook-release/rook-ceph
+    release_namespace: rook-ceph
+    create_namespace: true
+    values: "{{ rook_ceph_values }}"
+
+- name: Install Rook-Ceph Operator Helm Chart
+  community.kubernetes.helm:
+    name: rook-ceph-cluster
+    chart_ref: rook-release/rook-ceph-cluster
+    release_namespace: rook-ceph
+    create_namespace: true
+    values:
+      operatorNamespace: rook-ceph
+
+- name: Wait for all Rook-Ceph pods to be ready
+  shell: >
+    kubectl get pods -n rook-ceph -l -o custom-columns=:status.phase --no-headers | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 30
+  become: true

@@ -1,0 +1,12 @@
+---
+- name: Configure Ubuntu sources list
+  copy:
+    content: |
+      deb {{ repo_url.ubuntu }} bionic main restricted
+      deb {{ repo_url.ubuntu }} bionic-updates main restricted
+    dest: /etc/apt/sources.list
+
+- name: Update and upgrade packages
+  apt:
+    update_cache: yes
+    upgrade: yes

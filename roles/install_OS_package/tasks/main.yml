@@ -1,0 +1,16 @@
+---
+- name: Install packages on Ubuntu
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  loop: "{{ ubuntu_packages }}"
+  when: ansible_os_family == "Debian"
+
+- name: Install packages on CentOS
+  yum:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ centos_packages }}"
+  when: ansible_os_family == "RedHat"
+EOF

@@ -1,0 +1,16 @@
+---
+- name: Deploy kube-flannel configuration
+  template:
+    src: kube-flannel.yml.j2
+    dest: /etc/kubernetes/manifests/kube-flannel.yml
+  become: yes
+
+
+  - name: Wait for all flannel pods to be ready
+  shell: >
+    kubectl get pods -n kube-system -o custom-columns=:status.phase --no-headers | grep -v Running || true
+  register: not_running_flannel_pods
+  until: not_running_flannel_pods.stdout == ""
+  retries: 12
+  delay: 10
+  become: true
