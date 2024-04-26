@@ -4,7 +4,7 @@
 #    - common
 #    - configure_repo
 #    - configure_sysctl
-#    - install_OS_package
+#    - install_os_package
 #    - install_docker
 #    - install_kubernetes
 
@@ -13,4 +13,8 @@
 #    - install_flannel
 #    - install_tools
 #    - remove_master_taint
-    - install_cert_manager
+#    - install_cert_manager
+#    - install_rook_ceph
+    - install_istio
+#    - install_metal_lb
+#    - install_harbor

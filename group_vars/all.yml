@@ -5,6 +5,7 @@ dns_domain: cluster.local
 service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
 
+
 # helm command && OS package repo
 repo_url:
   centos: "http://192.168.0.21/repo"
@@ -35,14 +36,19 @@ rook_ceph_values:
 helm_repo_url: "http://get.helm.sh/helm-v3.5.4-linux-amd64.tar.gz"
 k9s_repo_url: "http://github.com/derailed/k9s/releases/download/v0.24.10/k9s_Linux_x86_64.tar.gz"
 
+
+# delete_master_node_taint
 remove_master_taint: true
 
-# cert Manager 
+# cert_Manager 
 cert_manager_version: "v1.11.0"
 cert_manager_values:
   installCRDs: true
   prometheus:
     enabled: false
+
+# istio_service_type
+istio_service_type: "LoadBalancer"
 
 # harbor
 harbor_values:
@@ -52,7 +58,6 @@ harbor_values:
     type: clusterIP
   externalURLs:
     - "http://harbor.makina.onboarding-1.com"
-    - "http://harbor.makina.onboarding-2.com"
   persistence:
     enabled: true
     persistentVolumeClaim:

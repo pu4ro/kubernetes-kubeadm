@@ -1,43 +1,81 @@
-- name: Create istio-system namespace
-  community.kubernetes.k8s:
-    name: istio-system
-    api_version: v1
-    kind: Namespace
+---
+# istio-base-install
+- name: Check if istio-base is already installed
+  community.kubernetes.helm_info:
+    name: istio-base
+    namespace: istio-system
+  register: istio_base
+
+- name: Add istio-base repository to Helm
+  community.kubernetes.helm_repository:
+    name: istio-base
+    repo_url: http://{{ helm_repo_ip }}/istio-base
     state: present
+  when: istio_base.status is undefined or ('failed' in istio_base.status)
 
 - name: Install istio-base
   community.kubernetes.helm:
     name: istio-base
-    chart_ref: helm/istio/base
+    chart_ref: istio-base/base
     release_namespace: istio-system
     create_namespace: true
+  when: istio_base.status is undefined or ('failed' in istio_base.status)
+
+# istiod - install
+- name: Check if istiod is already installed
+  community.kubernetes.helm_info:
+    name: istio-istiod
+    namespace: istio-system
+  register: istio_istiod
+
+- name: Add istiod repository to Helm
+  community.kubernetes.helm_repository:
+    name: istio-istiod
+    repo_url: http://{{ helm_repo_ip }}/istio-istiod
+    state: present
+  when: istio_istiod.status is undefined or ('failed' in istio_istiod.status)
 
 - name: Install istiod
   community.kubernetes.helm:
-    name: istiod
-    chart_ref: helm/istio/istiod
+    name: istio-istiod
+    chart_ref: istio-istiod/istiod
     release_namespace: istio-system
+  when: istio_istiod.status is undefined or ('failed' in istio_istiod.status)
+
+
+# install_ingressGateway
+- name: Check if istio_ingressgateway is already installed
+  community.kubernetes.helm_info:
+    name: istio-ingressgateway
+    namespace: istio-system
+  register: istio_ingressgateway
+
+- name: Add istio-ingressgateway repository to Helm
+  community.kubernetes.helm_repository:
+    name: istio-ingressgateway
+    repo_url: http://{{ helm_repo_ip }}/istio-gateway
+    state: present
+  when: istio_ingressgateway.status is undefined or ('failed' in istio_ingressgateway.status)
 
 - name: Install istio-ingressgateway
   community.kubernetes.helm:
     name: istio-ingressgateway
-    chart_ref: helm/istio/gateway
+    chart_ref: istio-ingressgateway/gateway
     release_namespace: istio-system
     values:
       service:
-        type: LoadBalancer
+        type: '{{ istio_service_type }}'
 
-- name: Wait for istio-ingressgateway deployment
-  community.kubernetes.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    namespace: istio-system
-    name: istio-ingressgateway
-  register: ingress_gateway
-  until: ingress_gateway.resources[0].status.readyReplicas is defined and ingress_gateway.resources[0].status.readyReplicas == ingress_gateway.resources[0].status.replicas
-  retries: 30
-  delay: 10
+- name: Wait for all istio pods to be ready
+  shell: >
+    kubectl get pods -n istio-system -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 60
+  become: true
 
+# python-pip3 is needed - install kuberenetes
 - name: Patch istio-ingressgateway deployment to set imagePullPolicy to IfNotPresent
   community.kubernetes.k8s:
     api_version: apps/v1

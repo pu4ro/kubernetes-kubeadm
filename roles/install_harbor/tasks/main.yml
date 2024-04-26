@@ -5,13 +5,19 @@
     namespace: harbor
   register: harbor_installed
 
+- name: Add harbor repository to Helm
+  community.kubernetes.helm_repository:
+    name: harbor
+    repo_url: http://{{ helm_repo_ip }}/harbor
+    state: present
+  when: harbor_installed.helm_info is undefined or harbor_installed.helm_info.resources | length == 0
+
 - name: Install or Upgrade Harbor Helm chart
   community.kubernetes.helm:
     name: harbor
-    chart_ref: helm/harbor
+    chart_ref: harbor/harbor
     release_namespace: harbor
     create_namespace: true
-    state: present
     values: "{{ harbor_values | combine({'externalURL': item}) }}"
   loop: "{{ harbor_values.externalURLs }}"
   when: harbor_installed.helm_info is undefined or harbor_installed.helm_info.resources | length == 0
@@ -25,4 +31,4 @@
   register: harbor_deployment
   until: harbor_deployment.resources[0].status.readyReplicas == harbor_deployment.resources[0].status.replicas
   retries: 30
-  delay: 10
+  delay: 60

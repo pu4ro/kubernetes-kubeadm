@@ -1,0 +1,61 @@
+---
+# rook-ceph-operator
+- name: Check if rook-ceph is already installed
+  community.kubernetes.helm_info:
+    name: rook-ceph
+    namespace: rook-ceph
+  register: rook_ceph
+
+- name: Add Rook repository to Helm
+  community.kubernetes.helm_repository:
+    name: rook-release
+    repo_url: http://{{ helm_repo_ip }}/rook-ceph
+    state: present
+  when: rook_ceph.status is undefined or ('failed' in rook_ceph.status)
+
+- name: Install Rook-Ceph Operator Helm Chart
+  community.kubernetes.helm:
+    name: rook-ceph
+    chart_ref: rook-release/rook-ceph
+    release_namespace: rook-ceph
+    create_namespace: true
+
+- name: Wait for all Rook-Ceph pods to be ready
+  shell: >
+    kubectl get pods -n rook-ceph -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 60
+  become: true
+
+  # rook-ceph-cluster
+- name: Check if rook-ceph-cluster is already installed
+  community.kubernetes.helm_info:
+    name: rook-ceph-cluster
+    namespace: rook-ceph
+  register: rook_ceph_cluster
+
+- name: Add rook-ceph-cluster repository to Helm
+  community.kubernetes.helm_repository:
+    name: rook-ceph-cluster
+    repo_url: http://{{ helm_repo_ip }}/rook-ceph-cluster
+    state: present
+  when: rook_ceph_cluster.status is undefined or ('failed' in rook_ceph_cluster.status)
+
+- name: Install Rook-Ceph-cluster cluster Helm Chart
+  community.kubernetes.helm:
+    name: rook-ceph-cluster
+    chart_ref: rook-ceph-cluster/rook-ceph-cluster
+    release_namespace: rook-ceph
+    create_namespace: true
+    values: "{{ rook_ceph_values }}"
+
+- name: Wait for all Rook-Ceph-cluster pods to be ready
+  shell: >
+    kubectl get pods -n rook-ceph -o custom-columns=:status.phase --no-headers | egrep -v '(Running|Completed|Succeeded)' || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 60
+  become: true
