@@ -22,13 +22,15 @@
   loop: "{{ harbor_values.externalURLs }}"
   when: harbor_installed.helm_info is undefined or harbor_installed.helm_info.resources | length == 0
 
-- name: Wait for Harbor to be ready
-  community.kubernetes.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    namespace: harbor
-    name: harbor
-  register: harbor_deployment
-  until: harbor_deployment.resources[0].status.readyReplicas == harbor_deployment.resources[0].status.replicas
-  retries: 30
+- name: Pause for 5 seconds
+  pause:
+    seconds: 5
+
+- name: Wait for all harbor pods to be ready
+  shell: >
+    kubectl get pods -n harbor -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
   delay: 60
+  become: true

@@ -15,6 +15,7 @@
 #    - remove_master_taint
 #    - install_cert_manager
 #    - install_rook_ceph
-    - install_istio
-#    - install_metal_lb
-#    - install_harbor
+#    - install_istio
+    - install_metal_lb
+    - install_harbor
+    - install_prometheus

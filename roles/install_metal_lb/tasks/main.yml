@@ -1,3 +1,9 @@
+- name: Check if metallb is already installed
+  community.kubernetes.helm_info:
+    name: metallb
+    namespace: metallb-system
+  register: metallb
+
 - name: Patch kube-proxy ConfigMap to set strictARP to true
   community.kubernetes.k8s:
     api_version: v1
@@ -22,8 +28,58 @@
               mode: "iptables"
               strictARP: true
   register: patch_result
+  when: metallb.status is undefined or ('failed' in metallb.status)
 
 - name: Verify if the patch was applied
   debug:
     msg: "The kube-proxy ConfigMap was patched successfully."
-  when: patch_result is changed
+  when: patch_result is changed and metallb.status is undefined or ('failed' in metallb.status)
+
+- name: Add metallb repository to Helm
+  community.kubernetes.helm_repository:
+    name: metallb
+    repo_url: http://{{ helm_repo_ip }}/metallb
+    state: present
+  
+
+- name: Install metallb Helm Chart
+  community.kubernetes.helm:
+    name: metallb
+    chart_ref: metallb/metallb
+    release_namespace: metallb-system
+    create_namespace: true
+  when: metallb.status is undefined or ('failed' in metallb.status)
+
+
+- name: Pause for 5 seconds
+  pause:
+    seconds: 5
+
+- name: Wait for all metallb pods to be ready
+  shell: >
+    kubectl get pods -n metallb-system -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 60
+  become: true
+
+- name: Ensure namespace exists
+  kubernetes.core.k8s:
+    name: "{{ metallb_namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+
+- name: Deploy MetalLB configuration from template
+  template:
+    src: metallb_config.yaml.j2
+    dest: "/tmp/metallb_config.yaml"
+
+- name: Apply MetalLB configuration
+  command: kubectl apply -f /tmp/metallb_config.yaml
+
+- name: Clean up MetalLB configuration file from local
+  file:
+    path: "/tmp/metallb_config.yaml"
+    state: absent

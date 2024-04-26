@@ -50,6 +50,12 @@ cert_manager_values:
 # istio_service_type
 istio_service_type: "LoadBalancer"
 
+# metalLb-vars
+metallb_namespace: metallb-system
+metallb_ip_pool_name: default
+metallb_l2adv_name: default
+metallb_ip_range: "192.168.0.30/32"
+
 # harbor
 harbor_values:
   expose:
