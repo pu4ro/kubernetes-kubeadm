@@ -11,7 +11,6 @@
 
 - hosts: installs
   roles:
-     - create_nfs_server # if you needed
 #    - install_flannel
 #    - install_tools
 #    - remove_master_taint
@@ -21,13 +20,13 @@
 #    - install_metal_lb
 #    - install_harbor
 #    - install_prometheus
-#    - install_ef # elastic & fluentd
+    - install_ef # elastic & fluentd
 #    - install_knative
 #    - install_minio
 #    - install_argo
 #    - install_pypiserver
 #    - install_stream
 #    - install_backend
-    - install_frontend
+#    - install_frontend
 
 

@@ -8,7 +8,7 @@
 - name: Add elasticsearch-fluentd repository to Helm
   community.kubernetes.helm_repository:
     name: elasticsearch-fluentd
-    repo_url: http://{{ helm_repo_ip }}/elasticsearch-fluentd
+    repo_url: http://{{ helm_repo_ip }}/elastic
     state: present
   when: elasticsearch_fluentd_installed.helm_info is undefined or elasticsearch_fluentd_installed.helm_info.resources | length == 0
 
