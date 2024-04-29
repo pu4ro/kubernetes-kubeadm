@@ -9,7 +9,7 @@
     - install_kubernetes
     - copy_config # docker_config_copy
 
-- hosts: installs
+- hosts: installs # runway back_ground install && runway install
   roles:
     - install_flannel
     - install_tools

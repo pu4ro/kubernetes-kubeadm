@@ -59,3 +59,10 @@
   retries: 20
   delay: 60
   become: true
+
+- name: Verify Rook Ceph Cluster health
+  shell: kubectl -n rook-ceph exec deploy/rook-ceph-tools -- ceph status
+  register: ceph_status
+  until: ceph_status.stdout.find("HEALTH_OK") != -1
+  retries: 10
+  delay: 60
