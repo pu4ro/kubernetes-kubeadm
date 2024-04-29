@@ -27,7 +27,11 @@
   template:
     src: dnsmasq.conf.j2
     dest: /etc/dnsmasq.conf
-  notify:
-    - restart dnsmasq
   tags: dns
 
+- name: Ensure dnsmasq is enabled and started
+  systemd:
+    name: dnsmasq
+    state: started
+    enabled: yes
+  tags: dns

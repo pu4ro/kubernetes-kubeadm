@@ -17,8 +17,8 @@ wildcard_ip: "192.168.0.30"
 main_nameserver: "192.168.0.21"
 enable_forwarding: true
 forward_servers:
-  - "8.8.8.8"
-  - "8.8.4.4"
+  - "168.126.63.1"
+  - "168.126.63.2"
 enable_wildcard: true
 
 # helm command && OS package repo
@@ -114,7 +114,7 @@ pgpool_password: "kidi"
 
 # create_docker_config.json in kubelet
 docker_username: "admin"
-docker_password: "Mak1nar0cks!"
+docker_password: "example"
 docker_registry: "cr.makina.rocks"
 
 
