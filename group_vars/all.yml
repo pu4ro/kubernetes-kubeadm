@@ -1,6 +1,6 @@
 ---
 # how to set domain
-main_domain: onboarding-1.com
+main_domain: onboarding1.com
 
 # kubeadm-init.yaml create
 kubernetes_version: '1.23.17'
@@ -18,7 +18,7 @@ helm_repo_ip: "192.168.0.21"
 
 # Docker 관련 변수
 insecure_registries:
-  - "harbor.makina.onboarding-1.com"
+  - "harbor.makina.{{ main_domain }}"
   - "cr.makina.rocks"
 
 # Master Node remove taint
@@ -66,7 +66,7 @@ harbor_values:
       enabled: false
     type: clusterIP
   externalURLs:
-    - "http://harbor.makina.onboarding-1.com"
+    - "http://harbor.makina.{{ main_domain }}"
   persistence:
     enabled: true
     persistentVolumeClaim:
@@ -79,4 +79,31 @@ harbor_values:
 # elastic-search replicas
 elastic_replicas: 2
 
-#
+#backend
+image_registry_url: "http://harbor.makina.{{ main_domain }}/api/v2.0"
+image_registry_username: "mrx.dev"
+image_registry_password: "klw9pcSDWkpY4udGaGjQP7KrjGoegdIw"
+image_registry_api_token: "YWRtaW46SGaFyYm9yMTIzNDU="
+grafana_public_url: "grafana.runway.makina.{{ main_domain }}"
+runway_url: "runway.makina.{{ main_domain }}"
+postgresql_replica_count: "3"
+project_shard_volume_storage_class: "ceph-filesystem"
+nfs_pv_path: "/nfs"
+nfs_pv_server: "host1"
+link_instance_max_cpu: "8"
+link_instance_max_memory: "16"
+link_instance_max_gpu: "0"
+pod_commit_image_repository: "makina-runway/commit-link-"
+pip_trusted_host: "pubpypi.makina.rocks"
+pip_index_url: "http://pubpypi.makina.rocks/simple/"
+
+# create_docker_config.json in kubelet
+docker_username: "admin"
+docker_password: "Mak1nar0cks!"
+docker_registry: "cr.makina.rocks"
+
+
+# frontend-vars
+helm_namespace: "runway"
+global_production: true
+image_tag: "v1.1.0"

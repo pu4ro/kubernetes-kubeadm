@@ -1,0 +1,52 @@
+---
+- name: Login to Docker registry
+  shell: echo "{{ docker_password }}" | docker login --username "{{ docker_username }}" --password-stdin "{{ docker_registry }}"
+  register: login_result
+  no_log: false  # 패스워드 정보가 로그에 나타나지 않도록 설정
+
+- name: Check if Docker login was successful
+  fail:
+    msg: "Docker login failed"
+  when: login_result.rc != 0 or ('Login Succeeded' not in login_result.stdout)
+
+- name: Fetch config.json from home directory
+  fetch:
+    src: ~/.docker/config.json
+    dest: "/tmp/{{ inventory_hostname }}-config.json"
+    flat: yes
+
+- name: Ensure /var/lib/kubelet directory exists
+  file:
+    path: /var/lib/kubelet
+    state: directory
+    mode: '0755'
+
+- name: Copy config.json to /var/lib/kubelet
+  copy:
+    src: "/tmp/{{ inventory_hostname }}-config.json"
+    dest: /var/lib/kubelet/config.json
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Remove temporary config.json file
+  file:
+    path: "/tmp/{{ inventory_hostname }}-config.json"
+    state: absent
+
+- name: Restart kubelet service
+  systemd:
+    name: kubelet
+    state: restarted
+    daemon_reload: yes
+  register: result
+
+- name: Check the status of kubelet
+  systemd:
+    name: kubelet
+    state: started
+  register: status
+  
+- name: Report the status of kubelet
+  debug:
+    msg: "Kubelet restart status: {{ status }}"

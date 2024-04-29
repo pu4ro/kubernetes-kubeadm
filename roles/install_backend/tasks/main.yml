@@ -1,0 +1,74 @@
+---
+- name: Check if backend is already installed
+  community.kubernetes.helm_info:
+    name: backend
+    namespace: runway
+  register: backend
+
+- name: Add backend repository to Helm
+  community.kubernetes.helm_repository:
+    name: backend
+    repo_url: http://{{ helm_repo_ip }}/backend
+    state: present
+  when: backend.helm_info is undefined or backend.helm_info.resources | length == 0
+
+- name: Debug backend variable
+  debug:
+    var: backend
+
+- name: Install or update runway-backend Helm chart
+  community.kubernetes.helm:
+    name: runway-backend
+    chart_ref: backend/backend
+    release_namespace: runway
+    create_namespace: true
+    values:
+      customEnv:
+        GRAFANA_PUBLIC_URL: "{{ grafana_public_url }}"
+        NODE_NO_LIMIT_RESOURCES: "false"
+        RUNWAY_URL: "{{ runway_url }}"
+        POD_COMMIT_IMAGE_REGISTRY: "harbor.makina.{{ main_domain }}"
+        POD_COMMIT_IMAGE_REPOSITORY: "{{ pod_commit_image_repository }}"
+        POD_COMMIT_IMAGE_TAG: ""
+        POD_COMMIT_IMAGE_REGISTRY_USERNAME: "{{ image_registry_username }}"
+        POD_COMMIT_IMAGE_REGISTRY_PASSWORD: "{{ image_registry_password }}"
+        POD_COMMIT_IMAGE_REGISTRY_API_TOKEN: "{{ image_registry_api_token }}"
+        POD_COMMIT_IMAGE_REGISTRY_API_URL: "{{ image_registry_url }}"
+        PIP_TRUSTED_HOST: "{{ pip_trusted_host }}"
+        PIP_INDEX_URL: "{{ pip_index_url }}"
+      global:
+        image:
+          tag: "v1.1.0"
+        initSetup: false
+        production: true
+        virtualService:
+          domainHost: "runway.makina.{{ main_domain }}"
+          frontend:
+            hosts: ""
+        backend:
+          projectShardVolumeStorageClass: "{{ project_shard_volume_storage_class }}"
+        nfs:
+          pv:
+            path: "{{ nfs_pv_path }}"
+            server: "{{ nfs_pv_server }}"
+        backend:
+          link:
+            LINK_INSTANCE_MAX_CPU: "{{ link_instance_max_cpu }}"
+            LINK_INSTANCE_MAX_MEMORY: "{{ link_instance_max_memory }}"
+            LINK_INSTANCE_MAX_GPU: "{{ link_instance_max_gpu }}"
+      postgresql-ha:
+        postgresql:
+          replicaCount: "{{ postgresql_replica_count }}"
+
+- name: Pause for 5 seconds
+  pause:
+    seconds: 5
+
+- name: Wait for all runway pods to be ready
+  shell: >
+    kubectl get pods -n runway -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 60
+  become: true

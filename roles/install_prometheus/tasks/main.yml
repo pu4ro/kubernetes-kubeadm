@@ -7,14 +7,14 @@
 
 - name: Add prometheus repository to Helm
   community.kubernetes.helm_repository:
-    name: prometheus
+    name: kube-prometheus-stack
     repo_url: http://{{ helm_repo_ip }}/kube-prometheus-stack
     state: present
   when: prometheus_installed.helm_info is undefined or prometheus_installed.helm_info.resources | length == 0
 
 - name: Install or Upgrade prometheus Helm chart
   community.kubernetes.helm:
-    name: prometheus
+    name: kube-prometheus-stack
     chart_ref: prometheus/kube-prometheus-stack
     release_namespace: monitoring
     create_namespace: true

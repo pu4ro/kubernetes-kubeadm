@@ -1,0 +1,66 @@
+---
+- name: Check if runway-frontend is already installed
+  community.kubernetes.helm_info:
+    name: runway-frontend
+    namespace: runway
+  register: runway_frontend
+
+- name: Add runway-frontend repository to Helm
+  community.kubernetes.helm_repository:
+    name: runway-frontend
+    repo_url: http://{{ helm_repo_ip }}/frontend
+    state: present
+  when: runway_frontend.helm_info is undefined or runway_frontend.helm_info.resources | length == 0
+
+- name: Install runway-frontend Helm chart
+  community.kubernetes.helm:
+    name: "runway-frontend"
+    chart_ref: "runway-frontend/frontend"
+    release_namespace: "{{ helm_namespace }}"
+    values:
+      global:
+        production: "{{ global_production }}"
+        virtualService:
+          domainHost: "runway.makina.{{ main_domain }}"
+          frontend:
+            hosts: ""
+      image:
+        tag: "{{ image_tag }}"
+  register: frontend_install
+  when: runway_frontend.helm_info is undefined or runway_frontend.helm_info.resources | length == 0
+
+- name: Check if runway-frontend-admin is already installed
+  community.kubernetes.helm_info:
+    name: runway-frontend-admin
+    namespace: runway
+  register: runway_frontend_admin
+
+- name: Add runway-frontend-admin repository to Helm
+  community.kubernetes.helm_repository:
+    name: runway-frontend-admin
+    repo_url: http://{{ helm_repo_ip }}/frontend-admin
+    state: present
+  when: runway_frontend_admin.helm_info is undefined or runway_frontend_admin.helm_info.resources | length == 0
+
+- name: Install runway-frontend-admin Helm chart
+  community.kubernetes.helm:
+    name: "runway-frontend-admin"
+    chart_ref: "runway-frontend-admin/frontend-admin"
+    release_namespace: "{{ helm_namespace }}"
+    values:
+      global:
+        production: "{{ global_production }}"
+        virtualService:
+          domainHost: "admin.runway.makina.{{ main_domain }}"
+          frontendAdmin:
+            hosts: "admin"
+      image:
+        tag: "{{ image_tag }}"
+  register: frontend_admin_install
+  when: runway_frontend_admin.helm_info is undefined or runway_frontend_admin.helm_info.resources | length == 0
+
+- name: Output results
+  debug:
+    msg:
+      - "Runway Frontend Install Result: {{ frontend_install }}"
+      - "Runway Frontend Admin Install Result: {{ frontend_admin_install }}"

@@ -7,9 +7,11 @@
 #    - install_os_package
 #    - install_docker
 #    - install_kubernetes
+#    - copy_config
 
 - hosts: installs
   roles:
+     - create_nfs_server # if you needed
 #    - install_flannel
 #    - install_tools
 #    - remove_master_taint
@@ -22,4 +24,10 @@
 #    - install_ef # elastic & fluentd
 #    - install_knative
 #    - install_minio
-    - install_argo
+#    - install_argo
+#    - install_pypiserver
+#    - install_stream
+#    - install_backend
+    - install_frontend
+
+

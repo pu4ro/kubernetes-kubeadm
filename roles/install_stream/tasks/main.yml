@@ -1,0 +1,35 @@
+---
+- name: Check if runway-stream is already installed
+  community.kubernetes.helm_info:
+    name: runway-stream
+    namespace: runway
+  register: runway_stream
+
+- name: Add runway-stream repository to Helm
+  community.kubernetes.helm_repository:
+    name: stream-infra
+    repo_url: http://{{ helm_repo_ip }}/stream-infra
+    state: present
+  when: runway_stream.helm_info is undefined or runway_stream.helm_info.resources | length == 0
+
+- name: Install or Upgrade runway-stream Helm chart
+  community.kubernetes.helm:
+    name: runway-stream
+    chart_ref: stream-infra/stream
+    release_namespace: runway
+    create_namespace: true
+  when: runway_stream.helm_info is undefined or runway_stream.helm_info.resources | length == 0
+
+
+- name: Pause for 5 seconds
+  pause:
+    seconds: 5
+
+- name: Wait for all runway-stream pods to be ready
+  shell: >
+    kubectl get pods -n runway -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 60
+  become: true
