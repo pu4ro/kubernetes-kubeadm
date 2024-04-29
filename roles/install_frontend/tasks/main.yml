@@ -51,7 +51,7 @@
       global:
         production: "{{ global_production }}"
         virtualService:
-          domainHost: "admin.runway.makina.{{ main_domain }}"
+          domainHost: "runway.makina.{{ main_domain }}"
           frontendAdmin:
             hosts: "admin"
       image:

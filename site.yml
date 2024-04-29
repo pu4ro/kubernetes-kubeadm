@@ -8,11 +8,13 @@
     - install_docker
     - install_kubernetes
     - copy_config # docker_config_copy
+    - configure_dns # tags=set_dns
 
 - hosts: installs # runway back_ground install && runway install
   roles:
+    - install_dnsmasq # set dns-server, tags=dns
     - install_flannel
-    - install_tools
+    - install_tools # set k9s,kubectl,helm tags=tools
     - remove_master_taint
     - install_cert_manager
     - install_rook_ceph

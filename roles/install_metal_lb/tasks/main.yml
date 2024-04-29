@@ -60,6 +60,10 @@
     src: metallb_config.yaml.j2
     dest: "/tmp/metallb_config.yaml"
 
+- name: Pause for 5 seconds
+  pause:
+    seconds: 5
+
 - name: Apply MetalLB configuration
   command: kubectl apply -f /tmp/metallb_config.yaml
 

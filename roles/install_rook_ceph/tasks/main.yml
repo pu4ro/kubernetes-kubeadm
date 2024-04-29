@@ -56,7 +56,7 @@
     kubectl get pods -n rook-ceph -o custom-columns=:status.phase --no-headers | egrep -v '(Running|Completed|Succeeded)' || true
   register: not_running_rook_pods
   until: not_running_rook_pods.stdout == ""
-  retries: 20
+  retries: 30
   delay: 60
   become: true
 
@@ -64,5 +64,5 @@
   shell: kubectl -n rook-ceph exec deploy/rook-ceph-tools -- ceph status
   register: ceph_status
   until: ceph_status.stdout.find("HEALTH_OK") != -1
-  retries: 10
+  retries: 30
   delay: 60

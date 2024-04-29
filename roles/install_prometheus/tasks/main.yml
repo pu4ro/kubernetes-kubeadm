@@ -15,7 +15,7 @@
 - name: Install or Upgrade prometheus Helm chart
   community.kubernetes.helm:
     name: kube-prometheus-stack
-    chart_ref: prometheus/kube-prometheus-stack
+    chart_ref: kube-prometheus-stack/kube-prometheus-stack
     release_namespace: monitoring
     create_namespace: true
   when: prometheus_installed.helm_info is undefined or prometheus_installed.helm_info.resources | length == 0

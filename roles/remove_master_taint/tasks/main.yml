@@ -1,6 +1,6 @@
 ---
 - name: List all taints on master nodes
-  command: kubectl describe node {{ item }} | grep Taints
+  command: kubectl describe node {{ item }} | grep -i Taints
   register: taints_output
   loop: "{{ groups['masters'] }}"
   when: remove_taints

@@ -1,0 +1,33 @@
+---
+- name: Install dnsmasq on Ubuntu
+  apt:
+    name: dnsmasq
+    state: present
+    update_cache: yes
+  when: ansible_facts['os_family'] == "Debian"
+  tags: dns
+
+- name: Install dnsmasq on CentOS (RHEL 8+ uses dnf)
+  yum:
+    name: dnsmasq
+    state: present
+    update_cache: yes
+  when: ansible_facts['os_family'] == "RedHat" and ansible_facts['distribution_major_version'] | int < 8
+  tags: dns
+
+- name: Install dnsmasq on CentOS 8 or newer
+  dnf:
+    name: dnsmasq
+    state: present
+    update_cache: yes
+  when: ansible_facts['os_family'] == "RedHat" and ansible_facts['distribution_major_version'] | int >= 8
+  tags: dns
+
+- name: Configure dnsmasq with forwarding and wildcard
+  template:
+    src: dnsmasq.conf.j2
+    dest: /etc/dnsmasq.conf
+  notify:
+    - restart dnsmasq
+  tags: dns
+

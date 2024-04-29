@@ -8,6 +8,14 @@ dns_domain: cluster.local
 service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
 
+# DNS wildcard_ip
+wildcard_ip: "192.168.0.30"
+main_nameserver: "192.168.0.21"
+enable_forwarding: true
+forward_servers:
+  - "8.8.8.8"
+  - "8.8.4.4"
+enable_wildcard: true
 
 # helm command && OS package repo
 repo_url:
@@ -73,7 +81,7 @@ harbor_values:
       registry:
         size: "50Gi"
   trivy:
-    enabled: false\
+    enabled: false
 
 
 # elastic-search replicas
@@ -89,7 +97,7 @@ runway_url: "runway.makina.{{ main_domain }}"
 postgresql_replica_count: "3"
 project_shard_volume_storage_class: "ceph-filesystem"
 nfs_pv_path: "/nfs"
-nfs_pv_server: "host1"
+nfs_pv_server: "master1"
 link_instance_max_cpu: "8"
 link_instance_max_memory: "16"
 link_instance_max_gpu: "0"

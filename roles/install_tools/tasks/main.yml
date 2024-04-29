@@ -4,6 +4,8 @@
     url: "{{ repo_url.centos }}/helm"
     dest: "/tmp/helm"
     mode: '0777'
+  tags:
+    - tools
 
 - name: copy Helm
   copy:
@@ -11,12 +13,16 @@
     dest: "/usr/local/bin"
     remote_src: yes
     mode: '0777'
+  tags:
+    - tools
 
 - name: Install k9s (CentOS & Ubuntu)
   get_url:
     url: "{{ repo_url.centos }}/k9s"
     dest: "/tmp/k9s"
     mode: '0777'
+  tags:
+    - tools
 
 - name: copy k9s
   copy:
@@ -24,3 +30,40 @@
     dest: "/usr/local/bin"
     remote_src: yes
     mode: '0777'
+  tags:
+    - tools
+
+- name: Add kubectl completion to .bashrc
+  lineinfile:
+    path: ~/.bashrc
+    line: 'source <(kubectl completion bash)'
+    create: yes
+    state: present
+  tags:
+    - tools
+
+- name: Add kubectl alias to .bashrc
+  lineinfile:
+    path: ~/.bashrc
+    line: 'alias k=kubectl'
+    create: yes
+    state: present
+  tags:
+    - tools
+
+- name: Add kubectl auto-completion for alias to .bashrc
+  lineinfile:
+    path: ~/.bashrc
+    line: 'complete -o default -F __start_kubectl k'
+    create: yes
+    state: present
+  tags:
+    - tools
+
+- name: Source the .bashrc file to apply changes
+  command: bash -c "source ~/.bashrc"
+  args:
+    executable: /bin/bash
+  tags:
+    - tools
+

@@ -9,6 +9,7 @@ ubuntu_packages:
   - nfs-kernel-server
   - tree
   - bash-completion
+  - dnsmasq
 
 centos_packages:
   - docker-ce
@@ -19,3 +20,4 @@ centos_packages:
   - nfs-utils
   - tree
   - bash-completion
+  - dnsmasq

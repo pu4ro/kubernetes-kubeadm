@@ -1,0 +1,14 @@
+# Managed by Ansible
+domain-needed
+bogus-priv
+expand-hosts
+
+{% if enable_forwarding %}
+{% for server in forward_servers %}
+server=/#/{{ server }}
+{% endfor %}
+{% endif %}
+
+{% if enable_wildcard %}
+address=/#/{{ wildcard_ip }}
+{% endif %}
