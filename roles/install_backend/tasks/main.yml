@@ -57,6 +57,10 @@
             LINK_INSTANCE_MAX_MEMORY: "{{ link_instance_max_memory }}"
             LINK_INSTANCE_MAX_GPU: "{{ link_instance_max_gpu }}"
       postgresql-ha:
+        pgpool:
+          customUsers:
+            usernames: "{{ pgpool_username }}"
+            passwords: "{{ pgpool_password }}"
         postgresql:
           replicaCount: "{{ postgresql_replica_count }}"
 

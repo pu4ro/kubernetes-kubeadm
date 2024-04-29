@@ -2,6 +2,10 @@
 # how to set domain
 main_domain: onboarding1.com
 
+# timezone && chrony
+set_timezone: Asia/Seoul
+
+
 # kubeadm-init.yaml create
 kubernetes_version: '1.23.17'
 dns_domain: cluster.local
@@ -104,6 +108,9 @@ link_instance_max_gpu: "0"
 pod_commit_image_repository: "makina-runway/commit-link-"
 pip_trusted_host: "pubpypi.makina.rocks"
 pip_index_url: "http://pubpypi.makina.rocks/simple/"
+pgpool_username: "kidi"
+pgpool_password: "kidi"
+
 
 # create_docker_config.json in kubelet
 docker_username: "admin"

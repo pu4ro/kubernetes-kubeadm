@@ -2,7 +2,7 @@
 - hosts: all  #Infra settings
   roles:
     - configure_repo                
-    - common                     
+    - common # set_timezone, set_kernel, tags=timezone                 
     - configure_sysctl           
     - install_os_package
     - install_docker
