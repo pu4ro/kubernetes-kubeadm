@@ -1,0 +1,35 @@
+---
+- name: Check if argo is already installed
+  community.kubernetes.helm_info:
+    name: argo
+    namespace: argo
+  register: argo
+
+- name: Add argo repository to Helm
+  community.kubernetes.helm_repository:
+    name: argo
+    repo_url: http://{{ helm_repo_ip }}/argo-workflows
+    state: present
+  when: argo.helm_info is undefined or argo.helm_info.resources | length == 0
+
+- name: Install or Upgrade argo Helm chart
+  community.kubernetes.helm:
+    name: argo
+    chart_ref: argo/argo-workflows
+    release_namespace: argo
+    create_namespace: true
+  when: argo.helm_info is undefined or argo.helm_info.resources | length == 0
+
+
+- name: Pause for 5 seconds
+  pause:
+    seconds: 5
+
+- name: Wait for all argo pods to be ready
+  shell: >
+    kubectl get pods -n argo -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 60
+  become: true

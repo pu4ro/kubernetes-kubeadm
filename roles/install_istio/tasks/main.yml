@@ -76,18 +76,8 @@
   become: true
 
 # python-pip3 is needed - install kuberenetes
-- name: Patch istio-ingressgateway deployment to set imagePullPolicy to IfNotPresent
-  community.kubernetes.k8s:
-    api_version: apps/v1
-    kind: Deployment
-    namespace: istio-system
-    name: istio-ingressgateway
-    merge_type:
-      - strategic-merge
-    definition:
-      spec:
-        template:
-          spec:
-            containers:
-              - name: istio-proxy
-                imagePullPolicy: IfNotPresent
+- name: Patch Deployment to set imagePullPolicy to IfNotPresent
+  command: >
+    kubectl patch deployment istio-ingressgateway -n istio-system
+    --type=json
+    -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/imagePullPolicy", "value": "IfNotPresent"}]'

@@ -1,0 +1,41 @@
+---
+- name: Check if knative-serving is already installed
+  community.kubernetes.helm_info:
+    name: knative-serving
+    namespace: api-deployment-infra
+  register: knative
+
+- name: Add knative-serving repository to Helm
+  community.kubernetes.helm_repository:
+    name: knative-serving
+    repo_url: http://{{ helm_repo_ip }}/knative-serving
+    state: present
+  when: knative.helm_info is undefined or knative.helm_info.resources | length == 0
+
+- name: Install or Upgrade knative-serving Helm chart
+  community.kubernetes.helm:
+    name: knative-serving
+    chart_ref: knative-serving/knative-serving
+    release_namespace: api-deployment-infra
+    create_namespace: true
+    values:
+      servingCore:
+        domain:
+          configmaps:
+            configDomain:
+              domain: "serving.runway.{{ main_domain }}"
+  when: knative.helm_info is undefined or knative.helm_info.resources | length == 0
+
+
+- name: Pause for 5 seconds
+  pause:
+    seconds: 5
+
+- name: Wait for all knative-serving pods to be ready
+  shell: >
+    kubectl get pods -n api-deployment-infra -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 60
+  become: true

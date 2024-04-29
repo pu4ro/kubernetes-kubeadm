@@ -1,0 +1,35 @@
+---
+- name: Check if pypiserver is already installed
+  community.kubernetes.helm_info:
+    name: pypiserver
+    namespace: pypiserver
+  register: pypiserver
+
+- name: Add pypiserver repository to Helm
+  community.kubernetes.helm_repository:
+    name: pypiserver
+    repo_url: http://{{ helm_repo_ip }}/pypiserver
+    state: present
+  when: pypiserver.helm_info is undefined or pypiserver.helm_info.resources | length == 0
+
+- name: Install or Upgrade pypiserver Helm chart
+  community.kubernetes.helm:
+    name: pypiserver
+    chart_ref: pypiserver/pypiserver
+    release_namespace: pypiserver
+    create_namespace: true
+  when: pypiserver.helm_info is undefined or pypiserver.helm_info.resources | length == 0
+
+
+- name: Pause for 5 seconds
+  pause:
+    seconds: 5
+
+- name: Wait for all pypiserver pods to be ready
+  shell: >
+    kubectl get pods -n pypiserver -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 60
+  become: true

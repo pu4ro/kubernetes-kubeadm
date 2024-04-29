@@ -1,4 +1,7 @@
 ---
+# how to set domain
+main_domain: onboarding-1.com
+
 # kubeadm-init.yaml create
 kubernetes_version: '1.23.17'
 dns_domain: cluster.local
@@ -19,7 +22,7 @@ insecure_registries:
   - "cr.makina.rocks"
 
 # Master Node remove taint
-remove_master_taint: true
+remove_taints: true
 
 rook_ceph_values:
   cephClusterSpec:
@@ -70,4 +73,10 @@ harbor_values:
       registry:
         size: "50Gi"
   trivy:
-    enabled: false
+    enabled: false\
+
+
+# elastic-search replicas
+elastic_replicas: 2
+
+#

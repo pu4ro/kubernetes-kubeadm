@@ -1,0 +1,35 @@
+---
+- name: Check if minio is already installed
+  community.kubernetes.helm_info:
+    name: minio
+    namespace: minio
+  register: minio
+
+- name: Add minio repository to Helm
+  community.kubernetes.helm_repository:
+    name: minio
+    repo_url: http://{{ helm_repo_ip }}/minio
+    state: present
+  when: minio.helm_info is undefined or minio.helm_info.resources | length == 0
+
+- name: Install or Upgrade minio Helm chart
+  community.kubernetes.helm:
+    name: minio
+    chart_ref: minio/minio
+    release_namespace: minio
+    create_namespace: true
+  when: minio.helm_info is undefined or minio.helm_info.resources | length == 0
+
+
+- name: Pause for 5 seconds
+  pause:
+    seconds: 5
+
+- name: Wait for all minio pods to be ready
+  shell: >
+    kubectl get pods -n minio -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 60
+  become: true

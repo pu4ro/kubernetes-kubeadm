@@ -4,29 +4,20 @@
     namespace: metallb-system
   register: metallb
 
-- name: Patch kube-proxy ConfigMap to set strictARP to true
-  community.kubernetes.k8s:
-    api_version: v1
-    kind: ConfigMap
-    namespace: kube-system
-    name: kube-proxy
-    merge_type:
-      - strategic-merge
-      - merge
-    definition:
-      data:
-        config.conf: |
-          kind: ConfigMap
-          apiVersion: v1
-          metadata:
-            name: kube-proxy
-            namespace: kube-system
-          data:
-            config.conf: |
-              apiVersion: kubeproxy.config.k8s.io/v1alpha1
-              kind: KubeProxyConfiguration
-              mode: "iptables"
-              strictARP: true
+- name: Get kube-proxy ConfigMap
+  command: kubectl get configmap kube-proxy -n kube-system -o yaml
+  register: kube_proxy_config
+
+- name: Set strictARP to true
+  copy:
+    content: "{{ kube_proxy_config.stdout | regex_replace('strictARP: false', 'strictARP: true') }}"
+    dest: "/tmp/kube-proxy-config.yaml"
+  when: '"strictARP: false" in kube_proxy_config.stdout'
+
+- name: Apply the modified ConfigMap
+  command: kubectl apply -f /tmp/kube-proxy-config.yaml -n kube-system
+  when: '"strictARP: false" in kube_proxy_config.stdout'
+
   register: patch_result
   when: metallb.status is undefined or ('failed' in metallb.status)
 
@@ -63,13 +54,6 @@
   retries: 20
   delay: 60
   become: true
-
-- name: Ensure namespace exists
-  kubernetes.core.k8s:
-    name: "{{ metallb_namespace }}"
-    api_version: v1
-    kind: Namespace
-    state: present
 
 - name: Deploy MetalLB configuration from template
   template:
