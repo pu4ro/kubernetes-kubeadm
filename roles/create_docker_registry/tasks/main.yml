@@ -1,19 +1,17 @@
 ---
-- name: Install Docker
-  ansible.builtin.package:
-    name: docker
-    state: present
-
-- name: Start Docker service
-  ansible.builtin.service:
-    name: docker
-    state: started
-    enabled: true
-
 - name: Check if Docker Registry container exists
-  community.docker.docker_container_info:
-    name: "{{ registry_name }}"
-  register: registry_info
+  ansible.builtin.shell:
+    cmd: "docker ps --filter name=^/{{ registry_name }}$ --format '{{ '{{' }}.Names{{ '}}' }}'"
+  register: docker_ps_output
+  changed_when: false
+  ignore_errors: true
+
+- name: Set container exists flag
+  set_fact:
+    container_exists: "{{ docker_ps_output.stdout == registry_name }}"
+
+- debug:
+    msg: "Container exists: {{ container_exists }}"
 
 - name: Create directory for Docker Registry data
   ansible.builtin.file:
@@ -22,10 +20,10 @@
     owner: root
     group: root
     mode: '0755'
-  when: registry_info.exists == false
+  when: not container_exists  # 조건 수정
   
 - name: Run Docker Registry container
   ansible.builtin.shell:
     cmd: "docker run -d --restart=always --name {{ registry_name }} -p {{ registry_port }}:5000 -v {{ registry_data_dir }}:/var/lib/registry registry:{{ registry_version }}"
     creates: "{{ registry_data_dir }}/data"
-  when: registry_info.exists == false
+  when: not container_exists  # 조건 수정
