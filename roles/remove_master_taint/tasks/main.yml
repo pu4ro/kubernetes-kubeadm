@@ -1,17 +1,25 @@
 ---
 - name: List all taints on master nodes
-  command: kubectl describe node {{ item }} | grep -i Taints
-  register: taints_output
+  command: kubectl describe node {{ item }}
+  register: node_describe_output
   loop: "{{ groups['masters'] }}"
   when: remove_taints
-  ignore_errors: true  # taints가 없어서 grep 실패시 에러 무시
+  ignore_errors: true
+
+- name: Parse taints from describe output
+  set_fact:
+    taints_output: "{{ taints_output | default([]) + [{'node': item.item, 'taints': item.stdout | regex_findall('Taints: (.*)')}] }}"
+  loop: "{{ node_describe_output.results }}"
+  when: 
+    - item.rc == 0
+    - "'Taints: <none>' not in item.stdout"
 
 - name: Remove taints from master node
-  command: kubectl taint nodes {{ item.node }} {{ item.taint }}-
-  loop: "{{ taints_output.results }}"
+  command: kubectl taint nodes {{ item.node }} {{ taint.split(':')[0] }}-
+  loop: "{{ taints_output }}"
   when:
     - remove_taints
-    - item.rc == 0  # rc(return code)가 0이면 grep에서 무언가 찾았다는 의미
-    - "'NoSchedule' in item.stdout"
+    - "'NoSchedule' in item.taints"
   loop_control:
     loop_var: item
+    extended: true

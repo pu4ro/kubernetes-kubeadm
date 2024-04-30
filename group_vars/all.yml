@@ -114,7 +114,7 @@ pgpool_password: "kidi"
 
 # create_docker_config.json in kubelet
 docker_username: "admin"
-docker_password: "example"
+docker_password: "Mak1nar0cks!"
 docker_registry: "cr.makina.rocks"
 
 

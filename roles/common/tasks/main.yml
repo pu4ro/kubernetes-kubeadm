@@ -74,7 +74,6 @@
     - ip_vs_sh
     - overlay
 
-
 # set timezone
 - name: Set timezone to Asia/Seoul
   timezone:
@@ -86,8 +85,17 @@
   register: timedatectl_output
   tags: timezone
 
-
 - name: Show the current timezone
   debug:
     msg: "{{ timedatectl_output.stdout_lines }}"
   tags: timezone
+
+# set selinux off
+- name: Check SELinux status
+  command: getenforce
+  register: selinux_status
+  changed_when: false
+
+- name: Disable SELinux
+  command: setenforce 0
+  when: selinux_status.stdout != "Permissive"
