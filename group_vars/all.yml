@@ -2,6 +2,9 @@
 # how to set domain
 main_domain: onboarding1.com
 
+# docker-registry setting - to install k8s or runway
+docker_registry_hostname
+
 # timezone && chrony
 set_timezone: Asia/Seoul
 

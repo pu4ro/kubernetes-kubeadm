@@ -1,25 +1,20 @@
 ---
-- name: List all taints on master nodes
-  command: kubectl describe node {{ item }}
-  register: node_describe_output
-  loop: "{{ groups['masters'] }}"
+# tasks file for conditional_remove_master_taint
+- name: Check if taint removal is enabled
+  fail:
+    msg: "Taint removal is disabled."
+  when: not remove_taints
+
+- name: Get all master nodes
+  command: kubectl get nodes -o jsonpath="{.items[?(@.metadata.labels['node-role.kubernetes.io/master'])].metadata.name}"
+  register: master_nodes
   when: remove_taints
-  ignore_errors: true
+  changed_when: false
 
-- name: Parse taints from describe output
-  set_fact:
-    taints_output: "{{ taints_output | default([]) + [{'node': item.item, 'taints': item.stdout | regex_findall('Taints: (.*)')}] }}"
-  loop: "{{ node_describe_output.results }}"
-  when: 
-    - item.rc == 0
-    - "'Taints: <none>' not in item.stdout"
-
-- name: Remove taints from master node
-  command: kubectl taint nodes {{ item.node }} {{ taint.split(':')[0] }}-
-  loop: "{{ taints_output }}"
+- name: Remove specific taints from each master node
+  command: kubectl taint nodes {{ item }} key=value:NoSchedule-
+  loop: "{{ master_nodes.stdout_lines }}"
   when:
     - remove_taints
-    - "'NoSchedule' in item.taints"
-  loop_control:
-    loop_var: item
-    extended: true
+    - master_nodes.stdout != ""
+

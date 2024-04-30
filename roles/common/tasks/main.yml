@@ -2,6 +2,7 @@
 - name: Set hostname to inventory hostname
   hostname:
     name: "{{ inventory_hostname }}"
+  tags: common
 
 - name: Update /etc/hosts
   lineinfile:
@@ -9,6 +10,7 @@
     regexp: '^127\.0\.1\.1.*'
     line: "127.0.1.1 {{ inventory_hostname }}"
     state: present
+  tags: common
 
 - name: Disable firewalld (CentOS/RHEL)
   service:
@@ -16,11 +18,13 @@
     state: stopped
     enabled: no
   when: ansible_os_family == "RedHat"
+  tags: common
 
 - name: Disable SELinux (CentOS/RHEL)
   selinux:
     state: disabled
   when: ansible_os_family == "RedHat"
+  tags: common
 
 - name: Disable ufw (Ubuntu)
   service:
@@ -28,9 +32,12 @@
     state: stopped
     enabled: no
   when: ansible_os_family == "Debian"
+  tags: common
 
 - name: Gather facts from all hosts
   setup:
+  tags: common
+
 
 - name: Configure /etc/hosts
   template:
@@ -39,6 +46,7 @@
     owner: root
     group: root
     mode: '0644'
+  tags: common
 
 
 - name: Ensure the modules-load.d directory exists
@@ -46,6 +54,7 @@
     path: /etc/modules-load.d
     state: directory
     mode: '0755'
+  tags: common  
 
 - name: Add required kernel modules to load at boot
   copy:
@@ -61,6 +70,7 @@
     group: root
     mode: '0644'
   notify: reload systemd-modules-load
+  tags: common
 
 - name: Load kernel modules
   modprobe:
@@ -73,6 +83,7 @@
     - ip_vs_wrr
     - ip_vs_sh
     - overlay
+  tags: common
 
 # set timezone
 - name: Set timezone to Asia/Seoul
@@ -95,7 +106,9 @@
   command: getenforce
   register: selinux_status
   changed_when: false
+  tags: common
 
 - name: Disable SELinux
   command: setenforce 0
-  when: selinux_status.stdout != "Permissive"
+  when: selinux_status.stdout != "Permissive" and ansible_facts['os_family'] == "RedHat"
+  tags: common

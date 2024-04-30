@@ -12,3 +12,8 @@ server=/#/{{ server }}
 {% if enable_wildcard %}
 address=/#/.{{ main_domain }}/{{ wildcard_ip }}
 {% endif %}
+
+
+{% if docker_registry_address is defined %}
+address=/{{ docker_registry }}/{{ docker_registry_ip }}
+{% endif %}

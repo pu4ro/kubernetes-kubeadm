@@ -1,0 +1,31 @@
+---
+- name: Install Docker
+  ansible.builtin.package:
+    name: docker
+    state: present
+
+- name: Start Docker service
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Check if Docker Registry container exists
+  community.docker.docker_container_info:
+    name: "{{ registry_name }}"
+  register: registry_info
+
+- name: Create directory for Docker Registry data
+  ansible.builtin.file:
+    path: "{{ registry_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: registry_info.exists == false
+  
+- name: Run Docker Registry container
+  ansible.builtin.shell:
+    cmd: "docker run -d --restart=always --name {{ registry_name }} -p {{ registry_port }}:5000 -v {{ registry_data_dir }}:/var/lib/registry registry:{{ registry_version }}"
+    creates: "{{ registry_data_dir }}/data"
+  when: registry_info.exists == false

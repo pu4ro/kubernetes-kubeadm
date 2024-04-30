@@ -1,4 +1,10 @@
 ---
+- hosts: installs #pre-install
+    - configure_repo 
+    - install_os_package
+    - install_docker
+    - create_docker_registry
+
 - hosts: all  #Infra settings
   roles:
     - configure_repo                
