@@ -2,7 +2,6 @@
 domain-needed
 bogus-priv
 expand-hosts
-domain={{ main_domain }}
 
 {% if enable_forwarding %}
 {% for server in forward_servers %}
@@ -11,5 +10,5 @@ server=/#/{{ server }}
 {% endif %}
 
 {% if enable_wildcard %}
-address=/#/{{ wildcard_ip }}
+address=/#/.{{ main_domain }}/{{ wildcard_ip }}
 {% endif %}
