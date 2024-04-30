@@ -1,79 +1,42 @@
 # kubernetes-kubeadm
 
-kubernetes-kubeadm/
-├── group_vars
-│   └── all.yml
-├── inventory.ini
-├── README.md
-├── roles
-│   ├── common
-│   │   ├── handlers
-│   │   │   └── main.yml
-│   │   ├── tasks
-│   │   │   └── main.yml
-│   │   ├── templates
-│   │   └── vars
-│   │       └── main.yml
-│   ├── install_cert_manager
-│   │   └── tasks
-│   │       └── main.yml
-│   ├── install_docker
-│   │   ├── handlers
-│   │   │   └── main.yml
-│   │   ├── tasks
-│   │   │   └── main.yml
-│   │   └── templates
-│   │       └── daemon.json.j2
-│   ├── install_harbor
-│   │   ├── tasks
-│   │   │   └── main.yml
-│   │   └── templates
-│   ├── install_istio
-│   │   ├── tasks
-│   │   │   └── main.yml
-│   │   └── templates
-│   ├── install_master
-│   │   ├── tasks
-│   │   │   └── main.yml
-│   │   ├── templates
-│   │   │   └── kube-config.yaml.j2
-│   │   └── vars
-│   │       └── main.yml
-│   ├── install_metal_lb
-│   │   ├── tasks
-│   │   │   └── main.yml
-│   │   └── templates
-│   ├── install_OS_package
-│   │   ├── tasks
-│   │   │   └── main.yml
-│   │   ├── templates
-│   │   └── vars
-│   │       └── main.yml
-│   ├── install_rook-ceph
-│   │   ├── tasks
-│   │   │   └── main.yml
-│   │   └── templates
-│   ├── install_tools
-│   │   └── tasks
-│   │       └── main.yml
-│   ├── intall_flannel
-│   │   ├── tasks
-│   │   │   └── main.yml
-│   │   └── templates
-│   │       └── kube-flannel.yml.j2
-│   ├── remove_master_taint
-│   │   └── tasks
-│   │       └── main.yml
-│   ├── sysctl
-│   │   ├── handlers
-│   │   │   └── main.yml
-│   │   ├── tasks
-│   │   │   └── main.yml
-│   │   └── templates
-│   │       └── k8s.conf.j2
-│   └── worker
-│       ├── tasks
-│       │   └── main.yml
-│       └── vars
-│           └── main.yml
-└── site.yml
+### site.yml
+```
+- hosts: all  #Infra settings
+  roles:
+    - configure_repo                
+    - common # set_timezone, set_kernel, tags=timezone                 
+    - configure_sysctl           
+    - install_os_package
+    - install_docker
+    - install_kubernetes
+    - copy_config # docker_config_copy
+    - configure_dns # tags=set_dns
+
+- hosts: installs # runway back_ground install && runway install
+  roles:
+    - install_dnsmasq # set dns-server, tags=dns
+    - install_flannel
+    - install_tools # set k9s,kubectl,helm tags=tools
+    - remove_master_taint
+    - install_cert_manager
+    - install_rook_ceph
+    - install_istio
+    - install_metal_lb
+    - install_harbor
+    - install_prometheus
+    - install_ef # elastic & fluentd
+    - install_knative
+    - install_minio
+    - install_argo
+    - install_pypiserver
+    - install_stream
+    - install_backend
+    - install_frontend
+```
+
+
+### how to deploy  
+```
+ansible-playbook -i inventory.ini site.yml
+```
