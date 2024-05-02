@@ -64,7 +64,7 @@
 
 - name: Pause for 5 seconds
   pause:
-    seconds: 20
+    seconds: 60
 
 - name: Apply MetalLB configuration
   command: kubectl apply -f /tmp/metallb_config.yaml

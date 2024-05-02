@@ -6,7 +6,7 @@
   when: not remove_taints
 
 - name: Get all master nodes
-  command: kubectl get nodes -o jsonpath="{.items[?(@.metadata.labels['node-role.kubernetes.io/master'])].metadata.name}"
+  command:  kubectl get node | grep master | awk '{print $1}'
   register: master_nodes
   when: remove_taints
   changed_when: false

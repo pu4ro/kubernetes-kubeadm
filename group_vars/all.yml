@@ -55,10 +55,6 @@ rook_ceph_values:
       enabled: true
   operatorNamespace: rook-ceph
 
-helm_repo_url: "http://get.helm.sh/helm-v3.5.4-linux-amd64.tar.gz"
-k9s_repo_url: "http://github.com/derailed/k9s/releases/download/v0.24.10/k9s_Linux_x86_64.tar.gz"
-
-
 # delete_master_node_taint
 remove_master_taint: true
 

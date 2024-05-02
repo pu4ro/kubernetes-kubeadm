@@ -1,27 +1,27 @@
 ---
-- hosts: installs #pre-install
-  roles:
-  #  - configure_repo 
-  #  - install_os_package
-  #  - install_docker
-  #  - create_docker_registry
-  #  - install_dnsmasq # set dns-server, tags=dns
-
-- hosts: all  #Infra settings
-  roles:
+#- hosts: installs #pre-install
+#  roles:
+#    - configure_repo 
+#    - install_os_package
+#    - install_docker
+#  #  - create_docker_registry
+#    - install_dnsmasq # set dns-server, tags=dns
+#
+#- hosts: all  #Infra settings
+#  roles:
+#    - configure_dns # tags=set_dns
 #    - configure_repo                
 #    - common # set_timezone, set_kernel, tags=timezone                 
 #    - configure_sysctl           
 #    - install_os_package
 #    - install_docker
 #    - install_kubernetes
-#    - copy_config # docker_config_copy
-    - configure_dns # tags=set_dns
+#    - copy_config # docker_config_copy    
 #
 - hosts: installs # runway back_ground install && runway install
   roles:
-    - install_flannel
-    - install_tools # set k9s,kubectl,helm tags=tools
+#    - install_flannel
+#    - install_tools # set k9s,kubectl,helm tags=tools
     - remove_master_taint
     - install_cert_manager
     - install_rook_ceph

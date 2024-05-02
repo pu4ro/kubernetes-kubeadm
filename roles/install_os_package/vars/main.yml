@@ -1,7 +1,5 @@
 ---
 ubuntu_packages:
-  - docker-ce
-  - containerd
   - kubelet
   - kubeadm
   - kubectl
@@ -13,6 +11,8 @@ ubuntu_packages:
   - openssh-server
   - net-tools
   - ca-certificates
+  - docker-ce
+  - containerd
 
 centos_packages:
   - docker-ce
