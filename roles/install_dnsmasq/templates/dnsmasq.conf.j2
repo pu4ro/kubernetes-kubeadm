@@ -5,15 +5,15 @@ expand-hosts
 
 {% if enable_forwarding %}
 {% for server in forward_servers %}
-server=/#/{{ server }}
+server={{ server }}
 {% endfor %}
 {% endif %}
 
 {% if enable_wildcard %}
-address=/#/.{{ main_domain }}/{{ wildcard_ip }}
+address=/.{{ main_domain }}/{{ wildcard_ip }}
 {% endif %}
 
 
-{% if docker_registry is defined %}
+{% if docker_registry is defined and docker_registry_ip is defined %}
 address=/{{ docker_registry }}/{{ docker_registry_ip }}
 {% endif %}

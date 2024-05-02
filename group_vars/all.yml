@@ -3,11 +3,11 @@
 main_domain: onboarding1.com
 
 # docker-registry setting - to install k8s or runway
-docker_registry_ip: "192.168.0.21"
-registry_port: 5000
-registry_version: "2"
-registry_data_dir: "/opt/docker-registry"
-registry_name: "registry"
+#docker_registry_ip: "192.168.0.21"
+#registry_port: 5000
+#registry_version: "2"
+#registry_data_dir: "/opt/docker-registry"
+#registry_name: "registry"
 
 # timezone && chrony
 set_timezone: Asia/Seoul
@@ -20,8 +20,8 @@ service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
 
 # DNS wildcard_ip
-wildcard_ip: "192.168.0.30"
-main_nameserver: "192.168.0.21"
+wildcard_ip: "192.168.0.200"
+main_nameserver: "192.168.0.101"
 enable_forwarding: true
 forward_servers:
   - "168.126.63.1"
@@ -31,10 +31,10 @@ enable_wildcard: true
 # helm command && OS package repo
 repo_url:
   centos: "http://192.168.0.21:8080/repo"
-  ubuntu: "http://your-web-server.com/ubuntu/"
+  ubuntu: "http://192.168.0.101:8080/repo/"
 
-helm_repo_ip: "192.168.0.21"
-
+helm_repo_ip: "192.168.0.101:8080" # use http_port 
+ 
 # Docker 관련 변수
 insecure_registries:
   - "harbor.makina.{{ main_domain }}"
@@ -121,7 +121,7 @@ pgpool_password: "kidi"
 
 # create_docker_config.json in kubelet, only use public
 docker_username: "admin"
-docker_password: "password"
+docker_password: "Mak1nar0cks!"
 docker_registry: "cr.makina.rocks"
 
 

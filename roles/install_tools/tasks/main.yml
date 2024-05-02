@@ -4,6 +4,16 @@
     url: "{{ repo_url.centos }}/helm"
     dest: "/tmp/helm"
     mode: '0777'
+  when: ansible_facts['os_family'] == "RedHat"
+  tags:
+    - tools
+
+- name: Install Helm (CentOS & Ubuntu)
+  get_url:
+    url: "{{ repo_url.ubuntu }}/helm"
+    dest: "/tmp/helm"
+    mode: '0777'
+  when: ansible_facts['os_family'] == "Debian"
   tags:
     - tools
 
@@ -21,6 +31,16 @@
     url: "{{ repo_url.centos }}/k9s"
     dest: "/tmp/k9s"
     mode: '0777'
+  when: ansible_facts['os_family'] == "RedHat"
+  tags:
+    - tools
+  
+- name: Install k9s (CentOS & Ubuntu)
+  get_url:
+    url: "{{ repo_url.ubuntu}}/k9s"
+    dest: "/tmp/k9s"
+    mode: '0777'
+  when: ansible_facts['os_family'] == "Debian"
   tags:
     - tools
 

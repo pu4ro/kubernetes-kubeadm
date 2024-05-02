@@ -1,15 +1,18 @@
 ---
 ubuntu_packages:
-  - docker.io
+  - docker-ce
   - containerd
   - kubelet
   - kubeadm
   - kubectl
   - nfs-common
   - nfs-kernel-server
-  - tree
   - bash-completion
   - dnsmasq
+  - jq
+  - openssh-server
+  - net-tools
+  - ca-certificates
 
 centos_packages:
   - docker-ce

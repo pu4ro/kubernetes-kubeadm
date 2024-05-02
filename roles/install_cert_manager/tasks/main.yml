@@ -10,6 +10,7 @@
     name: jetstack
     repo_url: http://{{ helm_repo_ip }}/cert-manager
     state: present
+    force_update: yes
   when: cert_manager_info.status is undefined or ('failed' in cert_manager_info.status)
 
 - name: Install cert-manager if not installed

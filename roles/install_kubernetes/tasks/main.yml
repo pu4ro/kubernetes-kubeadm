@@ -1,9 +1,30 @@
 ---
 - name: Initialize the Kubernetes master
   block:
+    - name: Check if kube-apiserver is running
+      shell: docker ps | grep -v pause | grep kube-apiserver
+      register: kube_apiserver
+      ignore_errors: true
+      retries: 5
+      delay: 60
+      until: kube_apiserver.rc == 0
+      changed_when: False
+
+    - name: Proceed with next tasks
+      debug:
+        msg: "kube-apiserver is running."
+      when: kube_apiserver.rc == 0
+
+    - name: Proceed with next tasks
+      debug:
+        msg: "kube-apiserver is running."
+      when: kube_apiserver.rc == 0
+      
     - name: Check if any Kubernetes nodes are already set up
       command: kubectl get nodes
       register: kubectl_nodes
+      retries: 5
+      delay: 60
       ignore_errors: true
 
     - name: Template kubeadm config file

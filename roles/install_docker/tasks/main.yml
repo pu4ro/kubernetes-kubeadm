@@ -28,7 +28,7 @@
 
 - name: Install Docker (Ubuntu)
   apt:
-    name: docker.io
+    name: docker-ce
     state: present
     update_cache: yes
   when: ansible_os_family == "Debian"

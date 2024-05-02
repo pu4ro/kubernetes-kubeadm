@@ -14,7 +14,5 @@
 - name: Remove specific taints from each master node
   command: kubectl taint nodes {{ item }} key=value:NoSchedule-
   loop: "{{ master_nodes.stdout_lines }}"
-  when:
-    - remove_taints
-    - master_nodes.stdout != ""
+  when: remove_taints and master_nodes.stdout != ""
 

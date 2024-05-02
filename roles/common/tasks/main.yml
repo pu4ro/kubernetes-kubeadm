@@ -106,9 +106,41 @@
   command: getenforce
   register: selinux_status
   changed_when: false
+  when: ansible_os_family == "RedHat"
   tags: common
 
 - name: Disable SELinux
   command: setenforce 0
-  when: selinux_status.stdout != "Permissive" and ansible_facts['os_family'] == "RedHat"
+  when: ansible_facts['os_family'] == "RedHat"
   tags: common
+
+- name: Turn off all swap spaces immediately
+  command: swapoff -a
+  changed_when: false
+
+- name: Backup /etc/fstab file
+  copy:
+    src: /etc/fstab
+    dest: /etc/fstab.backup
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Permanently disable swap by commenting swap line in /etc/fstab
+  lineinfile:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s.*)$'
+    line: '#\1'
+    backrefs: yes
+
+- name: Ensure no swap entries exist in /etc/fstab
+  lineinfile:
+    path: /etc/fstab
+    state: absent
+    regexp: '^\s*UUID=\S+\s+none\s+swap\s+sw\s+0\s+0\s*$'
+    
+- name: Ensure no swap label entries exist in /etc/fstab
+  lineinfile:
+    path: /etc/fstab
+    state: absent
+    regexp: '^\s*LABEL=\S+\s+none\s+swap\s+sw\s+0\s+0\s*$'
