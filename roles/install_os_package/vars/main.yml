@@ -13,6 +13,7 @@ ubuntu_packages:
   - ca-certificates
   - docker-ce
   - containerd
+  - chrony
 
 centos_packages:
   - docker-ce
@@ -24,3 +25,5 @@ centos_packages:
   - bash-completion
   - dnsmasq
   - nfs-utils
+
+  
