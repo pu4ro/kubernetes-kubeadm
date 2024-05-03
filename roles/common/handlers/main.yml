@@ -3,4 +3,10 @@
   systemd:
     name: systemd-modules-load.service
     state: restarted
-    enabled: yes
+    enabled: true
+
+- name: Restart Chrony service
+  systemd:
+    name: chronyd
+    state: restarted
+    enabled: true

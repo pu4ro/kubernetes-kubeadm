@@ -143,4 +143,28 @@
   lineinfile:
     path: /etc/fstab
     state: absent
-    regexp: '^\s*LABEL=\S+\s+none\s+swap\s+sw\s+0\s+0\s*$'
+    regexp: '^\s*LABEL=\S+\s+none\s+swap\s+sw\s+0\s+0\s*$'\
+
+- name: Install Chrony - Debian
+  apt:
+    name: "chrony"
+    state: present
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Install Chrony - CentOS
+  apt:
+    name: "chrony"
+    state: present
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Configure Chrony
+  template:
+    src: "chrony-{{ ansible_os_family }}.conf.j2"
+    dest: /etc/chrony/chrony.conf
+  notify: Restart Chrony service
+
+- name: Start Chrony service
+  service:
+    name: chronyd
+    state: started
+    enabled: true

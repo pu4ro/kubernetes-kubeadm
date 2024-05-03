@@ -3,7 +3,7 @@
   roles:
 #    - configure_repo 
 #    - install_os_package
-    - install_docker
+#    - install_docker
 #  #  - create_docker_registry
 #    - install_dnsmasq # set dns-server, tags=dns
 #
@@ -11,7 +11,7 @@
 #  roles:
 #    - configure_dns # tags=set_dns
 #    - configure_repo                
-#    - common # set_timezone, set_kernel, tags=timezone                 
+#    - common # set_timezone & chrony, set_kernel, tags=timezone                 
 #    - configure_sysctl           
 #    - install_os_package
 #    - install_docker
