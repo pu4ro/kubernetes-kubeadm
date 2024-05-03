@@ -39,6 +39,7 @@ helm_repo_ip: "192.168.0.101:8080" # use http_port
 insecure_registries:
   - "harbor.makina.{{ main_domain }}"
   - "cr.makina.rocks"
+docker_log_max_size: "2000m"
 
 # Master Node remove taint
 remove_taints: true
@@ -125,3 +126,14 @@ docker_registry: "cr.makina.rocks"
 helm_namespace: "runway"
 global_production: true
 image_tag: "v1.1.0"
+
+#Gpu-operator
+gpu_operator_values:
+  driver:
+    enabled: false
+  mig:
+    strategy: false
+  toolkit:
+    enabled: false
+  dcgmExporter:
+    enabled: true

@@ -1,0 +1,37 @@
+---
+- name: Check if gpu-operator is already installed
+  community.kubernetes.helm_info:
+    name: gpu-operator
+    namespace: gpu-operator
+  register: gpu_operator
+
+- name: Add gpu-operator repository to Helm
+  community.kubernetes.helm_repository:
+    name: gpu-operator
+    repo_url: http://{{ helm_repo_ip }}/gpu-operator
+    state: present
+  when: gpu_operator.helm_info is undefined or gpu_operator.helm_info.resources | length == 0
+
+- name: Install GPU Operator
+  community.kubernetes.helm:
+    name: gpu-operator
+    chart_ref: "gpu-operator/gpu-operator"
+    release_namespace: gpu-operator
+    create_namespace: yes
+    values: "{{ gpu_operator_values }}"
+
+- name: Pause for 5 seconds
+  pause:
+    seconds: 5
+
+- name: Wait for all gpu-operator pods to be ready
+  shell: >
+    kubectl get pods -n gpu-operator -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 60
+  become: true
+
+
+

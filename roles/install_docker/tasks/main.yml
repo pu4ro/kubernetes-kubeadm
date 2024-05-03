@@ -39,10 +39,20 @@
     state: started
     enabled: true
 
-- name: Configure Docker daemon
+- name: Check if GPU is installed (Replace this with actual logic to check for GPU installation)
+  shell: lspci | grep -i nvidia
+  register: gpu_installed
+  ignore_errors: true
+
+- set_fact:
+    gpu_added: "{{ gpu_installed.rc == 0 }}"
+
+- name: Generate Docker daemon configuration template
   template:
     src: daemon.json.j2
     dest: /etc/docker/daemon.json
+  vars:
+    gpu_added: "{{ gpu_installed.rc == 0 }}" 
 
 - name: Reload Docker to apply new configuration
   systemd:

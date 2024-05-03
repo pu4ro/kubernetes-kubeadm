@@ -1,18 +1,11 @@
 ---
 # tasks file for conditional_remove_master_taint
-- name: Check if taint removal is enabled
-  fail:
-    msg: "Taint removal is disabled."
-  when: not remove_taints
-
-- name: Get all master nodes
-  command:  kubectl get node | grep master | awk '{print $1}'
-  register: master_nodes
-  when: remove_taints
+- name: Get master node name
+  shell: kubectl get nodes --no-headers -o custom-columns="NAME:.metadata.name" | grep -E 'master|control-plane'
+  register: master_node_name
   changed_when: false
-
-- name: Remove specific taints from each master node
-  command: kubectl taint nodes {{ item }} key=value:NoSchedule-
-  loop: "{{ master_nodes.stdout_lines }}"
-  when: remove_taints and master_nodes.stdout != ""
+  
+- name: Remove taint from master node
+  command: kubectl taint nodes {{ master_node_name.stdout }} node-role.kubernetes.io/master:NoSchedule- --overwrite
+  when: master_node_name.stdout != ""
 
