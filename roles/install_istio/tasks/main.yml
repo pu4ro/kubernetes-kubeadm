@@ -9,7 +9,7 @@
 - name: Add istio-base repository to Helm
   community.kubernetes.helm_repository:
     name: istio-base
-    repo_url: http://{{ helm_repo_ip }}/istio-base
+    repo_url: http://{{ helm_repo_ip }}/base
     state: present
   when: istio_base.status is undefined or ('failed' in istio_base.status)
 
@@ -31,7 +31,7 @@
 - name: Add istiod repository to Helm
   community.kubernetes.helm_repository:
     name: istio-istiod
-    repo_url: http://{{ helm_repo_ip }}/istio-istiod
+    repo_url: http://{{ helm_repo_ip }}/istiod
     state: present
   when: istio_istiod.status is undefined or ('failed' in istio_istiod.status)
 
@@ -53,7 +53,7 @@
 - name: Add istio-ingressgateway repository to Helm
   community.kubernetes.helm_repository:
     name: istio-ingressgateway
-    repo_url: http://{{ helm_repo_ip }}/istio-gateway
+    repo_url: http://{{ helm_repo_ip }}/gateway
     state: present
   when: istio_ingressgateway.status is undefined or ('failed' in istio_ingressgateway.status)
 

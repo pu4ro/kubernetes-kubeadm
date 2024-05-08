@@ -4,27 +4,25 @@
     namespace: metallb-system
   register: metallb
 
-- name: Get kube-proxy ConfigMap
-  command: kubectl get configmap kube-proxy -n kube-system -o yaml
-  register: kube_proxy_config
+- name: Get the current kube-proxy ConfigMap
+  shell: kubectl get configmap kube-proxy -n kube-system -o yaml
+  register: current_configmap
 
-- name: Set strictARP to true
+- name: Write the current kube-proxy ConfigMap to a file
   copy:
-    content: "{{ kube_proxy_config.stdout | regex_replace('strictARP: false', 'strictARP: true') }}"
-    dest: "/tmp/kube-proxy-config.yaml"
-  when: '"strictARP: false" in kube_proxy_config.stdout'
+    content: "{{ current_configmap.stdout }}"
+    dest: "/tmp/current-kube-proxy-config.yaml"
 
-- name: Apply the modified ConfigMap
-  command: kubectl apply -f /tmp/kube-proxy-config.yaml -n kube-system
-  when: '"strictARP: false" in kube_proxy_config.stdout'
+- name: Update strictARP to true in the kube-proxy ConfigMap
+  replace:
+    path: "/tmp/current-kube-proxy-config.yaml"
+    regexp: 'strictARP: false'
+    replace: 'strictARP: true'
+  register: update_result
 
-  register: patch_result
-  when: metallb.status is undefined or ('failed' in metallb.status)
-
-- name: Verify if the patch was applied
-  debug:
-    msg: "The kube-proxy ConfigMap was patched successfully."
-  when: patch_result is changed and metallb.status is undefined or ('failed' in metallb.status)
+- name: Apply the modified kube-proxy ConfigMap
+  command: kubectl apply -f /tmp/current-kube-proxy-config.yaml -n kube-system
+  when: update_result.changed
 
 - name: Add metallb repository to Helm
   community.kubernetes.helm_repository:

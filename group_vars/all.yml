@@ -3,11 +3,11 @@
 main_domain: onboarding1.com
 
 # docker-registry setting - to install k8s or runway
-#docker_registry_ip: "192.168.0.21"
-#registry_port: 5000
-#registry_version: "2"
-#registry_data_dir: "/opt/docker-registry"
-#registry_name: "registry"
+docker_registry_ip: "192.168.0.21"
+registry_port: 5000
+registry_version: "2"
+registry_data_dir: "/opt/docker-registry"
+registry_name: "registry"
 
 # timezone && chrony
 set_timezone: Asia/Seoul
@@ -20,8 +20,8 @@ service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
 
 # DNS wildcard_ip
-wildcard_ip: "192.168.0.200"
-main_nameserver: "192.168.0.101"
+wildcard_ip: "192.168.0.30"
+main_nameserver: "192.168.0.21"
 enable_forwarding: true
 forward_servers:
   - "168.126.63.1"
@@ -33,7 +33,7 @@ repo_url:
   centos: "http://192.168.0.21:8080/repo"
   ubuntu: "http://192.168.0.101:8080/repo/"
 
-helm_repo_ip: "192.168.0.101:8080" # use http_port 
+helm_repo_ip: "192.168.0.21:8080" # use http_port 
  
 # Docker 관련 변수
 insecure_registries:
@@ -114,7 +114,7 @@ pip_trusted_host: "pubpypi.makina.rocks"
 pip_index_url: "http://pubpypi.makina.rocks/simple/"
 pgpool_username: "kidi"
 pgpool_password: "kidi"
-
+backend_tag: "v1.1.0.1"
 
 # create_docker_config.json in kubelet, only use public
 docker_username: "admin"
@@ -125,7 +125,7 @@ docker_registry: "cr.makina.rocks"
 # frontend-vars
 helm_namespace: "runway"
 global_production: true
-image_tag: "v1.1.0"
+image_tag: "v1.1.0.1"
 
 #Gpu-operator
 gpu_operator_values:

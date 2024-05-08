@@ -36,9 +36,11 @@
         POD_COMMIT_IMAGE_REGISTRY_API_URL: "{{ image_registry_url }}"
         PIP_TRUSTED_HOST: "{{ pip_trusted_host }}"
         PIP_INDEX_URL: "{{ pip_index_url }}"
+        IMAGE_REGISTRY_API_URL: "http://harbor.makina.{{ main_domain }}/api/v2.0"
+        POD_COMMIT_JOB_IMAGE_REGISTRY: "harbor.makina.{{ main_domain }}"
       global:
         image:
-          tag: "v1.1.0"
+          tag: "{{ backend_tag }}"
         initSetup: false
         production: true
         virtualService:

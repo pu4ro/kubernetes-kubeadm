@@ -1,0 +1,70 @@
+---
+
+
+- name: Check if a specific file exists
+  stat:
+    path: "/var/lib/rook"
+  register: file_check
+
+- name: Delete Rook-Ceph directory if specific file exists
+  file:
+    path: "/var/lib/rook"
+    state: absent
+  when: file_check.stat.exists
+
+- name: Patch CRDs to remove finalizers
+  shell: |
+    for CRD in $(kubectl get crd | awk '/ceph.rook.io/ {print $1}'); do
+      kubectl get "$CRD" -n rook-ceph -o name | xargs -I {} kubectl patch -n rook-ceph {} --type merge -p '{"metadata":{"finalizers": []}}'
+    done
+  args:
+    executable: /bin/bash
+  ignore_errors: true
+
+- name: Remove finalizers from rook-ceph-mon-endpoints ConfigMap
+  shell: | 
+    kubectl -n rook-ceph patch configmap rook-ceph-mon-endpoints --type merge -p '{"metadata":{"finalizers": []}}'
+  args:
+    executable: /bin/bash
+  ignore_errors: true
+
+- name: Remove finalizers from rook-ceph-mon Secret
+  shell: |
+    kubectl -n rook-ceph patch secret rook-ceph-mon --type merge -p '{"metadata":{"finalizers": []}}'
+  args:
+    executable: /bin/bash
+  ignore_errors: true
+
+
+- name: Identify and initialize Ceph OSD disks
+  block:
+    - name: Find disks with ceph_bluestore type
+      shell: blkid | grep ceph
+      register: ceph_disks
+      changed_when: false
+      ignore_errors: true
+
+    - name: Zap all on the disk
+      command: sgdisk --zap-all {{ item.split(':')[0] }}
+      loop: "{{ ceph_disks.stdout_lines }}"
+      when: ceph_disks.stdout != ""
+      changed_when: false
+
+    - name: DD zero to the disk
+      command: dd if=/dev/zero of={{ item.split(':')[0] }} bs=1M count=100 oflag=direct,dsync
+      loop: "{{ ceph_disks.stdout_lines }}"
+      when: ceph_disks.stdout != ""
+      changed_when: true
+
+    - name: Discard blocks on the disk
+      command: blkdiscard {{ item.split(':')[0] }}
+      loop: "{{ ceph_disks.stdout_lines }}"
+      when: ceph_disks.stdout != ""
+      changed_when: true
+
+    - name: Inform OS of partition table changes
+      command: partprobe {{ item.split(':')[0] }}
+      loop: "{{ ceph_disks.stdout_lines }}"
+      when: ceph_disks.stdout != ""
+      changed_when: true
+

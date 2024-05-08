@@ -20,10 +20,10 @@
     owner: root
     group: root
     mode: '0755'
-  when: not container_exists  # 조건 수정
+  when: not container_exists  
   
 - name: Run Docker Registry container
   ansible.builtin.shell:
     cmd: "docker run -d --restart=always --name {{ registry_name }} -p {{ registry_port }}:5000 -v {{ registry_data_dir }}:/var/lib/registry registry:{{ registry_version }}"
     creates: "{{ registry_data_dir }}/data"
-  when: not container_exists  # 조건 수정
+  when: not container_exists 
