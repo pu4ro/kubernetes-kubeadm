@@ -37,7 +37,7 @@ helm_repo_ip: "192.168.0.21:8080" # use http_port
  
 # Docker 관련 변수
 insecure_registries:
-  - "harbor.makina.{{ main_domain }}"
+  - "harbor.{{ main_domain }}"
   - "cr.makina.rocks"
 docker_log_max_size: "2000m"
 
@@ -82,7 +82,7 @@ harbor_values:
       enabled: false
     type: clusterIP
   externalURLs:
-    - "http://harbor.makina.{{ main_domain }}"
+    - "http://harbor.{{ main_domain }}"
   persistence:
     enabled: true
     persistentVolumeClaim:
@@ -96,11 +96,11 @@ harbor_values:
 elastic_replicas: 2
 
 #backend
-image_registry_url: "http://harbor.makina.{{ main_domain }}/api/v2.0"
+image_registry_url: "http://harbor.{{ main_domain }}/api/v2.0"
 image_registry_username: "mrx.dev"
 image_registry_password: "klw9pcSDWkpY4udGaGjQP7KrjGoegdIw"
 image_registry_api_token: "YWRtaW46SGaFyYm9yMTIzNDU="
-grafana_public_url: "grafana.runway.makina.{{ main_domain }}"
+grafana_public_url: "grafana.runway.{{ main_domain }}"
 runway_url: "runway.makina.{{ main_domain }}"
 postgresql_replica_count: "3"
 project_shard_volume_storage_class: "ceph-filesystem"

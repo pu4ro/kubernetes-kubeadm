@@ -27,7 +27,7 @@
         GRAFANA_PUBLIC_URL: "{{ grafana_public_url }}"
         NODE_NO_LIMIT_RESOURCES: "false"
         RUNWAY_URL: "{{ runway_url }}"
-        POD_COMMIT_IMAGE_REGISTRY: "harbor.makina.{{ main_domain }}"
+        POD_COMMIT_IMAGE_REGISTRY: "harbor.{{ main_domain }}"
         POD_COMMIT_IMAGE_REPOSITORY: "{{ pod_commit_image_repository }}"
         POD_COMMIT_IMAGE_TAG: ""
         POD_COMMIT_IMAGE_REGISTRY_USERNAME: "{{ image_registry_username }}"
@@ -36,15 +36,15 @@
         POD_COMMIT_IMAGE_REGISTRY_API_URL: "{{ image_registry_url }}"
         PIP_TRUSTED_HOST: "{{ pip_trusted_host }}"
         PIP_INDEX_URL: "{{ pip_index_url }}"
-        IMAGE_REGISTRY_API_URL: "http://harbor.makina.{{ main_domain }}/api/v2.0"
-        POD_COMMIT_JOB_IMAGE_REGISTRY: "harbor.makina.{{ main_domain }}"
+        IMAGE_REGISTRY_API_URL: "http://harbor.{{ main_domain }}/api/v2.0"
+        POD_COMMIT_JOB_IMAGE_REGISTRY: "harbor.{{ main_domain }}"
       global:
         image:
           tag: "{{ backend_tag }}"
         initSetup: false
         production: true
         virtualService:
-          domainHost: "runway.makina.{{ main_domain }}"
+          domainHost: "runway.{{ main_domain }}"
           frontend:
             hosts: ""
         backend:
