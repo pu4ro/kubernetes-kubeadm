@@ -4,7 +4,6 @@
     - configure_repo 
     - install_os_package
     - install_docker
-    - create_docker_registry
     - install_dnsmasq # set dns-server, tags=dns
 
 - hosts: all  #Infra settings
