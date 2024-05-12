@@ -66,6 +66,12 @@
       ip_vs_wrr
       ip_vs_sh
       overlay
+      xt_REDIRECT
+      xt_owner
+      nf_nat
+      iptable_nat
+      iptable_mangle
+      iptable_filter
     owner: root
     group: root
     mode: '0644'
@@ -83,6 +89,12 @@
     - ip_vs_wrr
     - ip_vs_sh
     - overlay
+    - xt_REDIRECT
+    - xt_owner
+    - nf_nat
+    - iptable_nat
+    - iptable_mangle
+    - iptable_filter
   tags: common
 
 # set timezone
