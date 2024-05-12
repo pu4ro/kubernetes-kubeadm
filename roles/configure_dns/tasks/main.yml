@@ -15,7 +15,12 @@
         mode: '0644'
   tags: set_dns
   when: ansible_facts['os_family'] == "Debian"
-  
+
+- name: Set DNS servers for CentOS
+  command: systemctl reload NetworkManager
+  when: ansible_facts['os_family'] == "RedHat"
+  tags: set_dns
+
 - name: Set DNS servers for CentOS
   block:
     - name: Backup resolv.conf

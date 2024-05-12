@@ -1,15 +1,5 @@
 ---
-- name: Retrieve all namespaces
-  command: kubectl get namespaces -o jsonpath="{.items[*].metadata.name}"
-  register: namespaces
-  when: inventory_hostname == "master1"
-  
-- name: Delete all PVCs in each namespace
-  command: kubectl delete pvc --all --namespace {{ item }}
-  loop: "{{ namespaces.stdout.split() }}"
-  when: 
-    - namespaces.stdout != "" 
-    - inventory_hostname == "master1"
+
 
 - name: Check if a specific file exists
   stat:

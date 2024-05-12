@@ -1,0 +1,5 @@
+local stratum 3
+driftfile /var/lib/chrony/drift
+allow {{ ntp_client_network }}
+makestep 1.0 3
+logdir /var/log/chrony

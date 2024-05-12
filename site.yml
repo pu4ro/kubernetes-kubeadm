@@ -8,6 +8,7 @@
 
 - hosts: all  #Infra settings
   roles:
+    - configure_chrony
     - configure_dns # tags=set_dns
     - configure_repo                
     - common # set_timezone & chrony, set_kernel, tags=timezone                 

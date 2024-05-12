@@ -11,7 +11,8 @@ registry_name: "registry"
 
 # timezone && chrony
 set_timezone: Asia/Seoul
-
+ntp_client_network: 192.168.0.0/24
+chrony_server: "192.168.0.21"
 
 # kubeadm-init.yaml create
 kubernetes_version: '1.23.17'

@@ -125,6 +125,7 @@
   command: setenforce 0
   when: ansible_facts['os_family'] == "RedHat"
   tags: common
+  ignore_errors: true
 
 - name: Turn off all swap spaces immediately
   command: swapoff -a

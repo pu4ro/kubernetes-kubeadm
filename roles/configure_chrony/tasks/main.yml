@@ -1,0 +1,29 @@
+---
+- name: Check if this is the first host in the masters group
+  set_fact:
+    is_first_master: "{{ inventory_hostname == groups['masters'][0] }}"
+
+
+- name: Configure chrony as a server
+  template:
+    src: chrony_server.conf.j2
+    dest: /etc/chrony.conf
+  when: is_first_master
+
+
+- name: Check if this host is not the first master
+  set_fact:
+    is_not_first_master: "{{ inventory_hostname != groups['masters'][0] }}"
+
+- name: Configure chrony as a client
+  template:
+    src: chrony_client.conf.j2
+    dest: /etc/chrony.conf
+  when: is_not_first_master
+
+- name: Enable Chrony service
+  systemd:
+    name: chronyd
+    enabled: true
+    state: started
+    daemon_reload: yes
