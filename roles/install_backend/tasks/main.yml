@@ -47,13 +47,12 @@
           domainHost: "runway.{{ main_domain }}"
           frontend:
             hosts: ""
-        backend:
-          projectSharedVolumeStorageClass: "{{ project_shared_volume_storage_class }}"
         nfs:
           pv:
             path: "{{ nfs_pv_path }}"
             server: "{{ nfs_pv_server }}"
         backend:
+          projectShardVolumeStorageClass: "{{ project_shared_volume_storage_class }}"
           link:
             LINK_INSTANCE_MAX_CPU: "{{ link_instance_max_cpu }}"
             LINK_INSTANCE_MAX_MEMORY: "{{ link_instance_max_memory }}"
