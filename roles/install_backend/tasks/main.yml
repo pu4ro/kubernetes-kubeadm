@@ -48,7 +48,7 @@
           frontend:
             hosts: ""
         backend:
-          projectShardVolumeStorageClass: "{{ project_shard_volume_storage_class }}"
+          projectSharedVolumeStorageClass: "{{ project_shared_volume_storage_class }}"
         nfs:
           pv:
             path: "{{ nfs_pv_path }}"
