@@ -1,43 +1,43 @@
 ---
-- hosts: installs #pre-install
-  roles:
-    - configure_repo 
-    - install_os_package
-    - install_docker
-    - install_dnsmasq # set dns-server, tags=dns
-
-- hosts: all  #Infra settings
-  roles:
-    - configure_chrony
-    - configure_dns # tags=set_dns
-    - configure_repo                
-    - common # set_timezone & chrony, set_kernel, tags=timezone                 
-    - configure_sysctl           
-    - install_os_package
-    - install_docker
-    - install_kubernetes
-    - copy_config # docker_config_copy    
-
+#- hosts: installs #pre-install
+#  roles:
+#    - configure_repo 
+#    - install_os_package
+#    - install_docker
+#    - install_dnsmasq # set dns-server, tags=dns
+#
+#- hosts: all  #Infra settings
+#  roles:
+#    - configure_chrony
+#    - configure_dns # tags=set_dns
+#    - configure_repo                
+#    - common # set_timezone & chrony, set_kernel, tags=timezone                 
+#    - configure_sysctl           
+#    - install_os_package
+#    - install_docker
+#    - install_kubernetes
+#    - copy_config # docker_config_copy    
+#
 - hosts: installs # runway back_ground install && runway install
   roles:
-    - install_flannel
-    - install_tools # set k9s,kubectl,helm tags=tools
-    - remove_master_taint # if you need Master Node Scheduling
-    - install_cert_manager
-    - install_rook_ceph
-    - install_istio
+#    - install_flannel
+#    - install_tools # set k9s,kubectl,helm tags=tools
+#    - remove_master_taint # if you need Master Node Scheduling
+#    - install_cert_manager
+#    - install_rook_ceph
+#    - install_istio
     - install_metal_lb
-    - install_harbor
-    - install_prometheus
-    - install_ef # elastic & fluentd
-    - install_knative
-    - install_minio
-    - install_argo
-    - install_pypiserver
-    - install_stream
-    - install_backend
-    - install_frontend
-    - install_gpu_operator
+#    - install_harbor
+#    - install_prometheus
+#    - install_ef # elastic & fluentd
+#    - install_knative
+#    - install_minio
+#    - install_argo
+#    - install_pypiserver
+#    - install_stream
+#    - install_backend
+#    - install_frontend
+#    - install_gpu_operator
 
 # remove all_components
 #- hosts: all

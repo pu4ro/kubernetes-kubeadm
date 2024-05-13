@@ -2,6 +2,9 @@
 domain-needed
 bogus-priv
 expand-hosts
+dns-forward-max=5096
+min-cache-ttl=300
+rebind-domain-ok=
 
 {% if enable_forwarding %}
 {% for server in forward_servers %}
