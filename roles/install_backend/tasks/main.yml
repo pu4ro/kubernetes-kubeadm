@@ -44,7 +44,7 @@
         initSetup: false
         production: true
         virtualService:
-          domainHost: "runway.{{ main_domain }}"
+          domainHost: "{{ main_domain }}"
           frontend:
             hosts: ""
         nfs:

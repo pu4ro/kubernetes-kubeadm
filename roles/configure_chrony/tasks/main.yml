@@ -1,29 +1,57 @@
 ---
+- name: Install chrony package
+  ansible.builtin.package:
+    name: chrony
+    state: present
+
+- name: Ensure chrony service is enabled and started
+  ansible.builtin.service:
+    name: chronyd
+    enabled: yes
+    state: started
+
 - name: Check if this is the first host in the masters group
   set_fact:
     is_first_master: "{{ inventory_hostname == groups['masters'][0] }}"
 
-
-- name: Configure chrony as a server
+- name: Configure chrony as a server on CentOS
   template:
     src: chrony_server.conf.j2
     dest: /etc/chrony.conf
-  when: is_first_master
+  when: is_first_master and ansible_os_family == "RedHat"
 
+- name: Configure chrony as a server on Ubuntu
+  template:
+    src: chrony_server.conf.j2
+    dest: /etc/chrony/chrony.conf
+  when: is_first_master and ansible_os_family == "Debian"
 
 - name: Check if this host is not the first master
   set_fact:
     is_not_first_master: "{{ inventory_hostname != groups['masters'][0] }}"
 
-- name: Configure chrony as a client
+- name: Configure chrony as a client on CentOS
   template:
     src: chrony_client.conf.j2
     dest: /etc/chrony.conf
-  when: is_not_first_master
+  when: is_not_first_master and ansible_os_family == "RedHat"
 
-- name: Enable Chrony service
-  systemd:
+- name: Configure chrony as a client on Ubuntu
+  template:
+    src: chrony_client.conf.j2
+    dest: /etc/chrony/chrony.conf
+  when: is_not_first_master and ansible_os_family == "Debian"
+
+- name: Ensure chrony service is enabled and started on CentOS
+  ansible.builtin.service:
     name: chronyd
-    enabled: true
+    enabled: yes
     state: started
-    daemon_reload: yes
+  when: ansible_os_family == "RedHat"
+  
+- name: Ensure chrony service is enabled and started on Ubuntu
+  ansible.builtin.service:
+    name: chrony
+    enabled: yes
+    state: started
+  when: ansible_os_family == "Debian"
