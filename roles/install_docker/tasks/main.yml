@@ -65,3 +65,7 @@
     name: kubelet
     enabled: yes
     state: started
+
+- name: interver time
+  pause:
+    seconds: 60

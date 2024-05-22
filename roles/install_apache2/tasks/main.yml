@@ -37,5 +37,5 @@
 - name: Ensure Apache2 is started and enabled
   systemd:
     name: apache2
-    state: started
+    state: restarted
     enabled: yes

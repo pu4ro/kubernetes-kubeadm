@@ -4,10 +4,24 @@
     src: kube-flannel.yml.j2
     dest: /root/kube-flannel.yml
   become: yes
-  
+
+- name: Check if kube-apiserver container is running
+  shell: docker ps | grep k8s_kube-apiserver
+  register: kube_apiserver_status
+  retries: 30               # 최대 30번 재시도
+  delay: 10                 # 각 재시도 사이에 10초 대기
+  until: kube_apiserver_status.rc == 0
+  ignore_errors: yes
+
+- name: Debug the output of kube-apiserver status
+  debug:
+    msg: "{{ kube_apiserver_status.stdout }}"
+    
 - name: Apply kube-flannel configuration
   command: kubectl apply -f /root/kube-flannel.yml
-  when: inventory_hostname == groups['masters'][0]
+  when: 
+    - inventory_hostname == groups['masters'][0]
+    - kube_apiserver_status.rc == 0
 
 - name: Wait for all flannel pods to be ready
   shell: >

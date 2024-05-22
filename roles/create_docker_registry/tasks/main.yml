@@ -24,9 +24,41 @@
     group: root
     mode: '0755'
   when: not container_exists  
-  
+
+- name: Get list of all Docker containers
+  command: docker ps -a --format '{% raw %}{{.ID}} {{.Status}}{% endraw %}'
+  register: all_containers
+
+- name: Parse stopped containers
+  set_fact:
+    stopped_containers: >-
+      {{ all_containers.stdout_lines | map('split', ' ') | selectattr('1', 'match', '^Exited') | map('first') | list }}
+
+#- name: Remove stopped containers
+#  command: docker rm {{ item }}
+#  with_items: "{{ stopped_containers }}"
+#  when: stopped_containers | length > 0
+#
+#- name: Run Docker Registry container
+#  ansible.builtin.shell:
+#    cmd: "docker run -d --restart=always --name {{ registry_name }} -p {{ registry_port }}:5000 -v {{ registry_data_dir }}:/var/lib/registry registry:{{ registry_version }}"
+#    creates: "{{ registry_data_dir }}/data"
+ 
+- name: Check if Docker Registry container is running
+  ansible.builtin.docker_container_info:
+    name: "{{ registry_name }}"
+  register: registry_info
+  failed_when: false
+  ignore_errors: true
+
 - name: Run Docker Registry container
-  ansible.builtin.shell:
-    cmd: "docker run -d --restart=always --name {{ registry_name }} -p {{ registry_port }}:5000 -v {{ registry_data_dir }}:/var/lib/registry registry:{{ registry_version }}"
-    creates: "{{ registry_data_dir }}/data"
-  when: not container_exists 
+  ansible.builtin.docker_container:
+    name: "{{ registry_name }}"
+    image: "registry:{{ registry_version }}"
+    state: started
+    restart_policy: always
+    published_ports:
+      - "{{ registry_port }}:5000"
+    volumes:
+      - "{{ registry_data_dir }}:/var/lib/registry"
+  when: registry_info is defined and registry_info.containers is defined and registry_info.containers | length == 0

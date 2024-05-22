@@ -16,7 +16,7 @@ docker_image_directories:
 
 # timezone && chrony
 set_timezone: Asia/Seoul
-ntp_client_network: 192.168.0.0/24
+ntp_client_network: 192.168.135.0/23
 chrony_server: "192.168.135.21"
 
 # kubeadm-init.yaml create
@@ -27,7 +27,7 @@ pod_subnet: 10.244.0.0/16
 
 # DNS wildcard_ip
 wildcard_ip: "192.168.135.30"
-main_nameserver: "192.168.0.21"
+main_nameserver: "192.168.135.21"
 enable_forwarding: false
 forward_servers:
   - "168.126.63.1"

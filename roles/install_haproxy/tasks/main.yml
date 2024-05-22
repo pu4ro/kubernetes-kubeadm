@@ -28,7 +28,7 @@
 - name: Ensure HAProxy is started and enabled
   systemd:
     name: haproxy
-    state: started
+    state: restarted
     enabled: yes
   tags: haproxy
 
@@ -76,4 +76,11 @@
 - name: Print result of Docker image push
   debug:
     var: push_results
+  tags: haproxy
+
+- name: Ensure HAProxy is started and enabled
+  systemd:
+    name: haproxy
+    state: restarted
+    enabled: yes
   tags: haproxy

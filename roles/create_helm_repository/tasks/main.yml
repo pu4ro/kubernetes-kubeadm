@@ -28,15 +28,15 @@
 - name: Remove SNAPSHOT from appVersion and version
   replace:
     path: "/var/www/html/elasticsearch-fluentd/index.yaml"
-    regexp: '^(appVersion:.*)-SNAPSHOT$'
-    replace: '\1'
+    regexp: 'appVersion: ([0-9\.]+)-SNAPSHOT'
+    replace: 'appVersion: \1'
   notify: Remove SNAPSHOT from version
 
 - name: Remove SNAPSHOT from version
   replace:
     path: "/var/www/html/elasticsearch-fluentd/index.yaml"
-    regexp: '^(version:.*)-SNAPSHOT$'
-    replace: '\1'
+    regexp: 'version: ([0-9\.]+)-SNAPSHOT'
+    replace: 'version: \1'
   notify: Remove SNAPSHOT from appVersion
 
 - name: Ensure changes are reflected in the index.yaml file

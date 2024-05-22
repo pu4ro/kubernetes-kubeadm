@@ -16,7 +16,7 @@
   ignore_errors: true
 
 - name: Check for NVIDIA devices
-  command: lspci | grep NVIDIA
+  shell: lspci | grep NVIDIA
   register: nvidia_devices
   ignore_errors: true
 
