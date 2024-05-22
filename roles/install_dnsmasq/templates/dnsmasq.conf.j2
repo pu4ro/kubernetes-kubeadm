@@ -5,6 +5,7 @@ expand-hosts
 dns-forward-max=5096
 min-cache-ttl=300
 rebind-domain-ok=
+local=/{{ docker_registry }}/
 
 {% if enable_forwarding %}
 {% for server in forward_servers %}

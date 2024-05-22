@@ -1,5 +1,6 @@
-local stratum 3
+local stratum 10
 driftfile /var/lib/chrony/drift
 allow {{ ntp_client_network }}
-makestep 1.0 3
-logdir /var/log/chrony
+makestep 1 3
+logdir /var/log/chronyd
+rtcsync

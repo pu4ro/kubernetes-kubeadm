@@ -1,4 +1,7 @@
 ---
+- name: load image
+  shell: docker load -i {{ load_image }}
+
 - name: Check if Docker Registry container exists
   ansible.builtin.shell:
     cmd: "docker ps --filter name=^/{{ registry_name }}$ --format '{{ '{{' }}.Names{{ '}}' }}'"

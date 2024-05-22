@@ -1,10 +1,13 @@
 ---
 - hosts: installs #pre-install
   roles:
-    - configure_repo 
+    - install_apache2 #install repository-server
+    - configure_repo
     - install_os_package
     - install_docker
+    - create_docker_registry 
     - install_dnsmasq # set dns-server, tags=dns
+    - install_haproxy # image push and create 
 
 - hosts: all #Infra settings
   roles:
@@ -16,12 +19,13 @@
     - install_os_package
     - install_docker
     - install_kubernetes
-#    - copy_config # offline is not install, docker_config_copy    
+      #    - copy_config # offline is not install, docker_config_copy    
 
 - hosts: installs # runway back_ground install && runway install
   roles:
-    - install_flannel
     - install_tools # set k9s,kubectl,helm tags=tools
+    - create_helm_repository
+    - install_flannel
     - remove_master_taint # if you need Master Node Scheduling
     - install_cert_manager
     - install_rook_ceph

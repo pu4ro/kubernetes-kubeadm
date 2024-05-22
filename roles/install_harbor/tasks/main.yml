@@ -19,6 +19,7 @@
     release_namespace: harbor
     create_namespace: true
     values: "{{ harbor_values | combine({'externalURL': item}) }}"
+    wait: true
   loop: "{{ harbor_values.externalURLs }}"
   when: harbor_installed.helm_info is undefined or harbor_installed.helm_info.resources | length == 0
 

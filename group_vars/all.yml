@@ -1,18 +1,23 @@
 ---
+
 # how to set domain
 main_domain: onboarding1.com
 
-# docker-registry setting - to install k8s or runway
-docker_registry_ip: "192.168.0.21"
+# docker-registry setting - to install k8s or runway in offline 
+docker_registry_ip: "192.168.135.21"
 registry_port: 5000
 registry_version: "2"
 registry_data_dir: "/opt/docker-registry"
 registry_name: "registry"
+load_image: "/root/docker.tar.gz"
+docker_image_directories:
+  - external-hub
+  - makina-runway
 
 # timezone && chrony
 set_timezone: Asia/Seoul
 ntp_client_network: 192.168.0.0/24
-chrony_server: "192.168.0.21"
+chrony_server: "192.168.135.21"
 
 # kubeadm-init.yaml create
 kubernetes_version: '1.23.17'
@@ -21,9 +26,9 @@ service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
 
 # DNS wildcard_ip
-wildcard_ip: "192.168.0.30"
+wildcard_ip: "192.168.135.30"
 main_nameserver: "192.168.0.21"
-enable_forwarding: true
+enable_forwarding: false
 forward_servers:
   - "168.126.63.1"
   - "168.126.63.2"
@@ -31,10 +36,11 @@ enable_wildcard: true
 
 # helm command && OS package repo
 repo_url:
-  centos: "http://192.168.0.21:8080/repo"
-  ubuntu: "http://192.168.0.101:8080/repo/"
+  centos: "http://192.168.135.21:8080/repo"
+  ubuntu: "http://192.168.135.21:8080/repo/"
 
-helm_repo_ip: "192.168.0.21:8080" # use http_port 
+base_directory: "/root/makina-runway-1.1.0.1/helm"
+helm_repo_ip: "192.168.135.21:8080" # use http_port 
  
 # Docker 관련 변수
 insecure_registries:
@@ -74,7 +80,7 @@ istio_service_type: "LoadBalancer"
 metallb_namespace: metallb-system
 metallb_ip_pool_name: default
 metallb_l2adv_name: default
-metallb_ip_range: "192.168.0.30/32"
+metallb_ip_range: "192.168.135.30/32"
 
 # harbor
 harbor_values:

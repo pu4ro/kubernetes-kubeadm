@@ -19,6 +19,7 @@
     chart_ref: rook-release/rook-ceph
     release_namespace: rook-ceph
     create_namespace: true
+    wait: true
 
 - name: Wait for all Rook-Ceph pods to be ready
   shell: >
@@ -49,6 +50,7 @@
     chart_ref: rook-ceph-cluster/rook-ceph-cluster
     release_namespace: rook-ceph
     create_namespace: true
+    wait: true
     values: "{{ rook_ceph_values }}"
 
 - name: Wait for all Rook-Ceph-cluster pods to be ready

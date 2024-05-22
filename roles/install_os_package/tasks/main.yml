@@ -14,3 +14,18 @@
   loop: "{{ centos_packages }}"
   when: ansible_os_family == "RedHat"
   ignore_errors: true
+
+- name: Check for NVIDIA devices
+  command: lspci | grep NVIDIA
+  register: nvidia_devices
+  ignore_errors: true
+
+- name: Install NVIDIA container toolkit and driver
+  apt:
+    name: 
+      - nvidia-container-toolkit
+      - nvidia-driver-535-server
+    state: present
+  when: 
+    - nvidia_devices.stdout != "" 
+    - ansible_os_family == "Debian"

@@ -2,11 +2,11 @@
 - name: Deploy kube-flannel configuration
   template:
     src: kube-flannel.yml.j2
-    dest: /etc/kubernetes/manifests/kube-flannel.yml
+    dest: /root/kube-flannel.yml
   become: yes
   
 - name: Apply kube-flannel configuration
-  command: kubectl apply -f /etc/kubernetes/manifests/kube-flannel.yml
+  command: kubectl apply -f /root/kube-flannel.yml
   when: inventory_hostname == groups['masters'][0]
 
 - name: Wait for all flannel pods to be ready
