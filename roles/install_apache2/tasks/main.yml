@@ -1,0 +1,41 @@
+---
+
+- name: Ensure Apache2 is installed
+  apt:
+    name: apache2
+    state: present
+    update_cache: yes
+  
+
+- name: Change Apache2 port to 8080
+  lineinfile:
+    path: /etc/apache2/ports.conf
+    regexp: '^Listen'
+    line: 'Listen 8080'
+    state: present
+  notify: Restart Apache2
+  
+
+- name: Update default virtual host to listen on port 8080
+  lineinfile:
+    path: /etc/apache2/sites-available/000-default.conf
+    regexp: '^(<VirtualHost \*:).*(>)$'
+    line: '<VirtualHost *:8080>'
+    state: present
+  notify: Restart Apache2
+  
+
+- name: Copy directory contents from /usr/local/repo to /var/www/html
+  copy:
+    src: /usr/local/repo
+    dest: /var/www/html/
+    owner: root
+    group: root
+    mode: '0655'
+    remote_src: yes
+
+- name: Ensure Apache2 is started and enabled
+  systemd:
+    name: apache2
+    state: started
+    enabled: yes

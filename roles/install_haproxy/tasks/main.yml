@@ -1,0 +1,79 @@
+---
+- name: Install HAProxy
+  apt:
+    name: haproxy
+    state: present
+    update_cache: yes
+  tags: haproxy
+
+- name: Create HAProxy configuration directory
+  file:
+    path: /etc/haproxy
+    state: directory
+  tags: haproxy
+
+- name: Create HAProxy error file directory
+  file:
+    path: /etc/haproxy/errors
+    state: directory
+  tags: haproxy
+
+- name: Create HAProxy configuration file from template
+  template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    mode: '0644'
+  tags: haproxy
+
+- name: Ensure HAProxy is started and enabled
+  systemd:
+    name: haproxy
+    state: started
+    enabled: yes
+  tags: haproxy
+
+- name: Find Docker image files
+  find:
+    paths: "{{ item }}"
+    patterns: "*.tar"
+    recurse: yes
+  loop: "{{ docker_image_directories }}"
+  register: found_images
+  ignore_errors: yes
+  tags: haproxy
+
+- name: Combine found image files
+  set_fact:
+    all_found_images: "{{ all_found_images | default([]) + item.files }}"
+  loop: "{{ found_images.results }}"
+  when: item is defined and item.files is defined
+  tags: haproxy
+
+- name: Load Docker images
+  command: "docker load -i {{ item.path }}"
+  loop: "{{ all_found_images }}"
+  register: load_result
+  ignore_errors: yes
+  tags: haproxy
+
+- name: Get list of Docker images
+  command: docker image ls
+  register: docker_images_output
+  tags: haproxy
+
+- name: Filter images with 'cr' in the name
+  shell: echo "{{ docker_images_output.stdout }}" | grep cr | awk '{print $1":"$2}'
+  register: filtered_image
+  tags: haproxy
+
+- name: Push Docker images
+  shell: "docker push {{ item }}"
+  loop: "{{ filtered_image.stdout_lines }}"
+  when: filtered_image.stdout_lines | length > 0
+  register: push_results
+  tags: haproxy
+
+- name: Print result of Docker image push
+  debug:
+    var: push_results
+  tags: haproxy

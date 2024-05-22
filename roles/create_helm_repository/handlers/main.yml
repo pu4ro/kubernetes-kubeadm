@@ -1,0 +1,8 @@
+---
+- name: Remove SNAPSHOT from version
+  debug:
+    msg: "SNAPSHOT removed from version in /var/www/html/elasticsearch-fluentd/index.yaml"
+
+- name: Remove SNAPSHOT from appVersion
+  debug:
+    msg: "SNAPSHOT removed from appVersion in /var/www/html/elasticsearch-fluentd/index.yaml"

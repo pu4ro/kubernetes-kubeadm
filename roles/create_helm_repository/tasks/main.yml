@@ -1,0 +1,46 @@
+---
+- name: Ensure base_directory and helm_repo_ip are provided
+  fail:
+    msg: "Usage: ansible-playbook <playbook.yml> -e base_directory=<base-directory> -e helm_repo_ip=<helm-repo-ip>"
+  when: base_directory is not defined or helm_repo_ip is not defined
+
+- name: Find and package Helm charts
+  shell: |
+    find "{{ base_directory }}" -type f -name 'Chart.yaml' | while read chart_file; do
+        chart_directory=$(dirname "${chart_file}")
+        chart_name=$(basename "${chart_directory}")
+        destination_directory="/var/www/html/${chart_name}"
+        # Create the destination directory and set permissions
+        mkdir -p "${destination_directory}"
+        chmod -R 755 "${destination_directory}"
+        # Run Helm packaging
+        echo "Packaging Helm chart in ${chart_directory}..."
+        helm package "${chart_directory}" -d "${destination_directory}"
+        # Create Helm repo index
+        echo "Creating Helm repo index at ${destination_directory}..."
+        helm repo index "${destination_directory}" --url "http://{{ helm_repo_ip }}/${chart_name}"
+        echo "Helm package and index for ${chart_name} have been created and are available at http://{{ helm_repo_ip }}/${chart_name}"
+    done
+  args:
+    executable: /bin/bash
+  ignore_errors: true
+
+- name: Remove SNAPSHOT from appVersion and version
+  replace:
+    path: "/var/www/html/elasticsearch-fluentd/index.yaml"
+    regexp: '^(appVersion:.*)-SNAPSHOT$'
+    replace: '\1'
+  notify: Remove SNAPSHOT from version
+
+- name: Remove SNAPSHOT from version
+  replace:
+    path: "/var/www/html/elasticsearch-fluentd/index.yaml"
+    regexp: '^(version:.*)-SNAPSHOT$'
+    replace: '\1'
+  notify: Remove SNAPSHOT from appVersion
+
+- name: Ensure changes are reflected in the index.yaml file
+  command: touch /var/www/html/elasticsearch-fluentd/index.yaml
+
+
+
