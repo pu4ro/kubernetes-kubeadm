@@ -12,7 +12,7 @@
 ### 설치 패키지 정보
 
 ---
-
+- collections: ansible module 설치를 위한 collections
 - ansible_install.sh :  ansible을 설치하기 위한 쉘 스크립트
 - create_harbor_user.sh :  harbor 계정 생성 및 PW 생성
 - makina_runway_helm.tar.gz :  runway 구성을 위한 helm chart
