@@ -1,0 +1,14 @@
+[Unit]
+Description=Docker Registry Container
+After=network.target
+
+[Service]
+ExecStartPre=/bin/sh -c '(/usr/local/bin/ctr task kill -s SIGKILL {{ registry_name }} || true)'
+ExecStartPre=/bin/sh -c '(/usr/local/bin/ctr container delete {{ registry_name }} || true)'
+ExecStartPre=/bin/sh -c '(/usr/local/bin/ctr snapshot remove {{ registry_name }} || true)'
+ExecStart=/usr/local/bin/ctr run --detach --net-host --mount type=bind,src={{ registry_data_dir }},dst=/var/lib/registry,options=rbind:rw docker.io/library/registry:{{ registry_version }} {{ registry_name }}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
