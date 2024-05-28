@@ -5,7 +5,10 @@ expand-hosts
 dns-forward-max=5096
 min-cache-ttl=300
 rebind-domain-ok=
+
+{% if ansible_distribution == 'Ubuntu' %}
 local=/{{ docker_registry }}/
+{% endif %}
 
 {% if enable_forwarding %}
 {% for server in forward_servers %}

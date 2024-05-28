@@ -6,7 +6,7 @@
   changed_when: false
   
 - name: Remove taint from master node
-  command: kubectl taint nodes {{ master_node_name.stdout }} node-role.kubernetes.io/master:NoSchedule- --overwrite
+  command: kubectl taint nodes {{ master_node_name.stdout }} node-role.kubernetes.io/control-plane:NoSchedule- --overwrite
   when: master_node_name.stdout != ""
   ignore_errors: true
 

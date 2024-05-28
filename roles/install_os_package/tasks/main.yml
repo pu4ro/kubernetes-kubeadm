@@ -21,10 +21,10 @@
   ignore_errors: true
 
 - name: Install NVIDIA container toolkit and driver
-  apt:
+  yum:
     name: 
       - nvidia-container-toolkit
-      - nvidia-driver-535-server
+      - nvidia-driver
     state: present
   when: 
     - nvidia_devices.stdout != "" 

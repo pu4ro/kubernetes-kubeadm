@@ -6,7 +6,7 @@
   become: yes
 
 - name: Check if kube-apiserver container is running
-  shell: docker ps | grep k8s_kube-apiserver
+  shell: crictl ps | grep kube-apiserver
   register: kube_apiserver_status
   retries: 30               # 최대 30번 재시도
   delay: 10                 # 각 재시도 사이에 10초 대기

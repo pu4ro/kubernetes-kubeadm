@@ -16,13 +16,10 @@ ubuntu_packages:
   - chrony
 
 centos_packages:
-  - docker-ce
-  - containerd.io
   - kubelet
   - kubeadm
   - kubectl
   - tree
-  - bash-completion
   - dnsmasq
   - nfs-utils
 

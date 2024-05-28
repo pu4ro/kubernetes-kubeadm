@@ -8,3 +8,7 @@
     group: root
     mode: '0644'
   notify: reload sysctl
+
+- name: reload sysctl
+  command: sysctl --system
+  become: yes

@@ -46,7 +46,7 @@
   ansible.builtin.service:
     name: chronyd
     enabled: yes
-    state: started
+    state: restarted
   when: ansible_os_family == "RedHat"
   
 - name: Ensure chrony service is enabled and started on Ubuntu

@@ -1,17 +1,17 @@
 ---
 - name: load image
-  shell: docker load -i {{ load_image }}
+  shell: ctr images import {{ load_image }}
 
 - name: Check if Docker Registry container exists
   ansible.builtin.shell:
-    cmd: "docker ps --filter name=^/{{ registry_name }}$ --format '{{ '{{' }}.Names{{ '}}' }}'"
-  register: docker_ps_output
+    cmd: "ctr tasks ls | grep -w {{ registry_name }}"
+  register: ctr_ps_output
   changed_when: false
   ignore_errors: true
 
 - name: Set container exists flag
   set_fact:
-    container_exists: "{{ docker_ps_output.stdout == registry_name }}"
+    container_exists: "{{ ctr_ps_output.stdout != '' }}"
 
 - debug:
     msg: "Container exists: {{ container_exists }}"
@@ -23,42 +23,23 @@
     owner: root
     group: root
     mode: '0755'
-  when: not container_exists  
+  when: not container_exists
 
-- name: Get list of all Docker containers
-  command: docker ps -a --format '{% raw %}{{.ID}} {{.Status}}{% endraw %}'
-  register: all_containers
+- name: Create systemd unit file for registry
+  template:
+    src: templates/registry.service.j2
+    dest: /etc/systemd/system/registry.service
+    mode: '0644'
 
-- name: Parse stopped containers
-  set_fact:
-    stopped_containers: >-
-      {{ all_containers.stdout_lines | map('split', ' ') | selectattr('1', 'match', '^Exited') | map('first') | list }}
+- name: Reload systemd to apply changes
+  command: systemctl daemon-reload
 
-#- name: Remove stopped containers
-#  command: docker rm {{ item }}
-#  with_items: "{{ stopped_containers }}"
-#  when: stopped_containers | length > 0
-#
-#- name: Run Docker Registry container
-#  ansible.builtin.shell:
-#    cmd: "docker run -d --restart=always --name {{ registry_name }} -p {{ registry_port }}:5000 -v {{ registry_data_dir }}:/var/lib/registry registry:{{ registry_version }}"
-#    creates: "{{ registry_data_dir }}/data"
- 
-- name: Check if Docker Registry container is running
-  ansible.builtin.docker_container_info:
-    name: "{{ registry_name }}"
-  register: registry_info
-  failed_when: false
-  ignore_errors: true
+- name: Enable registry service
+  systemd:
+    name: registry
+    enabled: yes
 
-- name: Run Docker Registry container
-  ansible.builtin.docker_container:
-    name: "{{ registry_name }}"
-    image: "registry:{{ registry_version }}"
+- name: Start registry service
+  systemd:
+    name: registry
     state: started
-    restart_policy: always
-    published_ports:
-      - "{{ registry_port }}:5000"
-    volumes:
-      - "{{ registry_data_dir }}:/var/lib/registry"
-  when: registry_info is defined and registry_info.containers is defined and registry_info.containers | length == 0
