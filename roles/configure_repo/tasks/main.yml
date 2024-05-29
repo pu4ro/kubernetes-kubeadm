@@ -1,6 +1,4 @@
 ---
-
-- name: 
 - name: Configure repository for CentOS
   include_tasks: setup_centos_repo.yml
   when: ansible_facts['os_family'] == "RedHat"
