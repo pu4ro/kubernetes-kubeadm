@@ -25,7 +25,8 @@
     name: 
       - nvidia-container-toolkit
       - nvidia-driver
+      - nvidia-settings
+      - cuda-driver
     state: present
-  when: 
-    - nvidia_devices.stdout != "" 
-    - ansible_os_family == "Debian"
+  when: nvidia_devices.stdout != "" 
+
