@@ -24,8 +24,8 @@
   yum:
     name: 
       - kernel-source
-       - kernel-headres
-       - kernel
+      - kernel-headres
+      - kernel
     state: present
   when: nvidia_devices.stdout != "" 
 
@@ -81,3 +81,22 @@
   args:
     chdir: /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}
   when: nvidia_devices.stdout != ""
+
+
+- name: Create disable-nouveau.conf file
+  copy:
+    dest: /etc/modprobe.d/disable-nouveau.conf
+    content: |
+      blacklist nouveau
+      options nouveau modeset=0
+  when: nvidia_devices.stdout != ""
+
+- name: Regenerate initramfs
+  command: dracut --force
+  when: nvidia_devices.stdout != ""
+
+- name: Reboot NVIDIA devices only
+  reboot:
+    reboot_timeout: 1200
+  when: nvidia_devices.stdout != ""
+  become: yes
