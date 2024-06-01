@@ -7,7 +7,7 @@
     - configure_repo
     - install_os_package
     - install_containerd
-    - create_docker_registrSy 
+    - create_docker_registry 
     - install_dnsmasq # set dns-server, tags=dns
     - install_haproxy # image push and create 
 - hosts: all #Infra settings
