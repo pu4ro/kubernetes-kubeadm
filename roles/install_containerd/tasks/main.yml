@@ -45,14 +45,6 @@
     regexp: 'SystemdCgroup = false'
     replace: 'SystemdCgroup = true'
 
-- name: Add HTTP registry configuration
-  blockinfile:
-    path: /etc/containerd/config.toml
-    insertbefore: '^\\[plugins."io.containerd.grpc.v1.cri".registry.mirrors\\]'
-    block: |
-      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."cr.makina.rocks"]
-        endpoint = ["http://cr.makina.rocks"]
-
 - name: Ensure LimitNPROC is set to 100000
   lineinfile:
     path: /usr/lib/systemd/system/containerd.service
@@ -69,6 +61,18 @@
     state: present
     insertafter: '^\[Service\]'
 
+- name: Check for NVIDIA GPU
+  shell: lspci | grep -i nvidia
+  register: nvidia_gpu
+  ignore_errors: yes
+
+- name: Add NVIDIA runtime configuration to containerd
+  template:
+    src: containerd_nvidia.j2
+    dest: /etc/containerd/config.toml
+    backup: yes
+  when: nvidia_gpu.rc == 0
+
 - name: Replace sandbox_image value
   replace:
     path: /etc/containerd/config.toml
@@ -76,45 +80,19 @@
     replace: 'sandbox_image = "cr.makina.rocks/external-hub/kubernetes/pause:3.9"'
   become: yes
 
-- name: Check for NVIDIA GPU
-  shell: lspci | grep -i nvidia
-  register: nvidia_gpu
-  ignore_errors: yes
-
-- name: Ensure containerd configuration file exists
-  file:
+- name: Enable systemd cgroup in containerd configuration
+  ansible.builtin.replace:
     path: /etc/containerd/config.toml
-    state: touch
-  when: nvidia_gpu.rc == 0
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
 
-- name: Add NVIDIA runtime configuration to containerd
+- name: Add HTTP registry configuration
   blockinfile:
     path: /etc/containerd/config.toml
-    marker: "# {mark} ANSIBLE MANAGED BLOCK"
+    insertbefore: '^\\[plugins."io.containerd.grpc.v1.cri".registry.mirrors\\]'
     block: |
-      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia]
-        privileged_without_host_devices = false
-        runtime_engine = ""
-        runtime_root = ""
-        runtime_type = "io.containerd.runc.v1"
-        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
-          BinaryName = "/usr/bin/nvidia-container-runtime"
-          SystemdCgroup = true
-  when: nvidia_gpu.rc == 0
-
-- name: Set default_runtime_name to nvidia in containerd configuration
-  lineinfile:
-    path: /etc/containerd/config.toml
-    regexp: '^ *default_runtime_name *= *".*"'
-    line: 'default_runtime_name = "nvidia"'
-    state: present
-  when: nvidia_gpu.rc == 0
-
-- name: Restart containerd to apply changes
-  systemd:
-    name: containerd
-    state: restarted
-  when: nvidia_gpu.rc == 0
+      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."cr.makina.rocks"]
+        endpoint = ["http://cr.makina.rocks"]
 
 - name: Reload systemd daemon
   ansible.builtin.systemd:

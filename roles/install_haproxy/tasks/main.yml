@@ -99,11 +99,12 @@
   tags: push
 
 - name: Push container images
-  shell: "ctr images push {{ item }} --plain-http"
+  shell: "ctr images push {{ item }} --plain-http --max-concurrent-uploaded-layers=1"
   loop: "{{ filtered_image.stdout_lines }}"
   when: filtered_image.stdout_lines | length > 0
   register: push_results
   tags: push
+  ignore_errors: true
 
 - name: Print result of container image push
   debug:

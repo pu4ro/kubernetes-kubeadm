@@ -12,3 +12,25 @@
 - name: reload sysctl
   command: sysctl --system
   become: yes
+
+- name: Apply soft nofile limit temporarily
+  command: ulimit -Sn 100000
+  ignore_errors: true
+
+- name: Apply hard nofile limit temporarily
+  command: ulimit -Hn 100000
+  ignore_errors: true
+
+- name: Add soft nofile limit to /etc/security/limits.conf
+  lineinfile:
+    path: /etc/security/limits.conf
+    state: present
+    line: "* soft nofile 100000"
+    insertafter: EOF
+
+- name: Add hard nofile limit to /etc/security/limits.conf
+  lineinfile:
+    path: /etc/security/limits.conf
+    state: present
+    line: "* hard nofile 100000"
+    insertafter: EOF

@@ -1,48 +1,48 @@
 ---
 - hosts: installs #pre-install
   roles:
-    - common
-    - install_apache2 #install repository-server
-    - configure_repo
-    - install_os_package
-    - install_containerd
-    - create_docker_registry 
-    - install_dnsmasq # set dns-server, tags=dns
-    - install_haproxy # image push and create 
-
+#    - common
+#    - configure_sysctl 
+#    - install_apache2 #install repository-server
+#    - configure_repo
+#    - install_os_package
+#    - install_containerd
+#    - create_docker_registrSy 
+#    - install_dnsmasq # set dns-server, tags=dns
+#   - install_haproxy # image push and create 
 - hosts: all #Infra settings
   roles:
-    - configure_repo   
-    - configure_chrony
-    - configure_dns # tags=set_dns                
-    - common # set_timezone & chrony, set_kernel, tags=timezone                 
-    - configure_sysctl           
-    - install_os_package
-    - install_containerd
-    - install_kubernetes
+#    - configure_repo   
+#    - configure_chrony
+#    - configure_dns # tags=set_dns                
+#    - common # set_timezone & chrony, set_kernel, tags=timezone                 
+#    - configure_sysctl           
+#    - install_os_package
+#    - install_containerd
+#    - install_kubernetes
 #    - copy_config # offline is not install, docker_config_copy    
 
 - hosts: installs # runway back_ground install && runway install
   roles:
-    - install_tools # set k9s,kubectl,helm tags=tools
-    - create_helm_repository
-    - install_flannel
-    - remove_master_taint # if you need Master Node Scheduling
-    - install_cert_manager
-    - install_rook_ceph
-    - install_istio
-    - install_metal_lb
-    - install_harbor
-    - install_prometheus
-    - install_ef # elastic & fluentd
-    - install_knative
-    - install_kserve
-    - install_minio
-    - install_argo
-    - install_pypiserver
-    - install_stream
-    - install_backend
-    - install_frontend
+#    - install_tools # set k9s,kubectl,helm tags=tools
+#    - create_helm_repository
+#    - install_flannel
+#    - remove_master_taint # if you need Master Node Scheduling
+#    - install_cert_manager
+#    - install_rook_ceph
+#    - install_istio
+#    - install_metal_lb
+#    - install_harbor
+#    - install_prometheus
+#    - install_ef # elastic & fluentd
+#    - install_knative
+#    - install_kserve
+#    - install_minio
+#    - install_argo
+#    - install_pypiserver
+#    - install_stream
+#    - install_backend
+#    - install_frontend
     - install_gpu_operator
 
 # remove all_components
@@ -50,5 +50,3 @@
 #  roles:
 #    - remove_ceph_cluster
 #    - remove_helm_chart
-
-

@@ -23,10 +23,61 @@
 - name: Install NVIDIA container toolkit and driver
   yum:
     name: 
-      - nvidia-container-toolkit
-      - nvidia-driver
-      - nvidia-settings
-      - cuda-driver
+      - kernel-source
+       - kernel-headres
+       - kernel
     state: present
   when: nvidia_devices.stdout != "" 
 
+- name: Reboot NVIDIA devices only
+  reboot:
+    reboot_timeout: 1200
+  when: nvidia_devices.stdout != ""
+  become: yes
+
+- name: Download NVIDIA driver tarball
+  ansible.builtin.command:
+    cmd: wget -O /tmp/nvidia-driver_535.161.tar.gz {{ repo_url.centos }}nvidia-driver_535.161.tar.gz
+  args:
+    creates: /tmp/nvidia-driver_535.161.tar.gz
+  when: nvidia_devices.stdout != ""
+
+- name: Extract NVIDIA driver tarball
+  ansible.builtin.unarchive:
+    src: /tmp/nvidia-driver_535.161.tar.gz
+    dest: /tmp/
+    remote_src: yes
+  when: nvidia_devices.stdout != ""
+
+- name: Download NVIDIA installer
+  ansible.builtin.command:
+    cmd: wget -O /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run {{ repo_url.centos }}{{ driver_version }}/NVIDIA-Linux-x86_64-{{ driver_version }}.run
+  args:
+    creates: /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run
+  when: nvidia_devices.stdout != ""
+
+- name: Extract NVIDIA installer
+  ansible.builtin.shell:
+    cmd: sh NVIDIA-Linux-x86_64-{{ driver_version }}.run -x
+  args:
+    chdir: /tmp
+  when: nvidia_devices.stdout != ""
+
+- name: Run NVIDIA installer
+  ansible.builtin.shell:
+    cmd: ./nvidia-installer --silent \
+                             --install-compat32-libs \
+                             --no-nouveau-check \
+                             --no-nvidia-modprobe \
+                             --no-rpms \
+                             --no-backup \
+                             --no-check-for-alternate-installs \
+                             --no-libglx-indirect \
+                             --no-install-libglvnd \
+                             --x-prefix=/tmp/null \
+                             --x-module-path=/tmp/null \
+                             --x-library-path=/tmp/null \
+                             --x-sysconfig-path=/tmp/null
+  args:
+    chdir: /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}
+  when: nvidia_devices.stdout != ""
