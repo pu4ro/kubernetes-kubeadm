@@ -144,6 +144,8 @@ gpu_operator_values:
   mig:
     strategy: false
   toolkit:
-    enabled: false
+    enabled: true
   dcgmExporter:
     enabled: true
+driver_version: "535.161.07"
+

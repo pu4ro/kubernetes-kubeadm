@@ -39,12 +39,6 @@
     content: "{{ containerd_config.stdout }}"
     dest: /etc/containerd/config.toml
 
-- name: Enable systemd cgroup in containerd configuration
-  ansible.builtin.replace:
-    path: /etc/containerd/config.toml
-    regexp: 'SystemdCgroup = false'
-    replace: 'SystemdCgroup = true'
-
 - name: Ensure LimitNPROC is set to 100000
   lineinfile:
     path: /usr/lib/systemd/system/containerd.service
@@ -61,17 +55,17 @@
     state: present
     insertafter: '^\[Service\]'
 
-- name: Check for NVIDIA GPU
-  shell: lspci | grep -i nvidia
-  register: nvidia_gpu
-  ignore_errors: yes
+#- name: Check for NVIDIA GPU
+#  shell: lspci | grep -i nvidia
+#  register: nvidia_gpu
+#  ignore_errors: yes
 
-- name: Add NVIDIA runtime configuration to containerd
-  template:
-    src: containerd_nvidia.j2
-    dest: /etc/containerd/config.toml
-    backup: yes
-  when: nvidia_gpu.rc == 0
+#- name: Add NVIDIA runtime configuration to containerd
+#  template:
+#    src: containerd_nvidia.j2
+#    dest: /etc/containerd/config.toml
+#    backup: yes
+#  when: nvidia_gpu.rc == 0
 
 - name: Replace sandbox_image value
   replace:
