@@ -16,18 +16,31 @@
   ignore_errors: true
 
 - name: Check for NVIDIA devices
-  shell: lspci | grep NVIDIA
+  shell: lspci | grep -i NVIDIA
   register: nvidia_devices
   ignore_errors: true
+  tags: installer
 
 - name: Install NVIDIA container toolkit and driver
   yum:
     name: 
-      - kernel-source
-      - kernel-headres
-      - kernel
+      - kernel-devel-5.14.0-427.18.1.el9_4
+      - kernel-5.14.0-427.18.1.el9_4
+      - kernel-tools-5.14.0-427.18.1.el9_4
     state: present
   when: nvidia_devices.stdout != "" 
+
+- name: Create disable-nouveau.conf file
+  copy:
+    dest: /etc/modprobe.d/disable-nouveau.conf
+    content: |
+      blacklist nouveau
+      options nouveau modeset=0
+  when: nvidia_devices.stdout != ""
+
+- name: Regenerate initramfs
+  command: dracut --force
+  when: nvidia_devices.stdout != ""
 
 - name: Reboot NVIDIA devices only
   reboot:
@@ -64,36 +77,23 @@
   when: nvidia_devices.stdout != ""
 
 - name: Run NVIDIA installer
-  ansible.builtin.shell:
-    cmd: ./nvidia-installer --silent \
-                             --install-compat32-libs \
-                             --no-nouveau-check \
-                             --no-nvidia-modprobe \
-                             --no-rpms \
-                             --no-backup \
-                             --no-check-for-alternate-installs \
-                             --no-libglx-indirect \
-                             --no-install-libglvnd \
-                             --x-prefix=/tmp/null \
-                             --x-module-path=/tmp/null \
-                             --x-library-path=/tmp/null \
-                             --x-sysconfig-path=/tmp/null
-  args:
-    chdir: /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}
+  ansible.builtin.shell: |
+    cd /tmp/NVIDIA-Linux-x86_64-{{ driver_version }} &&
+    ./nvidia-installer --silent \
+                       --install-compat32-libs \
+                       --no-nouveau-check \
+                       --no-nvidia-modprobe \
+                       --no-rpms \
+                       --no-backup \
+                       --no-check-for-alternate-installs \
+                       --no-libglx-indirect \
+                       --no-install-libglvnd \
+                       --x-prefix=/tmp/null \
+                       --x-module-path=/tmp/null \
+                       --x-library-path=/tmp/null \
+                       --x-sysconfig-path=/tmp/null
   when: nvidia_devices.stdout != ""
-
-
-- name: Create disable-nouveau.conf file
-  copy:
-    dest: /etc/modprobe.d/disable-nouveau.conf
-    content: |
-      blacklist nouveau
-      options nouveau modeset=0
-  when: nvidia_devices.stdout != ""
-
-- name: Regenerate initramfs
-  command: dracut --force
-  when: nvidia_devices.stdout != ""
+  tags: installer
 
 - name: Reboot NVIDIA devices only
   reboot:
