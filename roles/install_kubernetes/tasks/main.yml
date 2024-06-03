@@ -52,12 +52,6 @@
       delegate_to: "{{ groups['masters'][0] }}"
       when: inventory_hostname in groups['masters'] and kubectl_nodes.rc != 0
 
-    - name: Get kubeadm join command
-      command: kubeadm token create --print-join-command
-      register: join_cmd
-      changed_when: False
-      when: inventory_hostname == groups['masters'][0]
-
     - name: Generate kubeadm token on first master node
       shell: kubeadm token create
       register: kubeadm_token
@@ -106,6 +100,20 @@
         remote_src: yes
         mode: 0644
       when: master_ha | bool and inventory_hostname in groups['masters'] and kubectl_nodes.rc != 0
+
+    - name: Get kubeadm join command
+      command: kubeadm token create --print-join-command
+      register: join_command
+      changed_when: False
+      when: inventory_hostname in groups['masters'] 
+      delegate_to: "{{ groups['masters'][0] }}"
+      
+    - name: Set join command as fact
+      set_fact:
+        join_cmd: "{{ join_command.stdout }}"
+      when: inventory_hostname in groups['masters'] 
+      delegate_to: "{{ groups['masters'][0] }}"
+      run_once: true 
 
 
 - name: Check if the node is already part of the cluster
