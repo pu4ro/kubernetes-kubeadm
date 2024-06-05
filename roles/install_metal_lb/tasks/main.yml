@@ -5,7 +5,7 @@
   register: metallb
 
 - name: Download MetalLB manifest
-  command: wget -O /tmp/metallb-native.yaml "{{ repo_url.centos }}/metallb-native.yaml"
+  command: wget -O /tmp/metallb-native.yaml "{{ repo_url.centos }}metallb-native.yaml"
   vars:
     version: "0.13.11"
 
