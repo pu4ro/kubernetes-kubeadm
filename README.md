@@ -1,11 +1,15 @@
-# Ansible 설치 가이드 작성
+# Ansible 설치 가이드 작성 - kidi-developer 
+
+상태: 완료
+시작일: 2024년 5월 23일
+종료일: 2024년 5월 23일
 
 ### 기본 정보
 
 ---
 
-- OS: ubuntu20.04.06 LTS
-- DISK: 300G이상
+- OS: RHEL 9.3
+- DISK: 500G이상
 - NODE:  MASTER  1식 WORKER 2식 + α
 - k8s_Version: 1.23.17
 
@@ -13,14 +17,15 @@
 
 ---
 
-- ansible_install.sh :  ansible을 설치하기 위한 쉘 스크립트
+- rhel_ansible_install.sh :  ansible을 설치하기 위한 쉘 스크립트
 - create_harbor_user.sh :  harbor 계정 생성 및 PW 생성
 - makina_runway_helm.tar.gz :  runway 구성을 위한 helm chart
 - makina-runway.tar.gz  : runway 구성을 위한  container_image
 - external-hub.tar.gz :  k8s add on 구성을 위한  container_image
 - kubernetes-kubeadm.tar.gz : runway 설치를 위한 ansible 파일
 - docker.tar.gz : docker registry container_image 입력
-- ubuntu_20.04_repo.tar.gz:  OS 설치 파일
+- repo.tar.gz:  OS 설치 파일
+- collections: ansible 모듈 설치를 위한 파일
 
 ### 설치 사전 준비
 
@@ -72,6 +77,12 @@ drwxr-xr-x 36 root root 4096 May 21 07:57 roles
 #! group_vars/all.yml
 # how to set domain
 main_domain: onboarding1.com # (변수) 사용할 도메인에 주소 입력 필요
+
+# kube-vip # control-plane 3중화일 때만 허용 만약에 3중화를 사용안한다면 vip는 주석처리 해줘야 함
+kube_vip_port: 6443 # (변수) control-plane을 위한 port
+kube_vip_interface: ens18  # (변수) control-plane을 위한 interface 
+kube_vip_address: 192.168.135.70 # (변수) ccontrol-plane을 위한 VIP 
+master_ha: false  # (변수) control-plane HA 3중화 설치
 
 # docker-registry setting - to install k8s or runway in offline
 docker_registry_ip: "192.168.135.21" # (변수) docker registry로 사용할 IP 작성 필요 ex) master 1번의 IP
@@ -212,6 +223,7 @@ gpu_operator_values:
     enabled: false
   dcgmExporter:
     enabled: true
+driver_version: "535.161.07" #(변수) GPU-operator 설치를 위한 버전 명시
 
 ```
 
@@ -265,6 +277,7 @@ The key's randomart image is:
 ```
 
 - 그리고 설치할 노드에 copy를 진행한다.
+    - deploy node 배포하는 노드에도 copy를 진행해줘야 설치가 진행된다.
 
 ```jsx
 $ ssh-copy-id <master_node IP>
@@ -283,7 +296,7 @@ $ ansible-playbook -i inventory site.yml
 
 harbor에 계정 생성을 위해  필요한 스크립트 돌리기
 
-- create_harbor_user.sh을 통한 계정생
+- create_harbor_user.sh을 통한 계정생성
 
 ```jsx
 $ chmod +x create_harbor_user.sh
