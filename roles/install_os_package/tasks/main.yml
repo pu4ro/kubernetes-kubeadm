@@ -24,9 +24,8 @@
 - name: Install NVIDIA container toolkit and driver
   yum:
     name: 
-      - kernel-devel-5.14.0-427.18.1.el9_4
-      - kernel-5.14.0-427.18.1.el9_4
-      - kernel-tools-5.14.0-427.18.1.el9_4
+      - kernel-devel
+      - kernel-tools
     state: present
   when: nvidia_devices.stdout != "" 
 
@@ -64,7 +63,7 @@
 
 - name: Download NVIDIA installer
   ansible.builtin.command:
-    cmd: wget -O /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run {{ repo_url.centos }}{{ driver_version }}/NVIDIA-Linux-x86_64-{{ driver_version }}.run
+    cmd: wget -O /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run {{ repo_url.centos }}/NVIDIA-Linux-x86_64-{{ driver_version }}.run
   args:
     creates: /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run
   when: nvidia_devices.stdout != ""

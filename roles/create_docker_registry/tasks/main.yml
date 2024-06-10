@@ -1,17 +1,17 @@
 ---
 - name: load image
-  shell: ctr images import {{ load_image }}
+  shell: docker load -i {{ load_image }}
 
 - name: Check if Docker Registry container exists
   ansible.builtin.shell:
-    cmd: "ctr tasks ls | grep -w {{ registry_name }}"
-  register: ctr_ps_output
+    cmd: "docker ps --filter name=^/{{ registry_name }}$ --format '{{ '{{' }}.Names{{ '}}' }}'"
+  register: docker_ps_output
   changed_when: false
   ignore_errors: true
 
 - name: Set container exists flag
   set_fact:
-    container_exists: "{{ ctr_ps_output.stdout != '' }}"
+    container_exists: "{{ docker_ps_output.stdout == registry_name }}"
 
 - debug:
     msg: "Container exists: {{ container_exists }}"
@@ -23,8 +23,10 @@
     owner: root
     group: root
     mode: '0755'
-  when: not container_exists
+  when: not container_exists  
 
-- name: Reload systemd to apply changes
-  shell: "nerdctl run -d --name registry --restart always -p 5000:5000 -v {{ registry_data_dir }}:/var/lib/registry registry:2"
+- name: Run Docker Registry container
+  ansible.builtin.shell:
+    cmd: "docker run -d --restart=always --name {{ registry_name }} -p {{ registry_port }}:5000 -v {{ registry_data_dir }}:/var/lib/registry registry:{{ registry_version }}"
+    creates: "{{ registry_data_dir }}/data"
   ignore_errors: true

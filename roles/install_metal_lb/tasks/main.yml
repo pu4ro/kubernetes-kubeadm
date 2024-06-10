@@ -1,16 +1,43 @@
+---
 - name: Check if metallb is already installed
   community.kubernetes.helm_info:
     name: metallb
     namespace: metallb-system
   register: metallb
 
-- name: Download MetalLB manifest
-  command: wget -O /tmp/metallb-native.yaml "{{ repo_url.centos }}metallb-native.yaml"
-  vars:
-    version: "0.13.11"
+- name: Get the current kube-proxy ConfigMap
+  shell: kubectl get configmap kube-proxy -n kube-system -o yaml
+  register: current_configmap
 
-- name: Apply MetalLB manifest
-  command: kubectl apply -f /tmp/metallb-native.yaml
+- name: Write the current kube-proxy ConfigMap to a file
+  copy:
+    content: "{{ current_configmap.stdout }}"
+    dest: "/tmp/current-kube-proxy-config.yaml"
+
+- name: Update strictARP to true in the kube-proxy ConfigMap
+  replace:
+    path: "/tmp/current-kube-proxy-config.yaml"
+    regexp: 'strictARP: false'
+    replace: 'strictARP: true'
+  register: update_result
+
+- name: Apply the modified kube-proxy ConfigMap
+  command: kubectl apply -f /tmp/current-kube-proxy-config.yaml -n kube-system
+  when: update_result.changed
+
+- name: Add metallb repository to Helm
+  community.kubernetes.helm_repository:
+    name: metallb
+    repo_url: http://{{ helm_repo_ip }}/metallb
+    state: present
+  
+- name: Install metallb Helm Chart
+  community.kubernetes.helm:
+    name: metallb
+    chart_ref: metallb/metallb
+    release_namespace: metallb-system
+    create_namespace: true
+  when: metallb.status is undefined or ('failed' in metallb.status)
 
 - name: Pause for 5 seconds
   pause:

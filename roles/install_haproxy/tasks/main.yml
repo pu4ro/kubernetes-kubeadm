@@ -1,18 +1,9 @@
 ---
-- name: Install HAProxy on Ubuntu
+- name: Install HAProxy
   apt:
     name: haproxy
     state: present
     update_cache: yes
-  when: ansible_distribution == "Ubuntu"
-  tags: haproxy
-
-- name: Install HAProxy on RHEL
-  yum:
-    name: haproxy
-    state: present
-    update_cache: yes
-  when: ansible_os_family == "RedHat"
   tags: haproxy
 
 - name: Create HAProxy configuration directory
@@ -33,23 +24,6 @@
     dest: /etc/haproxy/haproxy.cfg
     mode: '0644'
   tags: haproxy
-  when: ansible_distribution == "Ubuntu"
-
-- name: Create rhel_HAProxy configuration file from template
-  template:
-    src: rhel_haproxy.cfg.j2
-    dest: /etc/haproxy/haproxy.cfg
-    mode: '0644'
-  tags: haproxy
-  when: ansible_os_family == "RedHat"
-
-- name: Ensure HAProxy is started and enabled
-  systemd:
-    name: haproxy
-    state: started
-    enabled: yes
-  tags: haproxy
-  when: ansible_os_family == "RedHat"
 
 - name: Ensure HAProxy is started and enabled
   systemd:
@@ -57,7 +31,6 @@
     state: restarted
     enabled: yes
   tags: haproxy
-  when: ansible_distribution == "Ubuntu"
 
 - name: Find Docker image files
   find:
@@ -67,46 +40,40 @@
   loop: "{{ docker_image_directories }}"
   register: found_images
   ignore_errors: yes
-  tags: debug
+  tags: haproxy
 
 - name: Combine found image files
   set_fact:
     all_found_images: "{{ all_found_images | default([]) + item.files }}"
   loop: "{{ found_images.results }}"
   when: item is defined and item.files is defined
-  tags: debug
+  tags: haproxy
 
-- name: Debug all_found_images
-  debug:
-    var: all_found_images.path
-  tags: debug
-
-- name: Load container images
-  command: "ctr images import {{ item.path }}"
+- name: Load Docker images
+  command: "docker load -i {{ item.path }}"
   loop: "{{ all_found_images }}"
   register: load_result
   ignore_errors: yes
   tags: haproxy
 
-- name: Get list of container images
-  shell: ctr images ls -q
-  register: container_images_output
-  tags: push
+- name: Get list of Docker images
+  command: docker image ls
+  register: docker_images_output
+  tags: haproxy
 
 - name: Filter images with 'cr' in the name
-  shell: echo "{{ container_images_output.stdout }}" | grep cr
+  shell: echo "{{ docker_images_output.stdout }}" | grep cr | awk '{print $1":"$2}'
   register: filtered_image
-  tags: push
+  tags: haproxy
 
-- name: Push container images
-  shell: "ctr images push {{ item }} --plain-http --max-concurrent-uploaded-layers=1"
+- name: Push Docker images
+  shell: "docker push {{ item }}"
   loop: "{{ filtered_image.stdout_lines }}"
   when: filtered_image.stdout_lines | length > 0
   register: push_results
-  tags: push
-  ignore_errors: true
+  tags: haproxy
 
-- name: Print result of container image push
+- name: Print result of Docker image push
   debug:
     var: push_results
   tags: haproxy
@@ -116,4 +83,3 @@
     name: haproxy
     state: restarted
     enabled: yes
-  tags: haproxy
