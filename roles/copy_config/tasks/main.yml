@@ -1,6 +1,6 @@
 ---
 - name: Login to Docker registry
-  shell: echo "{{ docker_password }}" | docker login --username "{{ docker_username }}" --password-stdin "{{ docker_registry }}"
+  shell: echo "{{ docker_password }}" | nerdctl login --username "{{ docker_username }}" --password-stdin "{{ docker_registry }}"
   register: login_result
   no_log: false  # 패스워드 정보가 로그에 나타나지 않도록 설정
 

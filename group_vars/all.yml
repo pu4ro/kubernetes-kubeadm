@@ -6,8 +6,8 @@ main_domain: onboarding1.com
 # kube-vip
 kube_vip_port: 6443
 kube_vip_interface: ens18
-kube_vip_address: 192.168.135.70
-master_ha: true
+#kube_vip_address: 192.168.135.70
+master_ha: false
 
 # docker-registry setting - to install k8s or runway in offline 
 docker_registry_ip: "192.168.135.41"
@@ -130,7 +130,7 @@ pip_trusted_host: "pubpypi.makina.rocks"
 pip_index_url: "http://pubpypi.makina.rocks/simple/"
 pgpool_username: "kidi"
 pgpool_password: "kidi"
-backend_tag: "v1.1.0.1"
+backend_tag: "v1.2.0.1-rc5"
 
 # create_docker_config.json in kubelet, only use public
 docker_username: "admin"
@@ -141,7 +141,7 @@ docker_registry: "cr.makina.rocks"
 # frontend-vars
 helm_namespace: "runway"
 global_production: true
-image_tag: "v1.1.0.1"
+image_tag: "v1.2.0.1-rc5"
 
 #Gpu-operator
 gpu_operator_values:
