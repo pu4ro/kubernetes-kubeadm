@@ -3,6 +3,13 @@
 # how to set domain
 main_domain: onboarding1.com
 
+# kube-vip
+kube_vip_port: 6443
+kube_vip_interface: ens18
+kube_vip_address: 192.168.135.70
+master_ha: false
+
+
 # docker-registry setting - to install k8s or runway in offline 
 docker_registry_ip: "192.168.135.21"
 registry_port: 5000
