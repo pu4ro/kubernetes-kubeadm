@@ -18,7 +18,7 @@
 
 - name: Install or update runway-postgresql-ha Helm chart
   community.kubernetes.helm:
-    name: runway-postgresql-ha
+    name: runway-postgresql
     chart_ref: postgresql-ha/postgresql-ha
     release_namespace: runway
     create_namespace: true

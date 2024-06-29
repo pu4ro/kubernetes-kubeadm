@@ -20,7 +20,6 @@
     create_namespace: true
   when: minio.helm_info is undefined or minio.helm_info.resources | length == 0
 
-
 - name: Pause for 5 seconds
   pause:
     seconds: 5
