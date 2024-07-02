@@ -40,10 +40,10 @@
     #- install_pypiserver
     #- install_stream
     #- install_postgresql
-    #- install_backend
+    - install_backend
     #- install_frontend
     #- install_gpu_operator
-    - post_install
+    #- post_install
 
 # remove all_components
 #- hosts: all
