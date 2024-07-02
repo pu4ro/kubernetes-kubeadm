@@ -1,5 +1,11 @@
 - name: Initialize the Kubernetes master
   block:
+    - name: Start kubelet service
+      service:
+        name: kubelet
+        state: started
+        enabled: yes
+      
     - name: Check if any Kubernetes nodes are already set up
       command: kubectl get nodes
       register: kubectl_nodes

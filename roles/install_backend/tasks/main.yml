@@ -44,7 +44,7 @@
         initSetup: false
         production: true
         virtualService:
-          domainHost: "{{ main_domain }}"a
+          domainHost: "{{ main_domain }}"
           frontend:
             hosts: ""
         nfs:

@@ -100,3 +100,10 @@
     reboot_timeout: 1200
   when: nvidia_devices.stdout != ""
   become: yes
+
+- name: Ensure the symbolic link /sbin/ldconfig points to /sbin/ldconfig.real
+  ansible.builtin.file:
+    src: /sbin/ldconfig
+    dest: /sbin/ldconfig.real
+    state: link
+  tags: ldconfig
