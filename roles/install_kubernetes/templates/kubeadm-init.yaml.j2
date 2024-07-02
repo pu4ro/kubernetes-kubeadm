@@ -30,7 +30,9 @@ apiServer:
 - {{ hostvars[host].ansible_host }}
 {% endfor %}
 {%- endfilter %}
-controllerManager: {}
+controllerManager:
+  extraArgs:
+    experimental-cluster-signing-duration: 87600h
 scheduler: {}
 
 
