@@ -21,7 +21,7 @@
     - install_os_package
     - install_containerd
     - install_kubernetes
-    - copy_config # offline is not install, docker_config_copy    
+    #- copy_config # offline is not install, docker_config_copy    
 
 - hosts: installs # runway back_ground install && runway install
   roles:
