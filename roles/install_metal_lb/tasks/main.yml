@@ -1,3 +1,20 @@
+---
+- name: Get the current kube-proxy ConfigMap
+  shell: kubectl get configmap kube-proxy -n kube-system -o yaml
+  register: current_configmap
+
+- name: Write the current kube-proxy ConfigMap to a file
+  copy:
+    content: "{{ current_configmap.stdout }}"
+    dest: "/tmp/current-kube-proxy-config.yaml"
+
+- name: Update strictARP to true in the kube-proxy ConfigMap
+  replace:
+    path: "/tmp/current-kube-proxy-config.yaml"
+    regexp: 'strictARP: false'
+    replace: 'strictARP: true'
+  register: update_result
+  
 - name: Check if metallb is already installed
   community.kubernetes.helm_info:
     name: metallb
