@@ -20,13 +20,17 @@ apiServer:
   extraArgs:
     authorization-mode: Node,RBAC
   certSANs:
-    - 127.0.0.1
-    - {{ kube_vip_address }}
-  {% for host in groups['masters'] %}
-  - "{{ hostvars[host].ansible_host }}"
-  {% endfor %}
-controllerManager: {}
+{%- filter indent(width=4) %}
+
+- 127.0.0.1
+{% if kube_vip_address is defined %}
+- {{ kube_vip_address }}
+{% endif %}
+{% for host in groups['masters'] %}
+- {{ hostvars[host].ansible_host }}
+{% endfor %}
+{%- endfilter %}
+controllerManager:
+  extraArgs:
+    experimental-cluster-signing-duration: 87600h
 scheduler: {}
-
-
-

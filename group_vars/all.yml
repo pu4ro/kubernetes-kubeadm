@@ -1,12 +1,12 @@
 ---
 
 # how to set domain
-main_domain: onboarding1.com
+main_domain: onboarding3.com
 
 # kube-vip
 kube_vip_port: 6443
 kube_vip_interface: ens18
-kube_vip_address: 192.168.135.70
+#kube_vip_address: 192.168.135.70
 master_ha: false
 
 
@@ -33,7 +33,7 @@ service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
 
 # DNS wildcard_ip
-wildcard_ip: "192.168.135.30"
+wildcard_ip: "192.168.135.40"
 main_nameserver: "192.168.135.21"
 enable_forwarding: false
 forward_servers:
@@ -46,7 +46,7 @@ repo_url:
   centos: "http://192.168.135.21:8080/repo"
   ubuntu: "http://192.168.135.21:8080/repo/"
 
-base_directory: "/root/makina-runway-1.1.0.1/helm"
+base_directory: "/root/makina-runway-1.2.0.1/helm"
 helm_repo_ip: "192.168.135.21:8080" # use http_port 
  
 # Docker 관련 변수
@@ -87,7 +87,7 @@ istio_service_type: "LoadBalancer"
 metallb_namespace: metallb-system
 metallb_ip_pool_name: default
 metallb_l2adv_name: default
-metallb_ip_range: "192.168.135.30/32"
+metallb_ip_range: "192.168.135.40/32"
 
 # harbor
 harbor_values:
@@ -128,7 +128,7 @@ pip_trusted_host: "pubpypi.makina.rocks"
 pip_index_url: "http://pubpypi.makina.rocks/simple/"
 pgpool_username: "kidi"
 pgpool_password: "kidi"
-backend_tag: "v1.1.0.1"
+backend_tag: "v1.2.0.1"
 
 # create_docker_config.json in kubelet, only use public
 docker_username: "admin"
@@ -139,7 +139,7 @@ docker_registry: "cr.makina.rocks"
 # frontend-vars
 helm_namespace: "runway"
 global_production: true
-image_tag: "v1.1.0.1"
+image_tag: "v1.2.0.1"
 
 #Gpu-operator
 gpu_operator_values:

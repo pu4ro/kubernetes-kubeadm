@@ -13,11 +13,7 @@
   when: minio.helm_info is undefined or minio.helm_info.resources | length == 0
 
 - name: Install or Upgrade minio Helm chart
-  community.kubernetes.helm:
-    name: minio
-    chart_ref: minio/minio
-    release_namespace: minio
-    create_namespace: true
+  shell: helm install minio minio/minio -n minio --create-namespace
   when: minio.helm_info is undefined or minio.helm_info.resources | length == 0
 
 - name: Pause for 5 seconds
