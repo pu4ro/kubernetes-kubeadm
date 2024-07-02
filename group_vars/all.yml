@@ -131,6 +131,7 @@ pip_index_url: "http://pubpypi.makina.rocks/simple/"
 pgpool_username: "kidi"
 pgpool_password: "kidi"
 backend_tag: "v1.2.0.1"
+manual_tag : "v1.2.0"
 
 # create_docker_config.json in kubelet, only use public
 docker_username: "admin"
