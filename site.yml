@@ -35,6 +35,7 @@
     - install_prometheus
     - install_ef # elastic & fluentd
     - install_knative
+    - install_kserve
     - install_minio
     - install_argo
     - install_pypiserver

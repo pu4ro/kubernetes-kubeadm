@@ -1,0 +1,45 @@
+---
+
+- name: Add kserve repository to Helm
+  community.kubernetes.helm_repository:
+    name: kserve-crd
+    repo_url: http://{{ helm_repo_ip }}/kserve-crd
+    state: present
+
+
+- name: Install or Upgrade kserve Helm chart
+  community.kubernetes.helm:
+    name: kserve-crd
+    chart_ref: kserve-crd/kserve-crd
+    release_namespace: api-deployment-infra
+    create_namespace: true
+
+
+- name: Add kserve repository to Helm
+  community.kubernetes.helm_repository:
+    name: kserve
+    repo_url: http://{{ helm_repo_ip }}/kserve
+    state: present
+
+
+- name: Install or Upgrade kserve Helm chart
+  community.kubernetes.helm:
+    name: kserve
+    chart_ref: kserve/kserve
+    release_namespace: api-deployment-infra
+    create_namespace: true
+
+
+
+- name: Pause for 5 seconds
+  pause:
+    seconds: 5
+
+- name: Wait for all kserve pods to be ready
+  shell: >
+    kubectl get pods -n api-deployment-infra -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+  register: not_running_rook_pods
+  until: not_running_rook_pods.stdout == ""
+  retries: 20
+  delay: 60
+  become: true
