@@ -1,0 +1,21 @@
+---
+- name: Create ConfigMap file from template
+  template:
+    src: coredns-configmap.yaml.j2
+    dest: /tmp/coredns-configmap.yaml
+
+- name: Apply the ConfigMap using kubectl
+  command: kubectl apply -f /tmp/coredns-configmap.yaml
+  register: apply_result
+
+- name: Display the result of the kubectl apply
+  debug:
+    var: apply_result
+
+- name: Restart CoreDNS deployment
+  command: kubectl rollout restart deployment coredns -n kube-system
+  register: restart_result
+  
+- name: Display the result of the CoreDNS restart
+  debug:
+    var: restart_result

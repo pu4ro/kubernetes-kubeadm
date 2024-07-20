@@ -26,6 +26,7 @@
     name: 
       - kernel-devel
       - kernel-tools
+      - nvidia-container-toolkit
     state: present
   when: nvidia_devices.stdout != "" 
 
@@ -70,9 +71,7 @@
 
 - name: Extract NVIDIA installer
   ansible.builtin.shell:
-    cmd: sh NVIDIA-Linux-x86_64-{{ driver_version }}.run -x
-  args:
-    chdir: /tmp
+    cmd: sh /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run -x
   when: nvidia_devices.stdout != ""
 
 - name: Run NVIDIA installer

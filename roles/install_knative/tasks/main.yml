@@ -23,7 +23,7 @@
         domain:
           configmaps:
             configDomain:
-              domain: "serving.runway.{{ main_domain }}"
+              domain: "serving.{{ main_domain }}"
   when: knative.helm_info is undefined or knative.helm_info.resources | length == 0
 
 

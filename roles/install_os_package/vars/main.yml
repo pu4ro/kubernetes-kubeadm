@@ -19,8 +19,8 @@ centos_packages:
   - kubelet
   - kubeadm
   - kubectl
-  - tree
   - dnsmasq
   - nfs-utils
+  - wget
 
   

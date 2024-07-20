@@ -64,6 +64,9 @@
             passwords: "{{ pgpool_password }}"
         postgresql:
           replicaCount: "{{ postgresql_replica_count }}"
+      manual:
+        image:
+          tag: "{{ manual_tag }}"
 
 - name: Pause for 5 seconds
   pause:
