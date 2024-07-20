@@ -41,6 +41,7 @@
     repo_url: http://{{ helm_repo_ip }}/frontend-admin
     state: present
   when: runway_frontend_admin.helm_info is undefined or runway_frontend_admin.helm_info.resources | length == 0
+  tags: admin
 
 - name: Install runway-frontend-admin Helm chart
   community.kubernetes.helm:
@@ -58,6 +59,7 @@
         tag: "{{ image_tag }}"
   register: frontend_admin_install
   when: runway_frontend_admin.helm_info is undefined or runway_frontend_admin.helm_info.resources | length == 0
+  tags: admin
 
 - name: Output results
   debug:

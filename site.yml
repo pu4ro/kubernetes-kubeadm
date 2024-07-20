@@ -34,7 +34,7 @@
     #- install_istio
     #- install_metal_lb
     #- install_harbor
-    #- install_prometheus
+    - install_prometheus
     #- install_ef # elastic & fluentd
     #- install_knative
     #- install_kserve
@@ -45,7 +45,7 @@
     #- install_postgresql
     #- install_backend
     #- install_frontend
-    - install_gpu_operator
+    #- install_gpu_operator
 #
 # remove all_components
 #- hosts: all

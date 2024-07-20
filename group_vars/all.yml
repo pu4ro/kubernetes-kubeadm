@@ -1,13 +1,13 @@
 ---
 
 # how to set domain
-main_domain: onboarding1.com
+main_domain: kdsai.kwater.or.kr
 
 # kube-vip
 kube_vip_port: 6443
 kube_vip_interface: ens18
-kube_vip_address: 192.168.135.70 #optional
-master_ha: true
+#kube_vip_address: 192.168.135.70 #optional
+master_ha: false
 
 # docker-registry setting - to install k8s or runway in offline 
 docker_registry_ip: "192.168.135.41"
@@ -48,7 +48,7 @@ repo_url:
   centos: "http://192.168.135.41:8080/repo/"
   ubuntu: "http://192.168.135.21:8080/repo/"
 
-base_directory: "/root/makina-runway-1.2.0.1/helm"
+base_directory: "/root/makina-runway-1.2.0.2/helm"
 helm_repo_ip: "192.168.135.41:8080" # use http_port 
  
 # Docker 관련 변수
@@ -89,7 +89,7 @@ istio_service_type: "LoadBalancer"
 metallb_namespace: metallb-system
 metallb_ip_pool_name: default
 metallb_l2adv_name: default
-metallb_ip_range: "192.168.135.30/32"
+metallb_ip_range: "192.168.135.40/32"
 
 # harbor
 harbor_values:
@@ -122,15 +122,15 @@ postgresql_replica_count: "3"
 project_shared_volume_storage_class: "ceph-filesystem"
 nfs_pv_path: "/nfs"
 nfs_pv_server: "master1"
-link_instance_max_cpu: "8"
-link_instance_max_memory: "16"
+link_instance_max_cpu: "0"
+link_instance_max_memory: "0"
 link_instance_max_gpu: "0"
 pod_commit_image_repository: "makina-runway/commit-link-"
 pip_trusted_host: "pubpypi.makina.rocks"
 pip_index_url: "http://pubpypi.makina.rocks/simple/"
 pgpool_username: "kidi"
 pgpool_password: "kidi"
-backend_tag: "v1.2.0.1"
+backend_tag: "v1.2.0.2"
 manual_tag : "v1.2.0"
 
 # create_docker_config.json in kubelet, only use public
