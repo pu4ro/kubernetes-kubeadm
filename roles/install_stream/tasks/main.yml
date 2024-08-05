@@ -18,6 +18,10 @@
     chart_ref: stream-infra/stream
     release_namespace: runway
     create_namespace: true
+    values:
+      kafka-cluster: 
+        cp-kafka:
+          brokers: "{{ broker_replicas }}"
   when: runway_stream.helm_info is undefined or runway_stream.helm_info.resources | length == 0
 
 

@@ -14,7 +14,7 @@
   roles:
     #- configure_repo   
     #- configure_chrony
-  #  - configure_dns # tags=set_dns                
+  # - configure_dns # tags=set_dns                
     #- common # set_timezone & chrony, set_kernel, tags=timezone                 
     #- configure_sysctl           
     #- install_os_package
@@ -45,7 +45,8 @@
     #- install_backend
     #- install_frontend
     #- install_gpu_operator
-    - change_coredns
+    #- change_coredns
+    - configure_timeslicing
 ##
 # remove all_components
 #- hosts: all

@@ -73,6 +73,7 @@
   ansible.builtin.shell:
     cmd: sh /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run -x
   when: nvidia_devices.stdout != ""
+  ignore_errors: true
 
 - name: Run NVIDIA installer
   ansible.builtin.shell: |

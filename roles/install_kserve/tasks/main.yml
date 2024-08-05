@@ -1,18 +1,18 @@
 ---
 
-- name: Add kserve repository to Helm
-  community.kubernetes.helm_repository:
-    name: kserve-crd
-    repo_url: http://{{ helm_repo_ip }}/kserve-crd
-    state: present
-
-
-- name: Install or Upgrade kserve Helm chart
-  community.kubernetes.helm:
-    name: kserve-crd
-    chart_ref: kserve-crd/kserve-crd
-    release_namespace: api-deployment-infra
-    create_namespace: true
+#- name: Add kserve repository to Helm
+#  community.kubernetes.helm_repository:
+#    name: kserve-crd
+#    repo_url: http://{{ helm_repo_ip }}/kserve-crd
+#    state: present
+#
+#
+#- name: Install or Upgrade kserve Helm chart
+#  community.kubernetes.helm:
+#    name: kserve-crd
+#    chart_ref: kserve-crd/kserve-crd
+#    release_namespace: api-deployment-infra
+#    create_namespace: true
 
 
 - name: Add kserve repository to Helm

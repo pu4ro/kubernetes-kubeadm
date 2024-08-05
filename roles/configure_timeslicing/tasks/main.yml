@@ -1,0 +1,80 @@
+---
+- name: Gather facts about all nodes with specific label
+  kubernetes.core.k8s_info:
+    kind: Node
+    label_selectors:
+      - "nvidia.com/gpu.present=true" # 예시 라벨
+  register: nodes_info
+  tags: timeslicing 
+
+- name: Filter GPU nodes
+  set_fact:
+    gpu_nodes: "{{ nodes_info.resources | map(attribute='metadata.name') | list }}"
+  tags: timeslicing 
+
+- name: Create ConfigMap for time slicing
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ namespace }}"
+    definition: "{{ lookup('template', 'time-slicing-config.yaml.j2') }}"
+  tags: timeslicing
+
+- name: Patch clusterpolicy with time slicing config
+  kubernetes.core.k8s:
+    state: present
+    name: "{{ cluster_policy_name }}"
+    namespace: "{{ namespace }}"
+    kind: ClusterPolicy
+    api_version: nvidia.com/v1
+    merge_type: merge
+    definition:
+      spec:
+        devicePlugin:
+          config:
+            name: "{{ configmap_name }}"
+  tags: timeslicing
+
+- name: Label the GPU nodes for time slicing
+  kubernetes.core.k8s:
+    state: present
+    kind: Node
+    name: "{{ item }}"
+    api_version: v1
+    definition:
+      metadata:
+        labels:
+          nvidia.com/device-plugin.config: "{{ gpu_model }}"
+  loop: "{{ gpu_nodes }}"
+  loop_control:
+    loop_var: item
+  tags: timeslicing
+
+
+- name: Restart gpu-feature-discovery DaemonSet
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ namespace }}"
+    kind: DaemonSet
+    name: "gpu-feature-discovery"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              date: "{{ lookup('pipe', 'date +%s') }}"
+  tags: timeslicing
+
+
+- name: Restart nvidia-device-plugin-daemonset DaemonSet
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ namespace }}"
+    kind: DaemonSet
+    name: "nvidia-device-plugin-daemonset"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              date: "{{ lookup('pipe', 'date +%s') }}"
+  tags: timeslicing

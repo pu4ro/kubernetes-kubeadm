@@ -42,5 +42,8 @@
 - name: Ensure changes are reflected in the index.yaml file
   command: touch /var/www/html/elasticsearch-fluentd/index.yaml
 
+- name: helm repo update
+  command: helm repo update
+  ignore_errors: true
 
 
