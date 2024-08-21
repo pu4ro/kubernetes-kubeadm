@@ -1,0 +1,9 @@
+---
+- name: Set Kubernetes label on the nodes
+  shell: kubectl label nodes {{ inventory_hostname }} nvidia.com/mig.config={{ mig_config }} --overwrite
+  when: mig | default(false) | bool
+  register: kubectl_output
+  
+- name: Debug output
+  debug:
+    var: kubectl_output.stdout
