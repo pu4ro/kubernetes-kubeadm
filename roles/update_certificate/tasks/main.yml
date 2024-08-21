@@ -1,0 +1,26 @@
+- name: Deploy the update-kubeadm-cert.sh script using template
+  template:
+    src: update-kubeadm-cert.sh.j2
+    dest: "{{ remote_script_path }}"
+    mode: 'u+x'
+
+- name: Run the update-kubeadm-cert.sh script
+  command: >
+    {{ remote_script_path }} {{ node_type }} --cri {{ cri }}
+  register: script_output
+  failed_when: "'ERROR' in script_output.stdout or 'ERROR' in script_output.stderr"
+  changed_when: False
+
+- name: Show script output
+  debug:
+    msg: "{{ script_output.stdout }}"
+    
+- name: Show script error output if any
+  debug:
+    msg: "{{ script_output.stderr }}"
+  when: script_output.stderr != ""
+
+- name: Remove the script from the remote host
+  file:
+    path: "{{ remote_script_path }}"
+    state: absent

@@ -1,0 +1,2 @@
+remote_script_path: "/tmp/update-kubeadm-cert.sh"
+node_type: all

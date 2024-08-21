@@ -5,13 +5,13 @@ main_domain: onboarding3.com
 
 # kube-vip
 kube_vip_port: 6443
-kube_vip_interface: ens18
-#kube_vip_address: 192.168.135.70
+kube_vip_interface: ens19
+#kube_vip_address: 20.0.0.20
 master_ha: false
 
 
 # docker-registry setting - to install k8s or runway in offline 
-docker_registry_ip: "192.168.135.21"
+docker_registry_ip: "20.0.0.1"
 registry_port: 5000
 registry_version: "2"
 registry_data_dir: "/opt/docker-registry"
@@ -23,18 +23,19 @@ docker_image_directories:
 
 # timezone && chrony
 set_timezone: Asia/Seoul
-ntp_client_network: 192.168.135.0/23
-chrony_server: "192.168.135.21"
+ntp_client_network: 20.0.0.0/24
+chrony_server: "20.0.0.1"
 
 # kubeadm-init.yaml create
 kubernetes_version: '1.23.17'
 dns_domain: cluster.local
 service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
+apiserver_advertise_address: 20.0.0.1
 
 # DNS wildcard_ip
-wildcard_ip: "192.168.135.40"
-main_nameserver: "192.168.135.21"
+wildcard_ip: "20.0.0.100"
+main_nameserver: "20.0.0.1"
 enable_forwarding: false
 forward_servers:
   - "168.126.63.1"
@@ -43,11 +44,11 @@ enable_wildcard: true
 
 # helm command && OS package repo
 repo_url:
-  centos: "http://192.168.135.21:8080/repo"
-  ubuntu: "http://192.168.135.21:8080/repo/"
+  centos: "http://20.0.0.1:8080/repo"
+  ubuntu: "http://20.0.0.1:8080/repo/"
 
-base_directory: "/root/makina-runway-1.2.0.1/helm"
-helm_repo_ip: "192.168.135.21:8080" # use http_port 
+base_directory: "/root/makina-runway-1.3.0/helm"
+helm_repo_ip: "20.0.0.1:8080" # use http_port 
  
 # Docker 관련 변수
 insecure_registries:
@@ -87,7 +88,7 @@ istio_service_type: "LoadBalancer"
 metallb_namespace: metallb-system
 metallb_ip_pool_name: default
 metallb_l2adv_name: default
-metallb_ip_range: "192.168.135.40/32"
+metallb_ip_range: "20.0.0.100/32"
 
 # harbor
 harbor_values:
@@ -101,7 +102,7 @@ harbor_values:
     enabled: true
     persistentVolumeClaim:
       registry:
-        size: "50Gi"
+        size: "150Gi"
   trivy:
     enabled: false
 
@@ -128,8 +129,8 @@ pip_trusted_host: "pubpypi.makina.rocks"
 pip_index_url: "http://pubpypi.makina.rocks/simple/"
 pgpool_username: "kidi"
 pgpool_password: "kidi"
-backend_tag: "v1.2.0.1"
-manual_tag : "v1.2.0"
+backend_tag: "v1.3.0"
+manual_tag : "v1.3.0"
 
 # create_docker_config.json in kubelet, only use public
 docker_username: "admin"
@@ -140,7 +141,7 @@ docker_registry: "cr.makina.rocks"
 # frontend-vars
 helm_namespace: "runway"
 global_production: true
-image_tag: "v1.2.0.1"
+image_tag: "v1.3.0"
 
 #Gpu-operator
 gpu_operator_values:
@@ -152,3 +153,7 @@ gpu_operator_values:
     enabled: false
   dcgmExporter:
     enabled: true
+
+# update_certificate
+cri: "docker"  # Valid options are "docker" or "containerd"
+cert_days: 3650

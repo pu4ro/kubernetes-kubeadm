@@ -19,6 +19,7 @@ controlPlaneEndpoint: {{ kube_vip_address }}:{{ kube_vip_port }}
 apiServer:
   extraArgs:
     authorization-mode: Node,RBAC
+    apiserver-advertise-address: "{{ apiserver_advertise_address }}"
   certSANs:
 {%- filter indent(width=4) %}
 
@@ -30,7 +31,4 @@ apiServer:
 - {{ hostvars[host].ansible_host }}
 {% endfor %}
 {%- endfilter %}
-controllerManager:
-  extraArgs:
-    experimental-cluster-signing-duration: 87600h
 scheduler: {}
