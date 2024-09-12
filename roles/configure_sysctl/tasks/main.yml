@@ -25,12 +25,26 @@
   lineinfile:
     path: /etc/security/limits.conf
     state: present
-    line: "* soft nofile 100000"
+    line: "* soft nofile 300000"
     insertafter: EOF
 
 - name: Add hard nofile limit to /etc/security/limits.conf
   lineinfile:
     path: /etc/security/limits.conf
     state: present
-    line: "* hard nofile 100000"
+    line: "* hard nofile 300000"
+    insertafter: EOF
+
+- name: Add soft nofile limit to /etc/security/limits.conf
+  lineinfile:
+    path: /etc/security/limits.conf
+    state: present
+    line: "* soft nofile 300000"
+    insertafter: EOF
+
+- name: Add hard nproc limit to /etc/security/limits.conf
+  lineinfile:
+    path: /etc/security/limits.conf
+    state: present
+    line: "* hard nproc 300000"
     insertafter: EOF
