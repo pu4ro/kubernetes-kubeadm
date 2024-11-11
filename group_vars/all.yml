@@ -1,16 +1,16 @@
 ---
 
 # how to set domain
-main_domain: runway.kidi.or.kr
+main_domain: kidi.or.kr
 
 # kube-vip
-kube_vip_port: 6443
-kube_vip_interface: bond0
-kube_vip_address: 192.168.226.50 #optional
-master_ha: true
+#kube_vip_port: 6443
+#kube_vip_interface: bond0
+#kube_vip_address: 192.168.226.50 #optional
+master_ha: false
 
 # docker-registry setting - to install k8s or runway in offline 
-docker_registry_ip: "192.168.226.51"
+docker_registry_ip: "192.168.135.71"
 registry_port: 5000
 registry_version: "2"
 registry_data_dir: "/opt/docker-registry"
@@ -22,8 +22,8 @@ docker_image_directories:
 
 # timezone && chrony
 set_timezone: Asia/Seoul
-ntp_client_network: 192.168.226.0/23
-chrony_server: "192.168.226.51"
+ntp_client_network: 192.168.135.0/23
+chrony_server: "192.168.135.71"
 
 # kubeadm-init.yaml create
 kubernetes_version: '1.23.17'
@@ -32,8 +32,8 @@ service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
 
 # DNS wildcard_ip
-wildcard_ip: "192.168.226.71"
-main_nameserver: "192.168.226.71"
+wildcard_ip: "192.168.135.71"
+main_nameserver: "192.168.135.71"
 enable_forwarding: false
 forward_servers:
   - "168.126.63.1"
@@ -45,11 +45,11 @@ containerd_version: "1.7.6"
 
 # helm command && OS package repo && containerd repo 
 repo_url:
-  centos: "http://192.168.226.51:8080/repo/"
+  centos: "http://192.168.135.71:8080/repo/"
   ubuntu: "http://192.168.135.21:8080/repo/"
 
 base_directory: "/root/makina-runway-1.4.0.2/helm"
-helm_repo_ip: "192.168.226.51:8080" # use http_port 
+helm_repo_ip: "192.168.135.71:8080" # use http_port 
  
 # Docker 관련 변수
 insecure_registries:
@@ -71,9 +71,7 @@ rook_ceph_values:
       allowMultiplePerNode: false
     storage:
       useAllNodes: true
-      useAllDevices: false
-      devices:
-        - name: /dev/disk/by-id/dm-name-cephvg-cephlv_0
+      useAllDevices: true
     dashboard:
       enabled: true
   operatorNamespace: rook-ceph
@@ -110,7 +108,7 @@ harbor_values:
     enabled: true
     persistentVolumeClaim:
       registry:
-        size: "1000Gi"
+        size: "50Gi"
   trivy:
     enabled: false
 
@@ -122,8 +120,8 @@ elastic_replicas: 2
 broker_replicas: 3
 #backend
 image_registry_url: "http://harbor.{{ main_domain }}/api/v2.0"
-image_registry_username: "mrx.dev"
-image_registry_password: "klw9pcSDWkpY4udGaGjQP7KrjGoegdIw"
+image_registry_username: "admin"
+image_registry_password: "Harbor12345"
 image_registry_api_token: "YWRtaW46SGaFyYm9yMTIzNDU="
 grafana_public_url: "grafana.{{ main_domain }}"
 runway_url: "{{ main_domain }}"

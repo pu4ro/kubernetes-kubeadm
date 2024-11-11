@@ -1,31 +1,31 @@
 ---
 - hosts: installs #pre-install
   roles:
-    - common
-    - configure_sysctl 
-    - install_apache2 #install repository-server
-    - configure_repo
-    - install_os_package
-    - install_docker
-    - create_docker_registry 
-    - install_dnsmasq # set dns-server, tags=dns
-    - install_haproxy # image push and create 
+    #- common
+    #- configure_sysctl 
+    #- install_apache2 #install repository-server
+    #- configure_repo
+    #- install_os_package
+    #- install_docker
+    #- create_docker_registry 
+    #- install_dnsmasq # set dns-server, tags=dns
+    #- install_haproxy # image push and create 
 - hosts: all #Infra settings
   roles:
-    - configure_repo   
-    - configure_chrony
+    #- configure_repo   
+    #- configure_chrony
   # - configure_dns # tags=set_dns                
-    - common # set_timezone & chrony, set_kernel, tags=timezone                 
-    - configure_sysctl           
-    - install_os_package
-    - install_docker
-    - install_kubernetes
+    #- common # set_timezone & chrony, set_kernel, tags=timezone                 
+    #- configure_sysctl           
+    #- install_os_package
+    #- install_docker
+    #- install_kubernetes
     #- copy_config # offline is not install, docker_config_copy    
 
 - hosts: installs # runway back_ground install && runway install
   roles:
     #- install_tools # set k9s,kubectl,helm tags=tools
-    - create_helm_repository
+    #- create_helm_repository
     - remove_master_taint # if you need Master Node Scheduling
     - install_flannel
     - install_cert_manager
@@ -46,7 +46,7 @@
     - install_frontend
     - install_gpu_operator
     - change_coredns
-    - configure_timeslicing
+    #- configure_timeslicing
 ##
 # remove all_components
 #- hosts: all
