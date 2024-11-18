@@ -46,9 +46,9 @@
     #- install_gpu_operator
     #- post_install
 
-- hosts: masters
-  roles:
-    - update_certificate
+#- hosts: masters
+#  roles:
+#    - update_certificate
 
 # remove all_components
 #- hosts: all

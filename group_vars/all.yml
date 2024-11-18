@@ -4,8 +4,8 @@
 main_domain: onboarding3.com
 
 # kube-vip
-kube_vip_port: 6443
-kube_vip_interface: ens19
+#kube_vip_port: 6443
+#kube_vip_interface: ens19
 #kube_vip_address: 20.0.0.20
 master_ha: false
 
@@ -31,7 +31,7 @@ kubernetes_version: '1.23.17'
 dns_domain: cluster.local
 service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
-apiserver_advertise_address: 20.0.0.1
+#apiserver_advertise_address: 20.0.0.1
 
 # DNS wildcard_ip
 wildcard_ip: "20.0.0.100"
