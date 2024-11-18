@@ -16,6 +16,11 @@ certificatesDir: /etc/kubernetes/pki
 {% if kube_vip_address is defined %}
 controlPlaneEndpoint: {{ kube_vip_address }}:{{ kube_vip_port }}
 {% endif %}
+apiServer:
+  extraArgs:
+    authorization-mode: Node,RBAC
+  certSANs:
+{%- filter indent(width=4) %}
 
 - 127.0.0.1
 {% if kube_vip_address is defined %}
@@ -25,4 +30,5 @@ controlPlaneEndpoint: {{ kube_vip_address }}:{{ kube_vip_port }}
 - {{ hostvars[host].ansible_host }}
 {% endfor %}
 {%- endfilter %}
+controllerManager: {}
 scheduler: {}

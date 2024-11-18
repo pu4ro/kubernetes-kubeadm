@@ -12,12 +12,12 @@
 - hosts: all #Infra settings
   roles:
     #- configure_repo   
-    - configure_chrony
+    #- configure_chrony
     #- configure_dns # tags=set_dns                
-    - common # set_timezone & chrony, set_kernel, tags=timezone                 
-    - configure_sysctl           
-    - install_os_package
-    - install_docker
+    #- common # set_timezone & chrony, set_kernel, tags=timezone                 
+    #- configure_sysctl           
+    #- install_os_package
+    #- install_docker
     - install_kubernetes
     #- copy_config # offline is not install, docker_config_copy    
 
