@@ -16,12 +16,6 @@ certificatesDir: /etc/kubernetes/pki
 {% if kube_vip_address is defined %}
 controlPlaneEndpoint: {{ kube_vip_address }}:{{ kube_vip_port }}
 {% endif %}
-apiServer:
-  extraArgs:
-    authorization-mode: Node,RBAC
-    apiserver-advertise-address: "{{ apiserver_advertise_address }}"
-  certSANs:
-{%- filter indent(width=4) %}
 
 - 127.0.0.1
 {% if kube_vip_address is defined %}

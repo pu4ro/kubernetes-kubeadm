@@ -12,13 +12,13 @@
 - hosts: all #Infra settings
   roles:
     #- configure_repo   
-    #- configure_chrony
+    - configure_chrony
     #- configure_dns # tags=set_dns                
-    #- common # set_timezone & chrony, set_kernel, tags=timezone                 
-    #- configure_sysctl           
-    #- install_os_package
-    #- install_docker
-    #- install_kubernetes
+    - common # set_timezone & chrony, set_kernel, tags=timezone                 
+    - configure_sysctl           
+    - install_os_package
+    - install_docker
+    - install_kubernetes
     #- copy_config # offline is not install, docker_config_copy    
 
 - hosts: installs # runway back_ground install && runway install
