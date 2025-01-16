@@ -2,7 +2,7 @@
 - name: Check if elasticsearch-fluentd is already installed
   community.kubernetes.helm_info:
     name: elasticsearch-fluentd
-    namespace: monitoring
+    namespace: logging
   register: elasticsearch_fluentd_installed
 
 - name: Add elasticsearch-fluentd repository to Helm
@@ -16,7 +16,7 @@
   community.kubernetes.helm:
     name: elasticsearch-fluentd
     chart_ref: elasticsearch-fluentd/elasticsearch-fluentd
-    release_namespace: monitoring
+    release_namespace: logging
     create_namespace: true
     values:
       replicas: "{{ elastic_replicas }}"
@@ -28,7 +28,7 @@
 
 - name: Wait for all elasticsearch-fluentd pods to be ready
   shell: >
-    kubectl get pods -n monitoring -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
+    kubectl get pods -n logging -o custom-columns=:status.phase --no-headers| grep operator | grep -v Running | grep -v Completed || true
   register: not_running_rook_pods
   until: not_running_rook_pods.stdout == ""
   retries: 20

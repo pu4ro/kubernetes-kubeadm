@@ -21,13 +21,13 @@
     #- install_os_package
     #- install_containerd
     #- install_kubernetes
-    - copy_config # offline is not install, docker_config_copy    
+    #- copy_config # offline is not install, docker_config_copy    
 
 - hosts: installs # runway back_ground install && runway install
   roles:
     #- install_tools # set k9s,kubectl,helm tags=tools
-    #- create_helm_repository
-    #s- install_flannel
+    - create_helm_repository
+    #- install_flannel
     #- remove_master_taint # if you need Master Node Scheduling
     #- install_cert_manager
     #- install_rook_ceph
