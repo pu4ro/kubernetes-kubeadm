@@ -18,7 +18,7 @@
     #- configure_sysctl           
     #- install_os_package
     #- install_docker
-    - install_kubernetes
+    #- install_kubernetes
     #- copy_config # offline is not install, docker_config_copy    
 
 - hosts: installs # runway back_ground install && runway install
@@ -29,7 +29,7 @@
     #- remove_master_taint # if you need Master Node Scheduling
     #- install_cert_manager
     #- install_rook_ceph
-    #- install_istio
+    - install_istio
     #- install_metal_lb
     #- install_harbor
     #- install_prometheus
