@@ -119,17 +119,57 @@
                             - |
                               echo "Cleaning dangling images on \$node..."
                               
-                              # Try Docker first
-                              if [ -S /var/run/docker.sock ]; then
-                                echo "Using Docker cleanup..."
-                                docker system prune -f --filter "until=168h" || true
-                                docker image prune -f || true
+                              # Install crictl if not available
+                              if ! command -v crictl >/dev/null 2>&1; then
+                                echo "Installing crictl..."
+                                # Try online installation first
+                                if curl -s --connect-timeout 5 https://github.com >/dev/null 2>&1; then
+                                  echo "Online mode: downloading crictl..."
+                                  wget -q https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.28.0/crictl-v1.28.0-linux-amd64.tar.gz
+                                  tar -xzf crictl-v1.28.0-linux-amd64.tar.gz -C /usr/local/bin/
+                                  chmod +x /usr/local/bin/crictl
+                                else
+                                  echo "Offline mode: using local crictl binary..."
+                                  # Use local binary if available
+                                  if [ -f /opt/k8s-bins/crictl-v1.28.0-linux-amd64.tar.gz ]; then
+                                    tar -xzf /opt/k8s-bins/crictl-v1.28.0-linux-amd64.tar.gz -C /usr/local/bin/
+                                    chmod +x /usr/local/bin/crictl
+                                  else
+                                    echo "Warning: crictl not available in offline mode"
+                                  fi
+                                fi
                               fi
                               
-                              # Try containerd/crictl
+                              # Configure crictl to use containerd
+                              export CONTAINER_RUNTIME_ENDPOINT=unix:///run/containerd/containerd.sock
+                              export IMAGE_SERVICE_ENDPOINT=unix:///run/containerd/containerd.sock
+                              
+                              # Primary cleanup using containerd/crictl
                               if [ -S /run/containerd/containerd.sock ]; then
-                                echo "Using crictl cleanup..."
+                                echo "Using crictl cleanup with containerd..."
                                 crictl rmi --prune || true
+                                crictl images -q | xargs -r crictl rmi || true
+                                
+                                # Additional cleanup using ctr (containerd CLI)
+                                if command -v ctr >/dev/null 2>&1; then
+                                  echo "Using ctr for additional cleanup..."
+                                  ctr -n k8s.io images rm \$(ctr -n k8s.io images list -q | grep -v sha256) || true
+                                  ctr -n k8s.io containers rm \$(ctr -n k8s.io containers list -q) || true
+                                fi
+                              fi
+                              
+                              # Fallback to nerdctl if available
+                              if command -v nerdctl >/dev/null 2>&1; then
+                                echo "Using nerdctl cleanup..."
+                                nerdctl system prune -f --filter "until=168h" || true
+                                nerdctl image prune -f || true
+                              fi
+                              
+                              # Legacy Docker cleanup (if still present)
+                              if [ -S /var/run/docker.sock ] && command -v docker >/dev/null 2>&1; then
+                                echo "Using Docker cleanup (legacy)..."
+                                docker system prune -f --filter "until=168h" || true
+                                docker image prune -f || true
                               fi
                               
                               echo "Cleanup completed on \$node"

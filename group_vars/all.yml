@@ -60,15 +60,19 @@ kubernetes_packages:
 # -----------------------------------------------------------------------------
 # CONTAINER RUNTIME PACKAGES
 # -----------------------------------------------------------------------------
-# Docker and containerd packages for container runtime
-# Both Docker CE and containerd are installed for compatibility
+# Containerd, buildkit, and nerdctl packages for container runtime
+# Containerd is the primary container runtime for Kubernetes
 container_packages:
   ubuntu:
-    - docker-ce        # Docker Community Edition
     - containerd.io    # Container runtime (used by Kubernetes)
+    - runc             # OCI container runtime
+    - buildkit         # Advanced container image building
+    - nerdctl          # Docker-compatible CLI for containerd
   centos:
-    - docker-ce        # Docker Community Edition
     - containerd.io    # Container runtime (used by Kubernetes)
+    - runc             # OCI container runtime
+    - buildkit         # Advanced container image building
+    - nerdctl          # Docker-compatible CLI for containerd
 
 # -----------------------------------------------------------------------------  
 # SYSTEM UTILITIES AND TOOLS
@@ -148,56 +152,6 @@ install_network_storage: true     # NFS and network storage support
 install_time_sync: true           # Chrony time synchronization (recommended)
 
 # =============================================================================
-# OS-SPECIFIC SERVICE NAMES AND PATHS
-# =============================================================================
-# Handle differences in service names and configuration paths between OS families
-# This section centralizes OS-specific variations to maintain consistency
-
-# -----------------------------------------------------------------------------
-# SERVICE NAMES (OS-SPECIFIC)
-# -----------------------------------------------------------------------------
-# Different service names between Ubuntu and CentOS for the same functionality
-# Used by systemd service management tasks
-service_names:
-  ubuntu:
-    chrony: chrony      # Time sync service on Ubuntu/Debian
-    docker: docker      # Container runtime service
-    kubelet: kubelet    # Kubernetes node agent service
-    firewall: ufw       # Firewall service on Ubuntu
-  centos:
-    chrony: chronyd     # Time sync service on CentOS/RHEL (note the 'd')
-    docker: docker      # Container runtime service  
-    kubelet: kubelet    # Kubernetes node agent service
-    firewall: firewalld # Firewall service on CentOS/RHEL
-
-# -----------------------------------------------------------------------------
-# CONFIGURATION FILE PATHS (OS-SPECIFIC)
-# -----------------------------------------------------------------------------
-# Different default configuration file locations between OS families
-# Used by template and configuration management tasks
-config_paths:
-  ubuntu:
-    chrony_conf: /etc/chrony/chrony.conf     # Chrony config on Ubuntu (subdirectory)
-    docker_daemon: /etc/docker/daemon.json  # Docker daemon configuration
-    sysctl_dir: /etc/sysctl.d               # Kernel parameter configurations
-  centos:
-    chrony_conf: /etc/chrony.conf           # Chrony config on CentOS (root etc)
-    docker_daemon: /etc/docker/daemon.json  # Docker daemon configuration
-    sysctl_dir: /etc/sysctl.d               # Kernel parameter configurations
-
-# -----------------------------------------------------------------------------
-# PACKAGE MANAGER SETTINGS (OS-SPECIFIC)
-# -----------------------------------------------------------------------------
-# Different behavior and options for package managers
-# Controls caching and update behavior during package installation
-package_manager:
-  ubuntu:
-    update_cache: yes       # Always update apt cache before installation
-    cache_valid_time: 3600  # Cache valid for 1 hour (3600 seconds)
-  centos:
-    update_cache: no        # Yum handles cache automatically
-
-# =============================================================================
 # DOCKER REGISTRY CONFIGURATION  
 # =============================================================================
 # Private Docker registry settings for offline installations and custom images
@@ -224,7 +178,21 @@ registry_name: "registry"                  # Registry container name
 # Critical for certificate validation and cluster coordination
 set_timezone: Asia/Seoul              # System timezone (change as needed)
 ntp_client_network: 192.168.0.0/24   # Network allowed to sync time
-chrony_server: "192.168.0.21"        # Primary NTP server (usually master node)
+
+# Chrony NTP Configuration
+# Support for both external NTP servers and internal cluster time sync
+use_external_ntp: true                # Use external NTP servers (false for airgapped)
+external_ntp_servers:                 # External NTP servers (when use_external_ntp: true)
+  - "time.google.com"
+  - "pool.ntp.org"
+  - "time.cloudflare.com"
+
+# Internal cluster time synchronization (for airgapped environments)
+chrony_master_server: "192.168.0.21" # Master node as NTP server (when use_external_ntp: false)
+chrony_allow_networks:                # Networks allowed to sync from master
+  - "192.168.0.0/24"
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
 
 # -----------------------------------------------------------------------------
 # KUBERNETES CLUSTER CONFIGURATION
@@ -258,109 +226,32 @@ repo_url:
   centos: "http://192.168.0.21:8080/repo"      # CentOS package repository
   ubuntu: "http://192.168.0.101:8080/repo/"    # Ubuntu package repository
 
-helm_repo_ip: "192.168.0.21:8080"             # Helm chart repository server
+# -----------------------------------------------------------------------------
+# CONTAINERD CONFIGURATION
+# -----------------------------------------------------------------------------
+# Containerd daemon configuration and registry settings
+# Controls containerd behavior and registry access
+containerd_log_max_size: "2000m"   # Maximum size for container logs
 
-# -----------------------------------------------------------------------------
-# DOCKER CONFIGURATION
-# -----------------------------------------------------------------------------
-# Docker daemon configuration and registry settings
-# Controls Docker behavior and registry access
-insecure_registries:                # Registries that don't use HTTPS
+# Container registry authentication
+registry_username: "admin"         # Registry username for authentication
+registry_password: "Mak1nar0cks!"  # Registry password for authentication
+registry_server: "cr.makina.rocks" # Registry server for authentication
+
+# Buildkit configuration
+buildkit_enabled: true             # Enable buildkit for advanced builds
+buildkit_insecure_registries:      # Insecure registries for buildkit
   - "harbor.{{ main_domain }}"      # Local Harbor registry
   - "cr.makina.rocks"               # Custom registry
-docker_log_max_size: "2000m"       # Maximum size for Docker container logs
 
+# Airgapped environment settings
+airgapped_mode: false              # Enable airgapped mode (no internet access)
+local_binary_path: "/opt/k8s-bins" # Local path for storing binaries in airgapped mode
 
-rook_ceph_values:
-  cephClusterSpec:
-    dataDirHostPath: /var/lib/rook
-    mon:
-      count: 3
-    storage:
-      useAllNodes: true
-      useAllDevices: true
-    dashboard:
-      enabled: true
-  operatorNamespace: rook-ceph
-
-# Master Node taint management
-remove_master_taint: true
-
-# cert_Manager 
-cert_manager_version: "v1.11.0"
-cert_manager_values:
-  installCRDs: true
-  prometheus:
-    enabled: false
-
-# istio_service_type
-istio_service_type: "LoadBalancer"
-
-# metalLb-vars
-metallb_namespace: metallb-system
-metallb_ip_pool_name: default
-metallb_l2adv_name: default
-metallb_ip_range: "192.168.0.30/32"
-
-# harbor
-harbor_values:
-  expose:
-    tls:
-      enabled: false
-    type: clusterIP
-  externalURLs:
-    - "http://harbor.{{ main_domain }}"
-  persistence:
-    enabled: true
-    persistentVolumeClaim:
-      registry:
-        size: "50Gi"
-  trivy:
-    enabled: false
-
-
-# elastic-search replicas
-elastic_replicas: 2
-
-#backend
-image_registry_url: "http://harbor.{{ main_domain }}/api/v2.0"
-image_registry_username: "mrx.dev"
-image_registry_password: "klw9pcSDWkpY4udGaGjQP7KrjGoegdIw"
-image_registry_api_token: "YWRtaW46SGaFyYm9yMTIzNDU="
-grafana_public_url: "grafana.runway.{{ main_domain }}"
-runway_url: "runway.{{ main_domain }}"
-postgresql_replica_count: "3"
-project_shared_volume_storage_class: "ceph-filesystem"
-nfs_pv_path: "/nfs"
-nfs_pv_server: "master1"
-link_instance_max_cpu: "8"
-link_instance_max_memory: "16"
-link_instance_max_gpu: "0"
-pod_commit_image_repository: "makina-runway/commit-link-"
-pip_trusted_host: "pubpypi.makina.rocks"
-pip_index_url: "http://pubpypi.makina.rocks/simple/"
-pgpool_username: "kidi"
-pgpool_password: "kidi"
-backend_tag: "v1.1.0.1"
-
-# create_docker_config.json in kubelet, only use public
-docker_username: "admin"
-docker_password: "Mak1nar0cks!"
-docker_registry: "cr.makina.rocks"
-
-
-# frontend-vars
-helm_namespace: "runway"
-global_production: true
-image_tag: "v1.1.0.1"
-
-#Gpu-operator
-gpu_operator_values:
-  driver:
-    enabled: false
-  mig:
-    strategy: false
-  toolkit:
-    enabled: false
-  dcgmExporter:
-    enabled: true
+# Offline package sources (for airgapped environments)
+offline_packages:
+  containerd_version: "1.7.8"      # Containerd version for offline installation
+  runc_version: "1.1.9"            # Runc version for offline installation
+  buildkit_version: "0.12.3"       # Buildkit version for offline installation
+  nerdctl_version: "1.7.0"         # Nerdctl version for offline installation
+  crictl_version: "1.28.0"         # Crictl version for offline installation

@@ -1,52 +1,150 @@
 ---
 # =============================================================================
-# DOCKER CONTAINER RUNTIME INSTALLATION ROLE
+# CONTAINERD CONTAINER RUNTIME INSTALLATION ROLE
 # =============================================================================
-# Installs and configures Docker CE and containerd for Kubernetes
+# Installs and configures containerd, buildkit, and nerdctl for Kubernetes
 # Supports both Ubuntu/Debian and CentOS/RHEL systems with GPU detection
+# Works in both online and airgapped environments
+
+# Include offline binary preparation tasks if needed
+- include: offline_binaries.yml
+  when: 
+    - airgapped_mode
+    - prepare_offline_binaries | default(false)
 
 # -----------------------------------------------------------------------------
-# DOCKER PACKAGE INSTALLATION
+# CONTAINERD PACKAGE INSTALLATION
 # -----------------------------------------------------------------------------
-# Install Docker CE and containerd from centralized package configuration
-# Uses OS-specific package lists from group_vars/all.yml
+# Install containerd, buildkit, and nerdctl from centralized package configuration
+# Supports both online package managers and offline binary installation
 
-# Install Docker packages on Ubuntu/Debian systems
-# Includes both docker-ce and containerd.io for Kubernetes compatibility
-# update_cache: Ensures latest package information before installation
-- name: Install Docker and containerd (Ubuntu)
+# Online installation (when not in airgapped mode)
+- name: Install containerd and tools (Ubuntu - Online)
   apt:
     name: "{{ container_packages.ubuntu }}"
     state: present
     update_cache: yes
-  when: ansible_facts['os_family'] == "Debian"
+  when: 
+    - ansible_facts['os_family'] == "Debian"
+    - not airgapped_mode
 
-# Install Docker packages on CentOS/RHEL systems
-# Uses yum package manager for RedHat family systems
-- name: Install Docker and containerd (CentOS)
+- name: Install containerd and tools (CentOS - Online)
   yum:
     name: "{{ container_packages.centos }}"
     state: present
-  when: ansible_facts['os_family'] == "RedHat"
+  when: 
+    - ansible_facts['os_family'] == "RedHat"
+    - not airgapped_mode
 
-# -----------------------------------------------------------------------------
-# DOCKER CONFIGURATION SETUP
-# -----------------------------------------------------------------------------
-# Configure Docker daemon settings and directory structure
-
-# Ensure Docker configuration directory exists with proper permissions
-# Required before creating daemon.json configuration file
-- name: Ensure Docker config directory exists
+# Offline installation (airgapped mode)
+- name: Create local binary directory for airgapped installation
   file:
-    path: /etc/docker
+    path: "{{ local_binary_path }}"
+    state: directory
+    mode: '0755'
+  when: airgapped_mode
+
+- name: Install containerd from local binary (airgapped)
+  unarchive:
+    src: "{{ local_binary_path }}/containerd-{{ offline_packages.containerd_version }}-linux-amd64.tar.gz"
+    dest: /usr/local/bin/
+    remote_src: yes
+    creates: /usr/local/bin/containerd
+  when: airgapped_mode
+
+- name: Install runc from local binary (airgapped)
+  copy:
+    src: "{{ local_binary_path }}/runc.amd64"
+    dest: /usr/local/bin/runc
+    mode: '0755'
+    remote_src: yes
+  when: airgapped_mode
+
+- name: Install buildkit from local binary (airgapped)
+  unarchive:
+    src: "{{ local_binary_path }}/buildkit-v{{ offline_packages.buildkit_version }}.linux-amd64.tar.gz"
+    dest: /usr/local/bin/
+    remote_src: yes
+    creates: /usr/local/bin/buildkitd
+  when: airgapped_mode
+
+- name: Install nerdctl from local binary (airgapped)
+  unarchive:
+    src: "{{ local_binary_path }}/nerdctl-{{ offline_packages.nerdctl_version }}-linux-amd64.tar.gz"
+    dest: /usr/local/bin/
+    remote_src: yes
+    creates: /usr/local/bin/nerdctl
+  when: airgapped_mode
+
+- name: Install crictl from local binary (airgapped)
+  unarchive:
+    src: "{{ local_binary_path }}/crictl-v{{ offline_packages.crictl_version }}-linux-amd64.tar.gz"
+    dest: /usr/local/bin/
+    remote_src: yes
+    creates: /usr/local/bin/crictl
+  when: airgapped_mode
+
+# -----------------------------------------------------------------------------
+# CONTAINERD CONFIGURATION SETUP
+# -----------------------------------------------------------------------------
+# Configure containerd daemon settings and directory structure
+
+# Ensure containerd configuration directory exists with proper permissions
+# Required before creating containerd configuration file
+- name: Ensure containerd config directory exists
+  file:
+    path: /etc/containerd
     state: directory
     mode: '0755'
 
-# Enable and start Docker service immediately
-# Ensures Docker is available for container operations
-- name: Ensure Docker service is enabled and running
+# Generate default containerd configuration
+# Creates base configuration for containerd daemon
+- name: Generate containerd default config
+  shell: containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+
+# Create containerd systemd service file (for airgapped installations)
+- name: Create containerd systemd service file
+  copy:
+    content: |
+      [Unit]
+      Description=containerd container runtime
+      Documentation=https://containerd.io
+      After=network.target local-fs.target
+
+      [Service]
+      ExecStartPre=-/sbin/modprobe overlay
+      ExecStart=/usr/local/bin/containerd
+      Type=notify
+      Delegate=yes
+      KillMode=process
+      Restart=always
+      RestartSec=5
+      LimitNPROC=infinity
+      LimitCORE=infinity
+      LimitNOFILE=infinity
+      TasksMax=infinity
+      OOMScoreAdjust=-999
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/containerd.service
+    mode: '0644'
+  when: airgapped_mode
+  notify: restart containerd
+
+# Reload systemd daemon when service file is created
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+  when: airgapped_mode
+
+# Enable and start containerd service immediately
+# Ensures containerd is available for container operations
+- name: Ensure containerd service is enabled and running
   service:
-    name: docker
+    name: containerd
     state: started
     enabled: true
 
@@ -54,7 +152,7 @@
 # GPU DETECTION AND CONFIGURATION
 # -----------------------------------------------------------------------------
 # Detect NVIDIA GPU presence for container GPU support
-# Configures Docker daemon with appropriate GPU runtime if available
+# Configures containerd with appropriate GPU runtime if available
 
 # Check for NVIDIA GPU hardware using lspci command
 # ignore_errors: Not all systems have NVIDIA hardware
@@ -66,24 +164,51 @@
   changed_when: false
 
 # Set fact for GPU availability based on detection result
-# Used by Docker daemon template to conditionally enable GPU support
+# Used by containerd configuration to conditionally enable GPU support
 - name: Set GPU fact
   set_fact:
     gpu_added: "{{ gpu_installed.rc == 0 }}"
 
-# Configure Docker daemon with settings from template
-# Template includes GPU runtime configuration if GPU is detected
-# Notifies handler to restart Docker service when configuration changes
-- name: Configure Docker daemon
+# Configure containerd with GPU runtime if GPU is detected
+# Updates containerd config.toml to include nvidia-container-runtime
+- name: Configure containerd for GPU support
+  lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    line: '        SystemdCgroup = true'
+  when: gpu_added
+  notify: restart containerd
+
+# Configure buildkit daemon
+# Create buildkit configuration for advanced container builds
+- name: Create buildkit configuration directory
+  file:
+    path: /etc/buildkit
+    state: directory
+    mode: '0755'
+
+- name: Configure buildkit daemon
   template:
-    src: daemon.json.j2
-    dest: /etc/docker/daemon.json
+    src: buildkitd.toml.j2
+    dest: /etc/buildkit/buildkitd.toml
     owner: root
     group: root
     mode: '0644'
-  vars:
-    gpu_added: "{{ gpu_added }}"
-  notify: restart docker
+  notify: restart buildkit
+
+# -----------------------------------------------------------------------------
+# BUILDKIT SERVICE CONFIGURATION
+# -----------------------------------------------------------------------------
+# Enable and start buildkit service for advanced container builds
+
+# Enable and start buildkit service
+# Buildkit provides advanced container image building capabilities
+- name: Ensure buildkit service is enabled and running
+  service:
+    name: buildkit
+    state: started
+    enabled: true
+  ignore_errors: yes  # May not be available as systemd service initially
 
 # -----------------------------------------------------------------------------
 # KUBELET SERVICE CONFIGURATION

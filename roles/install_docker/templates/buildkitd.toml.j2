@@ -1,0 +1,35 @@
+# =============================================================================
+# BUILDKIT DAEMON CONFIGURATION
+# =============================================================================
+# Buildkit configuration for advanced container image building
+# Supports insecure registries and custom registry authentication
+
+debug = false
+# insecure-entitlements = ["security.insecure"]
+
+[grpc]
+  address = [ "unix:///run/buildkit/buildkitd.sock" ]
+  # address = [ "tcp://0.0.0.0:1234" ]
+
+[worker.oci]
+  enabled = true
+  # platforms = [ "linux/amd64", "linux/arm64" ]
+  snapshotter = "overlayfs"
+
+[worker.containerd]
+  enabled = false
+
+# Registry configuration for insecure registries
+{% if buildkit_insecure_registries is defined %}
+[registry]
+{% for registry in buildkit_insecure_registries %}
+  [registry."{{ registry }}"]
+    http = true
+    insecure = true
+{% endfor %}
+{% endif %}
+
+# Log configuration
+[log]
+  format = "text"
+  level = "info"

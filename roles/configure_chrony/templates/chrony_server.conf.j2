@@ -1,5 +1,55 @@
+# =============================================================================
+# CHRONY NTP SERVER CONFIGURATION
+# =============================================================================
+# Supports both external NTP servers and airgapped internal time sync
+
+{% if use_external_ntp %}
+# Use external NTP servers (online mode)
+{% for server in external_ntp_servers %}
+server {{ server }} iburst
+{% endfor %}
+{% else %}
+# Airgapped mode - serve as local time source
+# Use local clock as time source when no external NTP available
 local stratum 3
+{% endif %}
+
+# Use system timezone
 driftfile /var/lib/chrony/drift
-allow {{ ntp_client_network }}
-makestep 1.0 3
+
+# Allow NTP client access from internal networks
+{% for network in chrony_allow_networks %}
+allow {{ network }}
+{% endfor %}
+
+# Enable kernel synchronization of the real-time clock (RTC)
+rtcsync
+
+# Log measurement statistics
 logdir /var/log/chrony
+
+# Enable hardware timestamping if available
+hwtimestamp *
+
+{% if not use_external_ntp %}
+# Serve time even if not synchronized to external time source (airgapped mode)
+local stratum 3
+manual
+{% endif %}
+
+# Stop bad estimates upsetting machine clock
+maxupdateskew 100.0
+
+# This directive tells 'chronyd' to parse the 'adjtime' file to find out
+# whether the real-time clock keeps local time or UTC
+hwclockfile /etc/adjtime
+
+# This directive enables kernel synchronisation (every 11 minutes) of the
+# real-time clock. Note that it can't be used along with the 'rtcfile' directive
+rtconutc
+
+# Logging configuration
+log tracking measurements statistics
+
+# Step the system clock instead of slewing it if the adjustment is larger than 1 second
+makestep 1 3

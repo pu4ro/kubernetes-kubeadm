@@ -1,6 +1,13 @@
 ---
-- name: restart docker
+- name: restart containerd
   service:
-    name: docker
+    name: containerd
     state: restarted
     enabled: yes
+
+- name: restart buildkit
+  service:
+    name: buildkit
+    state: restarted
+    enabled: yes
+  ignore_errors: yes

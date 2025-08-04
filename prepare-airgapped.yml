@@ -1,0 +1,96 @@
+---
+# =============================================================================
+# AIRGAPPED ENVIRONMENT PREPARATION PLAYBOOK
+# =============================================================================
+# This playbook prepares binaries and packages for airgapped Kubernetes deployment
+# Run this on a machine with internet access before deploying to airgapped environment
+#
+# Usage:
+#   ansible-playbook -i inventory.ini prepare-airgapped.yml
+#
+# After running this playbook:
+# 1. Copy the /opt/k8s-bins directory to your airgapped environment
+# 2. Set airgapped_mode: true in group_vars/all.yml
+# 3. Run the main site.yml playbook in airgapped environment
+# =============================================================================
+
+- hosts: localhost
+  name: "Prepare Binaries for Airgapped Installation"
+  gather_facts: no
+  vars:
+    prepare_offline_binaries: true
+    airgapped_mode: true
+  tasks:
+    - name: Display preparation start message
+      debug:
+        msg: |
+          Starting airgapped environment preparation...
+          This will download all required binaries for offline installation.
+          
+          Target directory: {{ local_binary_path }}
+          
+          Binaries to download:
+          - containerd v{{ offline_packages.containerd_version }}
+          - runc v{{ offline_packages.runc_version }}
+          - buildkit v{{ offline_packages.buildkit_version }}
+          - nerdctl v{{ offline_packages.nerdctl_version }}
+          - crictl v{{ offline_packages.crictl_version }}
+
+    - name: Include offline binary preparation
+      include_role:
+        name: install_docker
+        tasks_from: offline_binaries
+
+    - name: Create airgapped deployment instructions
+      copy:
+        content: |
+          # Airgapped Kubernetes Deployment Instructions
+          
+          ## Files prepared for airgapped deployment:
+          
+          ### Container Runtime Binaries ({{ local_binary_path }}/)
+          - containerd-{{ offline_packages.containerd_version }}-linux-amd64.tar.gz
+          - runc.amd64
+          - buildkit-v{{ offline_packages.buildkit_version }}.linux-amd64.tar.gz
+          - nerdctl-{{ offline_packages.nerdctl_version }}-linux-amd64.tar.gz
+          - crictl-v{{ offline_packages.crictl_version }}-linux-amd64.tar.gz
+          
+          ## Deployment Steps:
+          
+          1. Copy the entire {{ local_binary_path }}/ directory to your airgapped environment
+          2. Update group_vars/all.yml in your airgapped environment:
+             ```yaml
+             airgapped_mode: true
+             use_external_ntp: false  # Use internal time sync
+             ```
+          3. Run the main playbook:
+             ```bash
+             ansible-playbook -i inventory.ini site.yml
+             ```
+          
+          ## Time Synchronization in Airgapped Mode:
+          
+          The first master node will act as the NTP server for the cluster.
+          All other nodes will sync time from the master node.
+          
+          ## Registry Configuration:
+          
+          Make sure your local registry (Harbor) is accessible and contains
+          all required Kubernetes and application images.
+          
+          Generated on: {{ ansible_date_time.iso8601 }}
+        dest: "{{ local_binary_path }}/AIRGAPPED_DEPLOYMENT_INSTRUCTIONS.md"
+        mode: '0644'
+
+    - name: Display completion message
+      debug:
+        msg: |
+          ✅ Airgapped environment preparation completed!
+          
+          📁 Files location: {{ local_binary_path }}/
+          📄 Instructions: {{ local_binary_path }}/AIRGAPPED_DEPLOYMENT_INSTRUCTIONS.md
+          
+          Next steps:
+          1. Copy {{ local_binary_path }}/ to your airgapped environment
+          2. Set airgapped_mode: true in group_vars/all.yml
+          3. Run: ansible-playbook -i inventory.ini site.yml

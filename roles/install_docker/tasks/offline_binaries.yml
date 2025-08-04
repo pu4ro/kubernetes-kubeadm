@@ -1,0 +1,69 @@
+---
+# =============================================================================
+# OFFLINE BINARY PREPARATION TASKS
+# =============================================================================
+# This file contains tasks to prepare binaries for airgapped installation
+# Run this on a machine with internet access to download required binaries
+
+- name: Create local binary directory
+  file:
+    path: "{{ local_binary_path }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+
+- name: Download containerd binary
+  get_url:
+    url: "https://github.com/containerd/containerd/releases/download/v{{ offline_packages.containerd_version }}/containerd-{{ offline_packages.containerd_version }}-linux-amd64.tar.gz"
+    dest: "{{ local_binary_path }}/containerd-{{ offline_packages.containerd_version }}-linux-amd64.tar.gz"
+    mode: '0644'
+  delegate_to: localhost
+  run_once: true
+
+- name: Download runc binary
+  get_url:
+    url: "https://github.com/opencontainers/runc/releases/download/v{{ offline_packages.runc_version }}/runc.amd64"
+    dest: "{{ local_binary_path }}/runc.amd64"
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+
+- name: Download buildkit binary
+  get_url:
+    url: "https://github.com/moby/buildkit/releases/download/v{{ offline_packages.buildkit_version }}/buildkit-v{{ offline_packages.buildkit_version }}.linux-amd64.tar.gz"
+    dest: "{{ local_binary_path }}/buildkit-v{{ offline_packages.buildkit_version }}.linux-amd64.tar.gz"
+    mode: '0644'
+  delegate_to: localhost
+  run_once: true
+
+- name: Download nerdctl binary
+  get_url:
+    url: "https://github.com/containerd/nerdctl/releases/download/v{{ offline_packages.nerdctl_version }}/nerdctl-{{ offline_packages.nerdctl_version }}-linux-amd64.tar.gz"
+    dest: "{{ local_binary_path }}/nerdctl-{{ offline_packages.nerdctl_version }}-linux-amd64.tar.gz"
+    mode: '0644'
+  delegate_to: localhost
+  run_once: true
+
+- name: Download crictl binary
+  get_url:
+    url: "https://github.com/kubernetes-sigs/cri-tools/releases/download/v{{ offline_packages.crictl_version }}/crictl-v{{ offline_packages.crictl_version }}-linux-amd64.tar.gz"
+    dest: "{{ local_binary_path }}/crictl-v{{ offline_packages.crictl_version }}-linux-amd64.tar.gz"
+    mode: '0644'
+  delegate_to: localhost
+  run_once: true
+
+- name: Display download completion message
+  debug:
+    msg: |
+      Offline binaries downloaded to {{ local_binary_path }}/
+      Copy this directory to your airgapped environment before running the playbook.
+      
+      Downloaded files:
+      - containerd-{{ offline_packages.containerd_version }}-linux-amd64.tar.gz
+      - runc.amd64
+      - buildkit-v{{ offline_packages.buildkit_version }}.linux-amd64.tar.gz
+      - nerdctl-{{ offline_packages.nerdctl_version }}-linux-amd64.tar.gz
+      - crictl-v{{ offline_packages.crictl_version }}-linux-amd64.tar.gz
+  delegate_to: localhost
+  run_once: true
