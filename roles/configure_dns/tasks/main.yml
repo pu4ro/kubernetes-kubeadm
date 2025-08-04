@@ -1,39 +1,62 @@
 ---
-- name: Set DNS servers for Ubuntu
-  block:
-    - name: Backup resolv.conf
-      command: cp /etc/resolv.conf /etc/resolv.conf.backup
-      
-    - name: Set DNS servers in resolv.conf
-      copy:
-        content: |
-          # Managed by Ansible
-          nameserver {{ main_nameserver }}
-        dest: /etc/resolv.conf
-        owner: root
-        group: root
-        mode: '0644'
-  tags: set_dns
-  when: ansible_facts['os_family'] == "Debian"
+# =============================================================================
+# DNS CONFIGURATION ROLE
+# =============================================================================
+# Configures DNS resolution for Kubernetes cluster
+# Sets up nameserver configuration and DNS forwarding
+# Supports both Ubuntu/Debian and CentOS/RHEL systems
 
-- name: Set DNS servers for CentOS
-  command: systemctl reload NetworkManager
-  when: ansible_facts['os_family'] == "RedHat"
+# -----------------------------------------------------------------------------
+# DNS CONFIGURATION BACKUP AND SETUP
+# -----------------------------------------------------------------------------
+
+- name: Backup current resolv.conf
+  copy:
+    src: /etc/resolv.conf
+    dest: /etc/resolv.conf.backup
+    remote_src: yes
+    force: no
   tags: set_dns
 
-- name: Set DNS servers for CentOS
-  block:
-    - name: Backup resolv.conf
-      command: cp /etc/resolv.conf /etc/resolv.conf.backup
+- name: Configure DNS servers for all OS families
+  copy:
+    content: |
+      # Managed by Ansible - DNS Configuration
+      nameserver {{ main_nameserver }}
+      {% if forward_servers is defined %}
+      {% for server in forward_servers %}
+      nameserver {{ server }}
+      {% endfor %}
+      {% endif %}
       
-    - name: Set DNS servers in resolv.conf
-      copy:
-        content: |
-          # Managed by Ansible
-          nameserver {{ main_nameserver }}
-        dest: /etc/resolv.conf
-        owner: root
-        group: root
-        mode: '0644'
-  when: ansible_facts['os_family'] == "RedHat"
+      # Domain configuration
+      {% if main_domain is defined %}
+      search {{ main_domain }}
+      domain {{ main_domain }}
+      {% endif %}
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  tags: set_dns
+
+- name: Reload NetworkManager (CentOS/RHEL only)
+  systemd:
+    name: NetworkManager
+    state: reloaded
+  when: 
+    - ansible_facts['os_family'] == "RedHat"
+    - ansible_service_mgr == "systemd"
+  ignore_errors: yes
+  tags: set_dns
+
+- name: Restart networking service (Ubuntu/Debian - if needed)
+  systemd:
+    name: systemd-resolved
+    state: restarted
+  when: 
+    - ansible_facts['os_family'] == "Debian"
+    - ansible_service_mgr == "systemd"
+  ignore_errors: yes
   tags: set_dns

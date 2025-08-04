@@ -1,10 +1,42 @@
 ---
+# =============================================================================
+# SYSCTL KERNEL PARAMETERS CONFIGURATION ROLE
+# =============================================================================
+# Configures kernel parameters required for Kubernetes networking
+# Sets up bridge netfilter, IP forwarding, and other network settings
+# Essential for proper pod networking and service mesh functionality
+
+# -----------------------------------------------------------------------------
+# SYSCTL CONFIGURATION AND VALIDATION
+# -----------------------------------------------------------------------------
+
+- name: Ensure sysctl.d directory exists
+  file:
+    path: /etc/sysctl.d
+    state: directory
+    mode: '0755'
+
 - name: Configure sysctl for Kubernetes networking
-  become: yes
   template:
     src: k8s.conf.j2
     dest: /etc/sysctl.d/k8s.conf
     owner: root
     group: root
     mode: '0644'
+    backup: yes
   notify: reload sysctl
+
+- name: Apply sysctl settings immediately
+  command: sysctl --system
+  changed_when: false
+
+- name: Verify critical sysctl settings are active
+  command: sysctl -n {{ item }}
+  register: sysctl_check
+  changed_when: false
+  failed_when: sysctl_check.stdout != "1"
+  loop:
+    - net.bridge.bridge-nf-call-iptables
+    - net.bridge.bridge-nf-call-ip6tables
+    - net.ipv4.ip_forward
+  ignore_errors: yes

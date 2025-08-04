@@ -1,13 +1,31 @@
 ---
+# =============================================================================
+# COMMON SYSTEM CONFIGURATION ROLE
+# =============================================================================
+# Basic system setup and configuration required for Kubernetes deployment
+# This role handles fundamental system settings that must be applied to all nodes
+
+# -----------------------------------------------------------------------------
+# HOSTNAME AND HOST RESOLUTION SETUP
+# -----------------------------------------------------------------------------
+# Configure system hostname and host resolution for cluster communication
+
+# Set system hostname to match Ansible inventory hostname
+# Ensures consistent hostname across all cluster nodes
 - name: Set hostname to inventory hostname
   hostname:
     name: "{{ inventory_hostname }}"
   tags: common
 
+# Gather comprehensive system facts for use in subsequent tasks
+# Updates Ansible facts with current system information
 - name: Gather facts from all hosts
   setup:
   tags: common
 
+# Configure /etc/hosts file with all cluster nodes
+# Enables hostname-based communication between cluster members
+# Uses Jinja2 template to populate with all inventory hosts
 - name: Configure /etc/hosts
   template:
     src: hosts.j2
@@ -17,6 +35,15 @@
     mode: '0644'
   tags: common
 
+# -----------------------------------------------------------------------------
+# FIREWALL AND SECURITY CONFIGURATION
+# -----------------------------------------------------------------------------
+# Disable firewalls and security features that interfere with Kubernetes
+# Note: In production, configure proper firewall rules instead of disabling
+
+# Disable firewalld on CentOS/RHEL systems
+# Kubernetes requires specific network access that conflicts with default firewall
+# ignore_errors: Some systems may not have firewalld installed
 - name: Disable firewalld (CentOS/RHEL)
   service:
     name: firewalld
@@ -26,12 +53,18 @@
   ignore_errors: true
   tags: common
 
+# Disable SELinux permanently on CentOS/RHEL systems
+# SELinux can interfere with container operations and pod networking
+# Requires system reboot to take full effect
 - name: Disable SELinux (CentOS/RHEL)
   selinux:
     state: disabled
   when: ansible_facts['os_family'] == "RedHat"
   tags: common
 
+# Disable UFW firewall on Ubuntu/Debian systems
+# Similar to firewalld, UFW can block required Kubernetes communication
+# ignore_errors: Some systems may not have UFW installed or enabled
 - name: Disable ufw (Ubuntu)
   service:
     name: ufw
@@ -42,6 +75,14 @@
   tags: common
 
 
+# -----------------------------------------------------------------------------
+# KERNEL MODULES CONFIGURATION
+# -----------------------------------------------------------------------------
+# Load required kernel modules for Kubernetes networking and container runtime
+# These modules are essential for pod networking, load balancing, and iptables
+
+# Ensure the systemd modules configuration directory exists
+# Required for persistent module loading configuration
 - name: Ensure the modules-load.d directory exists
   file:
     path: /etc/modules-load.d
@@ -49,6 +90,14 @@
     mode: '0755'
   tags: common  
 
+# Create kernel modules configuration file for Kubernetes
+# Modules explained:
+# - br_netfilter: Bridge netfilter for pod networking
+# - ip_vs_*: IPVS load balancing modules for kube-proxy
+# - overlay: Overlay filesystem for container layers  
+# - xt_*: Netfilter extensions for iptables rules
+# - nf_nat: Network address translation
+# - iptable_*: iptables functionality for network policies
 - name: Add required kernel modules to load at boot
   copy:
     dest: /etc/modules-load.d/k8s.conf
@@ -71,52 +120,83 @@
   notify: reload systemd-modules-load
   tags: common
 
+# Load kernel modules immediately (don't wait for reboot)
+# Ensures modules are available for immediate use
 - name: Load kernel modules
   modprobe:
     name: "{{ item }}"
     state: present
   loop:
-    - br_netfilter
-    - ip_vs
-    - ip_vs_rr
-    - ip_vs_wrr
-    - ip_vs_sh
-    - overlay
-    - xt_REDIRECT
-    - xt_owner
-    - nf_nat
-    - iptable_nat
-    - iptable_mangle
-    - iptable_filter
+    - br_netfilter      # Bridge netfilter support
+    - ip_vs            # IP Virtual Server
+    - ip_vs_rr         # IPVS round-robin scheduler
+    - ip_vs_wrr        # IPVS weighted round-robin scheduler  
+    - ip_vs_sh         # IPVS source hashing scheduler
+    - overlay          # OverlayFS support
+    - xt_REDIRECT      # Netfilter REDIRECT target
+    - xt_owner         # Netfilter owner match
+    - nf_nat           # Network address translation
+    - iptable_nat      # iptables NAT table
+    - iptable_mangle   # iptables mangle table
+    - iptable_filter   # iptables filter table
   tags: common
 
-# set timezone
-- name: Set timezone to Asia/Seoul
+# -----------------------------------------------------------------------------
+# TIMEZONE CONFIGURATION
+# -----------------------------------------------------------------------------
+# Configure system timezone for consistent time across cluster nodes
+# Important for certificate validation and log correlation
+
+# Set system timezone from variable defined in group_vars
+# Uses timedatectl for systemd-based systems
+- name: Set timezone to configured value
   timezone:
     name: "{{ set_timezone }}"
   tags: timezone
 
+# Verify timezone configuration was applied successfully
+# Displays current timezone and time information
 - name: Check the current timezone
   command: timedatectl
   register: timedatectl_output
+  changed_when: false
   tags: timezone
 
+# Display timezone information for verification
+# Helps confirm timezone was set correctly
 - name: Show the current timezone
   debug:
     msg: "{{ timedatectl_output.stdout_lines }}"
   tags: timezone
 
-# Immediate SELinux disable for current session
+# -----------------------------------------------------------------------------
+# SELINUX IMMEDIATE DISABLE (CentOS/RHEL)
+# -----------------------------------------------------------------------------
+# Disable SELinux for current session (immediate effect)
+# Note: Permanent disable is handled earlier in the role
+
+# Disable SELinux immediately without waiting for reboot
+# ignore_errors: System may not have SELinux or may already be disabled
 - name: Disable SELinux immediately
   command: setenforce 0
   when: ansible_facts['os_family'] == "RedHat"
   tags: common
   ignore_errors: true
 
+# -----------------------------------------------------------------------------
+# SWAP CONFIGURATION
+# -----------------------------------------------------------------------------
+# Disable swap completely - required for Kubernetes
+# Kubernetes requires swap to be disabled for proper memory management
+
+# Turn off all active swap spaces immediately
+# changed_when: false - this is an idempotent operation
 - name: Turn off all swap spaces immediately
   command: swapoff -a
   changed_when: false
 
+# Create backup of fstab before making changes
+# Safety measure to allow recovery if needed
 - name: Backup /etc/fstab file
   copy:
     src: /etc/fstab
@@ -124,7 +204,10 @@
     owner: root
     group: root
     mode: '0644'
+    force: no  # Don't overwrite existing backup
 
+# Comment out swap entries in fstab to prevent re-enabling on reboot
+# Uses regex with backrefs to comment existing swap lines
 - name: Permanently disable swap by commenting swap line in /etc/fstab
   lineinfile:
     path: /etc/fstab
@@ -132,13 +215,16 @@
     line: '#\1'
     backrefs: yes
 
+# Remove any remaining UUID-based swap entries
+# Ensures no swap partitions are mounted by UUID
 - name: Ensure no swap entries exist in /etc/fstab
   lineinfile:
     path: /etc/fstab
     state: absent
     regexp: '^\s*UUID=\S+\s+none\s+swap\s+sw\s+0\s+0\s*$'
-  
 
+# Remove any remaining LABEL-based swap entries  
+# Ensures no swap partitions are mounted by label
 - name: Ensure no swap label entries exist in /etc/fstab
   lineinfile:
     path: /etc/fstab

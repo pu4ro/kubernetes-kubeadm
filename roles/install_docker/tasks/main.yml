@@ -1,43 +1,79 @@
 ---
+# =============================================================================
+# DOCKER CONTAINER RUNTIME INSTALLATION ROLE
+# =============================================================================
+# Installs and configures Docker CE and containerd for Kubernetes
+# Supports both Ubuntu/Debian and CentOS/RHEL systems with GPU detection
+
+# -----------------------------------------------------------------------------
+# DOCKER PACKAGE INSTALLATION
+# -----------------------------------------------------------------------------
+# Install Docker CE and containerd from centralized package configuration
+# Uses OS-specific package lists from group_vars/all.yml
+
+# Install Docker packages on Ubuntu/Debian systems
+# Includes both docker-ce and containerd.io for Kubernetes compatibility
+# update_cache: Ensures latest package information before installation
 - name: Install Docker and containerd (Ubuntu)
   apt:
-    name:
-      - docker-ce
-      - containerd.io
+    name: "{{ container_packages.ubuntu }}"
     state: present
     update_cache: yes
   when: ansible_facts['os_family'] == "Debian"
 
+# Install Docker packages on CentOS/RHEL systems
+# Uses yum package manager for RedHat family systems
 - name: Install Docker and containerd (CentOS)
   yum:
-    name:
-      - docker-ce
-      - containerd.io
+    name: "{{ container_packages.centos }}"
     state: present
   when: ansible_facts['os_family'] == "RedHat"
 
+# -----------------------------------------------------------------------------
+# DOCKER CONFIGURATION SETUP
+# -----------------------------------------------------------------------------
+# Configure Docker daemon settings and directory structure
+
+# Ensure Docker configuration directory exists with proper permissions
+# Required before creating daemon.json configuration file
 - name: Ensure Docker config directory exists
   file:
     path: /etc/docker
     state: directory
     mode: '0755'
 
+# Enable and start Docker service immediately
+# Ensures Docker is available for container operations
 - name: Ensure Docker service is enabled and running
   service:
     name: docker
     state: started
     enabled: true
 
+# -----------------------------------------------------------------------------
+# GPU DETECTION AND CONFIGURATION
+# -----------------------------------------------------------------------------
+# Detect NVIDIA GPU presence for container GPU support
+# Configures Docker daemon with appropriate GPU runtime if available
+
+# Check for NVIDIA GPU hardware using lspci command
+# ignore_errors: Not all systems have NVIDIA hardware
+# changed_when: false - this is just a detection command
 - name: Check if GPU is installed
   shell: lspci | grep -i nvidia
   register: gpu_installed
   ignore_errors: true
   changed_when: false
 
+# Set fact for GPU availability based on detection result
+# Used by Docker daemon template to conditionally enable GPU support
 - name: Set GPU fact
   set_fact:
     gpu_added: "{{ gpu_installed.rc == 0 }}"
 
+# Configure Docker daemon with settings from template
+# Template includes GPU runtime configuration if GPU is detected
+# Notifies handler to restart Docker service when configuration changes
 - name: Configure Docker daemon
   template:
     src: daemon.json.j2
@@ -49,8 +85,18 @@
     gpu_added: "{{ gpu_added }}"
   notify: restart docker
 
+# -----------------------------------------------------------------------------
+# KUBELET SERVICE CONFIGURATION
+# -----------------------------------------------------------------------------
+# Enable kubelet service for Kubernetes node operation
+# Note: kubelet will fail to start until Kubernetes is initialized
+
+# Enable kubelet service to start automatically
+# Service will be in failed state until kubeadm init/join completes
+# This is expected behavior - kubelet requires cluster configuration
 - name: Ensure kubelet is enabled and running
   systemd:
     name: kubelet
     enabled: yes
     state: started
+  ignore_errors: yes  # Expected to fail until cluster is initialized

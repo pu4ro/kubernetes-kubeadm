@@ -1,13 +1,146 @@
 ---
-- name: Install packages on Ubuntu
+# =============================================================================
+# OS PACKAGE INSTALLATION ROLE
+# =============================================================================
+# Installs OS-specific packages required for Kubernetes deployment
+# Uses centralized package configuration from group_vars/all.yml
+# Supports conditional installation of package groups
+
+# -----------------------------------------------------------------------------
+# OS DETECTION AND VARIABLE SETUP
+# -----------------------------------------------------------------------------
+# Set OS-specific variables for dynamic package management
+
+# Set OS key for easier package list access throughout the role
+# Simplifies conditional logic and template usage
+- name: Set OS-specific package lists
+  set_fact:
+    os_key: "{{ 'ubuntu' if ansible_facts['os_family'] == 'Debian' else 'centos' }}"
+
+# -----------------------------------------------------------------------------
+# CORE KUBERNETES PACKAGES
+# -----------------------------------------------------------------------------
+# Install essential Kubernetes components (kubelet, kubeadm, kubectl)
+# These packages are required on all cluster nodes
+
+# Install Kubernetes packages on Ubuntu/Debian systems
+# Uses apt package manager with cache update for latest packages
+- name: Install Kubernetes packages (Ubuntu)
   apt:
-    name: "{{ ubuntu_packages }}"
+    name: "{{ kubernetes_packages.ubuntu }}"
     state: present
     update_cache: yes
   when: ansible_facts['os_family'] == "Debian"
 
-- name: Install packages on CentOS
+# Install Kubernetes packages on CentOS/RHEL systems
+# Uses yum package manager for RedHat family distributions
+- name: Install Kubernetes packages (CentOS)
   yum:
-    name: "{{ centos_packages }}"
+    name: "{{ kubernetes_packages.centos }}"
     state: present
   when: ansible_facts['os_family'] == "RedHat"
+
+# -----------------------------------------------------------------------------
+# SYSTEM UTILITIES AND TOOLS
+# -----------------------------------------------------------------------------
+# Install common command-line tools and system utilities
+# Provides essential tools for system administration and troubleshooting
+
+# Install system utilities on Ubuntu/Debian systems
+# Includes tools like jq, curl, vim, network utilities, etc.
+- name: Install system utilities (Ubuntu)
+  apt:
+    name: "{{ system_packages.ubuntu }}"
+    state: present
+  when: ansible_facts['os_family'] == "Debian"
+
+# Install system utilities on CentOS/RHEL systems
+# Same functionality as Ubuntu but uses yum package manager
+- name: Install system utilities (CentOS)
+  yum:
+    name: "{{ system_packages.centos }}"
+    state: present
+  when: ansible_facts['os_family'] == "RedHat"
+
+# -----------------------------------------------------------------------------
+# NETWORK AND STORAGE PACKAGES (CONDITIONAL)
+# -----------------------------------------------------------------------------
+# Install network services and shared storage support
+# Controlled by install_network_storage flag in group_vars
+
+# Install network and storage packages on Ubuntu/Debian
+# Includes NFS client/server, dnsmasq for DNS services
+# Only installs if install_network_storage is enabled
+- name: Install network and storage packages (Ubuntu)
+  apt:
+    name: "{{ network_storage_packages.ubuntu }}"
+    state: present
+  when: 
+    - ansible_facts['os_family'] == "Debian"
+    - install_network_storage | default(true)
+
+# Install network and storage packages on CentOS/RHEL
+# Uses different package names (nfs-utils vs nfs-common)
+# Conditional installation based on configuration flag
+- name: Install network and storage packages (CentOS)
+  yum:
+    name: "{{ network_storage_packages.centos }}"
+    state: present
+  when: 
+    - ansible_facts['os_family'] == "RedHat"
+    - install_network_storage | default(true)
+
+# -----------------------------------------------------------------------------
+# TIME SYNCHRONIZATION PACKAGES (CONDITIONAL)
+# -----------------------------------------------------------------------------
+# Install chrony for network time synchronization
+# Essential for cluster stability and certificate validation
+
+# Install time synchronization packages on Ubuntu/Debian
+# Chrony provides accurate time sync for cluster nodes
+# Controlled by install_time_sync configuration flag
+- name: Install time sync packages (Ubuntu)
+  apt:
+    name: "{{ time_sync_packages.ubuntu }}"
+    state: present
+  when: 
+    - ansible_facts['os_family'] == "Debian"
+    - install_time_sync | default(true)
+
+# Install time synchronization packages on CentOS/RHEL
+# Same chrony package but managed via yum
+- name: Install time sync packages (CentOS)
+  yum:
+    name: "{{ time_sync_packages.centos }}"
+    state: present
+  when: 
+    - ansible_facts['os_family'] == "RedHat"
+    - install_time_sync | default(true)
+
+# -----------------------------------------------------------------------------
+# DEVELOPMENT TOOLS (OPTIONAL)
+# -----------------------------------------------------------------------------
+# Install development and build tools
+# Disabled by default for security - enable only in development environments
+
+# Install development tools on Ubuntu/Debian systems
+# Includes git, build-essential, python3-pip for development work
+# Only installs if explicitly enabled via install_dev_tools flag
+- name: Install development tools (Ubuntu)
+  apt:
+    name: "{{ dev_tools_packages.ubuntu }}"
+    state: present
+  when: 
+    - ansible_facts['os_family'] == "Debian"
+    - install_dev_tools | default(false)
+
+# Install development tools on CentOS/RHEL systems
+# Includes git, gcc, make, python3-pip for compilation and development
+# Conditional installation for development environments only
+- name: Install development tools (CentOS)
+  yum:
+    name: "{{ dev_tools_packages.centos }}"
+    state: present
+  when: 
+    - ansible_facts['os_family'] == "RedHat"
+    - install_dev_tools | default(false)

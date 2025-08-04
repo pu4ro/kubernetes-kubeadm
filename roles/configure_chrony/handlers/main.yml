@@ -1,5 +1,5 @@
 ---
 - name: restart chronyd
   ansible.builtin.service:
-    name: "{{ 'chronyd' if ansible_facts['os_family'] == 'RedHat' else 'chrony' }}"
+    name: "{{ service_names.ubuntu.chrony if ansible_facts['os_family'] == 'Debian' else service_names.centos.chrony }}"
     state: restarted

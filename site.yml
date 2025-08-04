@@ -1,46 +1,145 @@
 ---
-- hosts: all #System preparation and configuration
+# =============================================================================
+# KUBERNETES CLUSTER DEPLOYMENT PLAYBOOK
+# =============================================================================
+# This playbook deploys a complete Kubernetes cluster with additional services
+# Optimized for Ubuntu/Debian and CentOS/RHEL systems
+# 
+# EXECUTION ORDER:
+# 1. OS Validation      - Verify system compatibility
+# 2. System Setup       - Base system configuration and packages  
+# 3. Kubernetes Setup   - Cluster initialization and networking
+# 4. Applications       - Deploy additional services and components
+#
+# USAGE:
+#   ansible-playbook -i inventory.ini site.yml
+#   ansible-playbook -i inventory.ini site.yml --tags "validation,system_setup"
+#   ansible-playbook -i inventory.ini site.yml --skip-tags "applications"
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# STAGE 1: OS VALIDATION AND COMPATIBILITY CHECK
+# -----------------------------------------------------------------------------
+# Validates that target systems meet requirements for Kubernetes deployment
+# - Checks OS family compatibility (Ubuntu/Debian, CentOS/RHEL)
+# - Verifies minimum system requirements (memory, architecture)
+# - Ensures required services (systemd) and package managers are available
+# - Sets OS-specific facts for use in subsequent roles
+- hosts: all
+  name: "OS Validation and Compatibility Check"
   roles:
-    - configure_repo
-    - common # set_timezone & chrony, set_kernel, tags=timezone
-    - configure_chrony
-    - configure_dns # tags=set_dns
-    - configure_sysctl
-    - install_os_package
-    - install_docker
+    - validate_os_compatibility  # Comprehensive system validation
+  tags: validation
+
+# -----------------------------------------------------------------------------
+# STAGE 2: SYSTEM PREPARATION AND CONFIGURATION  
+# -----------------------------------------------------------------------------
+# Configures base system settings required for Kubernetes
+# - Configures package repositories for Kubernetes and Docker
+# - Sets up basic system configuration (timezone, kernel modules, etc.)
+# - Configures time synchronization with chrony
+# - Sets up DNS resolution
+# - Configures kernel parameters for container networking
+# - Installs OS packages (Kubernetes, Docker, utilities)
+# - Installs and configures Docker container runtime
+- hosts: all
+  name: "System Preparation and Configuration"
+  roles:
+    - configure_repo         # Set up package repositories (K8s, Docker)
+    - common                 # Basic system setup (timezone, kernel, firewall)
+    - configure_chrony       # Time synchronization configuration
+    - configure_dns          # DNS resolution setup
+    - configure_sysctl       # Kernel parameters for networking
+    - install_os_package     # Install required OS packages 
+    - install_docker         # Docker container runtime installation
   tags: system_setup
 
-- hosts: installs #DNS and Kubernetes setup
+# -----------------------------------------------------------------------------
+# STAGE 3: KUBERNETES CLUSTER INITIALIZATION
+# -----------------------------------------------------------------------------
+# Initializes Kubernetes cluster and sets up networking
+# - Installs and configures DNS masquerading (dnsmasq) on install nodes
+# - Initializes Kubernetes master node with kubeadm
+# - Joins worker nodes to the cluster
+# Note: Only runs on 'installs' group (typically master nodes)
+- hosts: installs
+  name: "Kubernetes Cluster and DNS Setup"
   roles:
-    - install_dnsmasq # set dns-server, tags=dns
-    - install_kubernetes
-#    - copy_config # offline is not install, docker_config_copy    
+    - install_dnsmasq        # DNS server for cluster (tags: dns)
+    - install_kubernetes     # Cluster initialization and node joining
+  tags: kubernetes_setup
 
-- hosts: installs # runway back_ground install && runway install
+# -----------------------------------------------------------------------------
+# STAGE 4: KUBERNETES APPLICATIONS AND SERVICES
+# -----------------------------------------------------------------------------
+# Deploys additional Kubernetes services and applications
+# All roles run on 'installs' group for centralized management
+# Network and Infrastructure:
+#   - Flannel: Pod networking (CNI)
+#   - MetalLB: Load balancer for bare metal
+#   - Istio: Service mesh
+# Storage:
+#   - Rook Ceph: Distributed storage system
+#   - MinIO: Object storage
+# Security and Management:
+#   - Cert Manager: TLS certificate management
+#   - Harbor: Container registry
+# Monitoring and Logging:
+#   - Prometheus: Metrics collection and monitoring
+#   - EFK Stack: Elasticsearch, Fluentd, Kibana for logging
+# Development and CI/CD:
+#   - Argo: GitOps and workflow engine
+#   - Knative: Serverless workloads
+# Additional Services:
+#   - PyPI Server: Python package repository
+#   - Streaming services, Backend/Frontend applications
+#   - GPU Operator: NVIDIA GPU support
+- hosts: installs
+  name: "Kubernetes Applications and Services Deployment"
   roles:
-    - install_flannel
-    - install_tools # set k9s,kubectl,helm tags=tools
-    - remove_master_taint # if you need Master Node Scheduling
-    - install_cert_manager
-    - install_rook_ceph
-    - install_istio
-    - install_metal_lb
-    - install_harbor
-    - install_prometheus
-    - install_ef # elastic & fluentd
-    - install_knative
-    - install_minio
-    - install_argo
-    - install_pypiserver
-    - install_stream
-    - install_backend
-    - install_frontend
-    - install_gpu_operator
+    # Network and Infrastructure
+    - install_flannel        # Pod networking (CNI plugin)
+    - install_tools          # Essential tools (k9s, kubectl, helm)
+    - remove_master_taint    # Allow scheduling on master nodes (optional)
+    - install_metal_lb       # Load balancer for bare metal clusters
+    - install_istio          # Service mesh for microservices
+    
+    # Storage Solutions  
+    - install_cert_manager   # TLS certificate automation
+    - install_rook_ceph      # Distributed storage cluster
+    - install_minio          # S3-compatible object storage
+    
+    # Container Registry and Security
+    - install_harbor         # Enterprise container registry
+    
+    # Monitoring and Observability
+    - install_prometheus     # Metrics collection and alerting
+    - install_ef             # Elasticsearch + Fluentd logging stack
+    
+    # Development and CI/CD Platform
+    - install_knative        # Serverless computing platform
+    - install_argo           # GitOps and workflow automation
+    - install_pypiserver     # Private Python package repository
+    
+    # Application Services
+    - install_stream         # Streaming data services
+    - install_backend        # Backend application services
+    - install_frontend       # Frontend application services
+    
+    # GPU and Hardware Acceleration
+    - install_gpu_operator   # NVIDIA GPU support for AI/ML workloads
+  tags: applications
 
-# remove all_components
+# -----------------------------------------------------------------------------
+# MAINTENANCE AND CLEANUP (COMMENTED OUT)
+# -----------------------------------------------------------------------------  
+# Uncomment these roles when you need to remove cluster components
+# WARNING: These operations are destructive and will remove data
 #- hosts: all
+#  name: "Cluster Component Removal"
 #  roles:
-#    - remove_ceph_cluster
-#    - remove_helm_chart
+#    - remove_ceph_cluster   # Remove Ceph storage cluster
+#    - remove_helm_chart     # Remove Helm chart deployments
+#  tags: cleanup
 
 

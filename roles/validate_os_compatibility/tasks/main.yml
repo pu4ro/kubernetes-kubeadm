@@ -1,0 +1,81 @@
+---
+# =============================================================================
+# OS COMPATIBILITY VALIDATION ROLE
+# =============================================================================
+# Comprehensive system validation for Kubernetes deployment readiness
+# Checks OS compatibility, system requirements, and service availability
+# Prevents deployment failures by validating prerequisites upfront
+
+# -----------------------------------------------------------------------------
+# SYSTEM INFORMATION GATHERING AND VALIDATION
+# -----------------------------------------------------------------------------
+
+# Display comprehensive system information for verification
+# Helps administrators confirm correct target systems
+- name: Display system information
+  debug:
+    msg:
+      - "Operating System: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+      - "OS Family: {{ ansible_facts['os_family'] }}"
+      - "Architecture: {{ ansible_facts['architecture'] }}"
+      - "Kernel: {{ ansible_facts['kernel'] }}"
+
+- name: Validate supported OS family
+  assert:
+    that:
+      - ansible_facts['os_family'] in ['Debian', 'RedHat']
+    fail_msg: "Unsupported OS family: {{ ansible_facts['os_family'] }}. Only Debian/Ubuntu and RedHat/CentOS are supported."
+    success_msg: "OS family {{ ansible_facts['os_family'] }} is supported."
+
+- name: Validate specific OS distributions
+  assert:
+    that:
+      - ansible_facts['distribution'] in ['Ubuntu', 'CentOS', 'RedHat', 'Debian', 'Rocky', 'AlmaLinux']
+    fail_msg: "Unsupported distribution: {{ ansible_facts['distribution'] }}. Supported: Ubuntu, Debian, CentOS, RedHat, Rocky, AlmaLinux."
+    success_msg: "Distribution {{ ansible_facts['distribution'] }} is supported."
+
+- name: Check minimum system requirements
+  assert:
+    that:
+      - ansible_facts['memtotal_mb'] >= 2048
+    fail_msg: "Insufficient memory. Minimum 2GB required, found {{ ansible_facts['memtotal_mb'] }}MB."
+    success_msg: "Memory requirement satisfied: {{ ansible_facts['memtotal_mb'] }}MB available."
+
+- name: Verify architecture compatibility  
+  assert:
+    that:
+      - ansible_facts['architecture'] in ['x86_64', 'amd64']
+    fail_msg: "Unsupported architecture: {{ ansible_facts['architecture'] }}. Only x86_64/amd64 is supported."
+    success_msg: "Architecture {{ ansible_facts['architecture'] }} is compatible."
+
+- name: Check if systemd is available
+  assert:
+    that:
+      - ansible_service_mgr == "systemd"
+    fail_msg: "systemd is required but {{ ansible_service_mgr }} is detected."
+    success_msg: "systemd service manager is available."
+
+- name: Verify package manager availability
+  command: "{{ 'apt --version' if ansible_facts['os_family'] == 'Debian' else 'yum --version' }}"
+  register: pkg_mgr_check
+  changed_when: false
+  failed_when: pkg_mgr_check.rc != 0
+
+- name: Display package manager info
+  debug:
+    msg: "Package manager {{ 'apt' if ansible_facts['os_family'] == 'Debian' else 'yum' }} is available."
+
+- name: Set OS-specific facts for later use
+  set_fact:
+    os_key: "{{ 'ubuntu' if ansible_facts['os_family'] == 'Debian' else 'centos' }}"
+    pkg_manager: "{{ 'apt' if ansible_facts['os_family'] == 'Debian' else 'yum' }}"
+    service_manager: "{{ ansible_service_mgr }}"
+
+- name: Display validation summary
+  debug:
+    msg:
+      - "✅ OS Compatibility Validation PASSED"
+      - "OS Key: {{ os_key }}"
+      - "Package Manager: {{ pkg_manager }}"
+      - "Service Manager: {{ service_manager }}"
+      - "Ready for Kubernetes deployment on {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"

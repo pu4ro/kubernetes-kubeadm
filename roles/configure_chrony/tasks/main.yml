@@ -1,52 +1,78 @@
 ---
+# =============================================================================
+# CHRONY TIME SYNCHRONIZATION CONFIGURATION ROLE
+# =============================================================================
+# Configures network time synchronization using chrony
+# Sets up time server hierarchy: first master as server, other nodes as clients
+# Essential for cluster stability and certificate validation
+
+# -----------------------------------------------------------------------------
+# CHRONY PACKAGE INSTALLATION
+# -----------------------------------------------------------------------------
+# Install chrony package for time synchronization
+# Uses unified package module for cross-OS compatibility
 - name: Install chrony package
   ansible.builtin.package:
     name: chrony
     state: present
 
+# -----------------------------------------------------------------------------
+# NODE ROLE DETECTION
+# -----------------------------------------------------------------------------
+# Determine if this node should act as time server or client
+# First master node acts as NTP server, others sync to it
 
+# Check if this node is the first master in the inventory
+# First master becomes the primary time server for the cluster
 - name: Check if this is the first host in the masters group
   set_fact:
     is_first_master: "{{ inventory_hostname == groups['masters'][0] }}"
 
-- name: Configure chrony as a server on CentOS
+# Set OS-specific configuration variables from centralized config
+# Handles different service names and config paths between OS families
+- name: Set OS-specific variables
+  set_fact:
+    os_key: "{{ 'ubuntu' if ansible_facts['os_family'] == 'Debian' else 'centos' }}"
+    chrony_conf_path: "{{ config_paths.ubuntu.chrony_conf if ansible_facts['os_family'] == 'Debian' else config_paths.centos.chrony_conf }}"
+    chrony_service_name: "{{ service_names.ubuntu.chrony if ansible_facts['os_family'] == 'Debian' else service_names.centos.chrony }}"
+
+# -----------------------------------------------------------------------------
+# CHRONY CONFIGURATION DEPLOYMENT
+# -----------------------------------------------------------------------------
+# Deploy appropriate chrony configuration based on node role
+# Server config for first master, client config for other nodes
+
+# Configure chrony as NTP server on the first master node
+# Allows other cluster nodes to synchronize time from this server
+# backup: yes - preserves existing configuration
+- name: Configure chrony as a server (first master)
   template:
     src: chrony_server.conf.j2
-    dest: /etc/chrony.conf
-  when: is_first_master and ansible_facts['os_family'] == "RedHat"
+    dest: "{{ chrony_conf_path }}"
+    backup: yes
+  when: is_first_master
   notify: restart chronyd
 
-- name: Configure chrony as a server on Ubuntu
-  template:
-    src: chrony_server.conf.j2
-    dest: /etc/chrony/chrony.conf
-  when: is_first_master and ansible_facts['os_family'] == "Debian"
-  notify: restart chronyd
-
-- name: Configure chrony as a client on CentOS
+# Configure chrony as NTP client on all other nodes  
+# Synchronizes time with the first master node
+# Ensures consistent time across the entire cluster
+- name: Configure chrony as a client (other nodes)
   template:
     src: chrony_client.conf.j2
-    dest: /etc/chrony.conf
-  when: not is_first_master and ansible_facts['os_family'] == "RedHat"
+    dest: "{{ chrony_conf_path }}"
+    backup: yes
+  when: not is_first_master
   notify: restart chronyd
 
-- name: Configure chrony as a client on Ubuntu
-  template:
-    src: chrony_client.conf.j2
-    dest: /etc/chrony/chrony.conf
-  when: not is_first_master and ansible_facts['os_family'] == "Debian"
-  notify: restart chronyd
+# -----------------------------------------------------------------------------
+# CHRONY SERVICE MANAGEMENT
+# -----------------------------------------------------------------------------
+# Ensure chrony service is running and enabled for automatic startup
 
-- name: Ensure chronyd service is enabled and started (CentOS)
+# Enable and start chrony service using OS-specific service name
+# Ensures time synchronization is active immediately and after reboot
+- name: Ensure chrony service is enabled and started
   ansible.builtin.service:
-    name: chronyd
+    name: "{{ chrony_service_name }}"
     enabled: yes
     state: started
-  when: ansible_facts['os_family'] == "RedHat"
-  
-- name: Ensure chrony service is enabled and started (Ubuntu)
-  ansible.builtin.service:
-    name: chrony
-    enabled: yes
-    state: started
-  when: ansible_facts['os_family'] == "Debian"

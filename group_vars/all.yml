@@ -1,46 +1,274 @@
 ---
-# how to set domain
+# =============================================================================
+# KUBERNETES CLUSTER CONFIGURATION
+# =============================================================================
+# Central configuration file for Kubernetes cluster deployment
+# This file contains all customizable variables for the deployment
+# Modify values according to your environment requirements
+
+# -----------------------------------------------------------------------------
+# DOMAIN AND NETWORK CONFIGURATION
+# -----------------------------------------------------------------------------
+# Main domain name for the cluster and services
+# Used for DNS resolution, ingress, and service discovery
 main_domain: onboarding1.com
 
-# docker-registry setting - to install k8s or runway
+# =============================================================================
+# OS-SPECIFIC PACKAGE CONFIGURATION
+# =============================================================================
+# Centralized package management for Ubuntu/Debian and CentOS/RHEL systems
+# All OS-specific packages are managed here for easy customization
+# 
+# ARCHITECTURE:
+# - Packages are organized by functionality (kubernetes, container, system, etc.)
+# - Each package category has ubuntu and centos sections
+# - Optional package groups can be enabled/disabled with install_* flags
+#
+# USAGE GUIDE:
+# 1. ADD PACKAGES: Add package names to appropriate OS lists
+#    Example: Add 'nginx' to both ubuntu and centos system_packages
+# 2. REMOVE PACKAGES: Comment out or remove from lists
+#    Example: # - unnecessary-package
+# 3. CONTROL COMPONENTS: Use install_* flags to enable/disable entire groups
+#    Example: install_dev_tools: false (disables all development packages)
+# 4. OS-SPECIFIC PACKAGES: Handle different package names per OS
+#    Example: nfs-common (Ubuntu) vs nfs-utils (CentOS)
+#
+# EXAMPLES:
+# - Add monitoring: system_packages -> ubuntu/centos -> add 'htop', 'iotop'
+# - Enable development: install_dev_tools: true
+# - Add web server: system_packages -> ubuntu/centos -> add 'nginx'
+# - Different package names: already handled (nfs-common vs nfs-utils)
+#
+# MODIFY THESE LISTS ACCORDING TO YOUR ENVIRONMENT NEEDS
+
+# -----------------------------------------------------------------------------
+# CORE KUBERNETES PACKAGES (REQUIRED)
+# -----------------------------------------------------------------------------
+# Essential Kubernetes components - DO NOT MODIFY unless changing K8s version
+# These packages are required for cluster operation on all nodes
+kubernetes_packages:
+  ubuntu:
+    - kubelet          # Kubernetes node agent
+    - kubeadm          # Kubernetes cluster bootstrapping tool
+    - kubectl          # Kubernetes command-line tool
+  centos:
+    - kubelet          # Kubernetes node agent  
+    - kubeadm          # Kubernetes cluster bootstrapping tool
+    - kubectl          # Kubernetes command-line tool
+
+# -----------------------------------------------------------------------------
+# CONTAINER RUNTIME PACKAGES
+# -----------------------------------------------------------------------------
+# Docker and containerd packages for container runtime
+# Both Docker CE and containerd are installed for compatibility
+container_packages:
+  ubuntu:
+    - docker-ce        # Docker Community Edition
+    - containerd.io    # Container runtime (used by Kubernetes)
+  centos:
+    - docker-ce        # Docker Community Edition
+    - containerd.io    # Container runtime (used by Kubernetes)
+
+# -----------------------------------------------------------------------------  
+# SYSTEM UTILITIES AND TOOLS
+# -----------------------------------------------------------------------------
+# Common system utilities and command-line tools
+# Customize this list based on your operational requirements
+system_packages:
+  ubuntu:
+    - bash-completion  # Command-line auto-completion
+    - jq              # JSON processor for scripts
+    - openssh-server  # SSH server for remote access
+    - net-tools       # Network utilities (netstat, ifconfig)
+    - ca-certificates # SSL/TLS certificate authorities
+    - tree            # Directory tree display utility
+    - curl            # HTTP client for testing and scripts
+    - wget            # File download utility
+    - vim             # Text editor
+  centos:
+    - bash-completion  # Command-line auto-completion
+    - jq              # JSON processor for scripts  
+    - openssh-server  # SSH server for remote access
+    - net-tools       # Network utilities (netstat, ifconfig)
+    - tree            # Directory tree display utility
+    - curl            # HTTP client for testing and scripts
+    - wget            # File download utility
+    - vim             # Text editor
+
+# -----------------------------------------------------------------------------
+# NETWORK AND STORAGE PACKAGES (CONDITIONAL)
+# -----------------------------------------------------------------------------
+# Network services and shared storage packages
+# Controlled by install_network_storage flag - disable if not needed
+network_storage_packages:
+  ubuntu:
+    - nfs-common       # NFS client utilities
+    - nfs-kernel-server # NFS server (for shared storage)
+    - dnsmasq         # Lightweight DNS/DHCP server
+  centos:
+    - nfs-utils       # NFS client/server utilities (different name on CentOS)
+    - dnsmasq         # Lightweight DNS/DHCP server
+
+# -----------------------------------------------------------------------------
+# TIME SYNCHRONIZATION PACKAGES (CONDITIONAL)
+# -----------------------------------------------------------------------------  
+# Network time synchronization with chrony
+# Controlled by install_time_sync flag - essential for cluster stability
+time_sync_packages:
+  ubuntu:
+    - chrony          # Time synchronization daemon
+  centos:
+    - chrony          # Time synchronization daemon (chronyd service)
+
+# -----------------------------------------------------------------------------
+# DEVELOPMENT TOOLS (OPTIONAL)
+# -----------------------------------------------------------------------------
+# Development and build tools for compilation and debugging
+# Controlled by install_dev_tools flag - disable in production for security
+dev_tools_packages:
+  ubuntu:
+    - git             # Version control system
+    - build-essential # Build tools (gcc, make, etc.)
+    - python3-pip     # Python package installer
+  centos:
+    - git             # Version control system
+    - gcc             # GNU C compiler
+    - gcc-c++         # GNU C++ compiler  
+    - make            # Build automation tool
+    - python3-pip     # Python package installer
+
+# -----------------------------------------------------------------------------
+# PACKAGE INSTALLATION CONTROL FLAGS
+# -----------------------------------------------------------------------------
+# Fine-grained control over which package groups to install
+# Set to false to skip installation of optional components
+install_dev_tools: false          # Development tools (git, compilers, pip)
+install_network_storage: true     # NFS and network storage support
+install_time_sync: true           # Chrony time synchronization (recommended)
+
+# =============================================================================
+# OS-SPECIFIC SERVICE NAMES AND PATHS
+# =============================================================================
+# Handle differences in service names and configuration paths between OS families
+# This section centralizes OS-specific variations to maintain consistency
+
+# -----------------------------------------------------------------------------
+# SERVICE NAMES (OS-SPECIFIC)
+# -----------------------------------------------------------------------------
+# Different service names between Ubuntu and CentOS for the same functionality
+# Used by systemd service management tasks
+service_names:
+  ubuntu:
+    chrony: chrony      # Time sync service on Ubuntu/Debian
+    docker: docker      # Container runtime service
+    kubelet: kubelet    # Kubernetes node agent service
+    firewall: ufw       # Firewall service on Ubuntu
+  centos:
+    chrony: chronyd     # Time sync service on CentOS/RHEL (note the 'd')
+    docker: docker      # Container runtime service  
+    kubelet: kubelet    # Kubernetes node agent service
+    firewall: firewalld # Firewall service on CentOS/RHEL
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION FILE PATHS (OS-SPECIFIC)
+# -----------------------------------------------------------------------------
+# Different default configuration file locations between OS families
+# Used by template and configuration management tasks
+config_paths:
+  ubuntu:
+    chrony_conf: /etc/chrony/chrony.conf     # Chrony config on Ubuntu (subdirectory)
+    docker_daemon: /etc/docker/daemon.json  # Docker daemon configuration
+    sysctl_dir: /etc/sysctl.d               # Kernel parameter configurations
+  centos:
+    chrony_conf: /etc/chrony.conf           # Chrony config on CentOS (root etc)
+    docker_daemon: /etc/docker/daemon.json  # Docker daemon configuration
+    sysctl_dir: /etc/sysctl.d               # Kernel parameter configurations
+
+# -----------------------------------------------------------------------------
+# PACKAGE MANAGER SETTINGS (OS-SPECIFIC)
+# -----------------------------------------------------------------------------
+# Different behavior and options for package managers
+# Controls caching and update behavior during package installation
+package_manager:
+  ubuntu:
+    update_cache: yes       # Always update apt cache before installation
+    cache_valid_time: 3600  # Cache valid for 1 hour (3600 seconds)
+  centos:
+    update_cache: no        # Yum handles cache automatically
+
+# =============================================================================
+# DOCKER REGISTRY CONFIGURATION  
+# =============================================================================
+# Private Docker registry settings for offline installations and custom images
+
+# -----------------------------------------------------------------------------
+# DOCKER REGISTRY SERVER
+# -----------------------------------------------------------------------------
+# Private registry for storing Kubernetes and application images
+# Used for air-gapped installations or custom image repositories
 docker_registry_ip: "192.168.0.21"
-registry_port: 5000
-registry_version: "2"
-registry_data_dir: "/opt/docker-registry"
-registry_name: "registry"
+registry_port: 5000                          # Docker registry port
+registry_version: "2"                      # Docker registry API version
+registry_data_dir: "/opt/docker-registry"  # Registry data storage directory
+registry_name: "registry"                  # Registry container name
 
-# timezone && chrony
-set_timezone: Asia/Seoul
-ntp_client_network: 192.168.0.0/24
-chrony_server: "192.168.0.21"
+# =============================================================================
+# SYSTEM CONFIGURATION
+# =============================================================================
 
-# kubeadm-init.yaml create
-kubernetes_version: '1.23.17'
-dns_domain: cluster.local
-service_subnet: 10.96.0.0/12
-pod_subnet: 10.244.0.0/16
+# -----------------------------------------------------------------------------
+# TIMEZONE AND TIME SYNCHRONIZATION
+# -----------------------------------------------------------------------------
+# System timezone and NTP configuration for cluster time synchronization
+# Critical for certificate validation and cluster coordination
+set_timezone: Asia/Seoul              # System timezone (change as needed)
+ntp_client_network: 192.168.0.0/24   # Network allowed to sync time
+chrony_server: "192.168.0.21"        # Primary NTP server (usually master node)
 
-# DNS wildcard_ip
-wildcard_ip: "192.168.0.30"
-main_nameserver: "192.168.0.21"
-enable_forwarding: true
-forward_servers:
-  - "168.126.63.1"
-  - "168.126.63.2"
-enable_wildcard: true
+# -----------------------------------------------------------------------------
+# KUBERNETES CLUSTER CONFIGURATION
+# -----------------------------------------------------------------------------
+# Core Kubernetes cluster settings - modify carefully
+# These settings affect cluster networking and DNS resolution
+kubernetes_version: '1.23.17'        # Kubernetes version to install
+dns_domain: cluster.local            # Internal DNS domain for services
+service_subnet: 10.96.0.0/12        # IP range for Kubernetes services
+pod_subnet: 10.244.0.0/16           # IP range for pod networking (Flannel default)
 
-# helm command && OS package repo
+# -----------------------------------------------------------------------------
+# DNS CONFIGURATION
+# -----------------------------------------------------------------------------
+# DNS settings for cluster name resolution and external connectivity
+# Supports wildcard DNS for ingress and service access
+wildcard_ip: "192.168.0.30"         # IP for wildcard DNS entries (*.domain.com)
+main_nameserver: "192.168.0.21"     # Primary DNS server (usually master node)
+enable_forwarding: true             # Enable DNS forwarding to upstream servers
+forward_servers:                    # Upstream DNS servers for external resolution
+  - "168.126.63.1"                  # KT DNS server (Korea) - change for your region
+  - "168.126.63.2"                  # KT DNS server (Korea) - change for your region
+enable_wildcard: true               # Enable wildcard DNS entries
+
+# -----------------------------------------------------------------------------
+# PACKAGE REPOSITORIES
+# -----------------------------------------------------------------------------
+# Local package repository URLs for offline or custom package sources
+# Useful for air-gapped environments or faster local package access
 repo_url:
-  centos: "http://192.168.0.21:8080/repo"
-  ubuntu: "http://192.168.0.101:8080/repo/"
+  centos: "http://192.168.0.21:8080/repo"      # CentOS package repository
+  ubuntu: "http://192.168.0.101:8080/repo/"    # Ubuntu package repository
 
-helm_repo_ip: "192.168.0.21:8080" # use http_port 
- 
-# Docker 관련 변수
-insecure_registries:
-  - "harbor.{{ main_domain }}"
-  - "cr.makina.rocks"
-docker_log_max_size: "2000m"
+helm_repo_ip: "192.168.0.21:8080"             # Helm chart repository server
+
+# -----------------------------------------------------------------------------
+# DOCKER CONFIGURATION
+# -----------------------------------------------------------------------------
+# Docker daemon configuration and registry settings
+# Controls Docker behavior and registry access
+insecure_registries:                # Registries that don't use HTTPS
+  - "harbor.{{ main_domain }}"      # Local Harbor registry
+  - "cr.makina.rocks"               # Custom registry
+docker_log_max_size: "2000m"       # Maximum size for Docker container logs
 
 
 rook_ceph_values:
