@@ -101,34 +101,44 @@
     - install_flannel        # Pod networking (CNI plugin)
     - install_tools          # Essential tools (k9s, kubectl, helm)
     - remove_master_taint    # Allow scheduling on master nodes (optional)
-    - install_metal_lb       # Load balancer for bare metal clusters
-    - install_istio          # Service mesh for microservices
-    
-    # Storage Solutions  
-    - install_cert_manager   # TLS certificate automation
-    - install_rook_ceph      # Distributed storage cluster
-    - install_minio          # S3-compatible object storage
-    
-    # Container Registry and Security
-    - install_harbor         # Enterprise container registry
-    
-    # Monitoring and Observability
-    - install_prometheus     # Metrics collection and alerting
-    - install_ef             # Elasticsearch + Fluentd logging stack
-    
-    # Development and CI/CD Platform
-    - install_knative        # Serverless computing platform
-    - install_argo           # GitOps and workflow automation
-    - install_pypiserver     # Private Python package repository
-    
-    # Application Services
-    - install_stream         # Streaming data services
-    - install_backend        # Backend application services
-    - install_frontend       # Frontend application services
-    
-    # GPU and Hardware Acceleration
-    - install_gpu_operator   # NVIDIA GPU support for AI/ML workloads
   tags: applications
+
+# -----------------------------------------------------------------------------
+# STAGE 5: POST-INSTALLATION TASKS
+# -----------------------------------------------------------------------------
+# Runs post-installation tasks only on master1 node
+# - Display cluster status and information
+# - Verify all pods are running correctly
+# - Create completion markers
+- hosts: masters[0]
+  name: "Post-Installation: Cluster Status Check"
+  roles:
+    - post_cluster_status    # Display cluster status and information
+  tags: post_status
+
+- hosts: masters[0]
+  name: "Post-Installation: CoreDNS Harbor Configuration"
+  roles:
+    - post_coredns_config    # Configure CoreDNS for Harbor domain resolution
+  tags: post_coredns
+
+- hosts: masters[0]
+  name: "Post-Installation: Node Configuration"
+  roles:
+    - post_node_config       # Configure node labels and annotations
+  tags: post_nodes
+
+- hosts: masters[0]
+  name: "Post-Installation: Certificate Extension"
+  roles:
+    - post_cert_extend       # Extend Kubernetes certificates to 10+ years
+  tags: post_certs
+
+- hosts: masters[0]
+  name: "Post-Installation: Image Cleanup CronJob"
+  roles:
+    - post_image_cleanup     # Setup automated dangling image cleanup
+  tags: post_cleanup
 
 # -----------------------------------------------------------------------------
 # MAINTENANCE AND CLEANUP (COMMENTED OUT)

@@ -1,0 +1,35 @@
+---
+# =============================================================================
+# KUBERNETES NODE LABELS AND STATUS CONFIGURATION
+# =============================================================================
+# This role configures node labels and annotations for better cluster management
+# =============================================================================
+
+- name: Label master nodes
+  shell: kubectl label node {{ item }} node-role.kubernetes.io/master=true --overwrite
+  with_items: "{{ groups['masters'] }}"
+  ignore_errors: yes
+
+- name: Label worker nodes
+  shell: kubectl label node {{ item }} node-role.kubernetes.io/worker=true --overwrite
+  with_items: "{{ groups['workers'] | default([]) }}"
+  ignore_errors: yes
+
+- name: Add node status annotations
+  shell: |
+    kubectl annotate node {{ item }} cluster.local/install-date="$(date -Iseconds)" --overwrite
+    kubectl annotate node {{ item }} cluster.local/kubernetes-version="{{ kubernetes_version }}" --overwrite
+  with_items: "{{ groups['all'] }}"
+  ignore_errors: yes
+
+- name: Display updated node labels
+  shell: kubectl get nodes --show-labels
+  register: node_labels
+
+- name: Show node labels
+  debug:
+    var: node_labels.stdout_lines
+
+- name: Display node configuration completion
+  debug:
+    msg: "Node labeling and annotation configuration completed on {{ inventory_hostname }}"

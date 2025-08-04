@@ -1,0 +1,40 @@
+---
+# =============================================================================
+# COREDNS HARBOR DOMAIN CONFIGURATION
+# =============================================================================
+# This role configures CoreDNS to resolve Harbor domain
+# =============================================================================
+
+- name: Get CoreDNS ConfigMap
+  shell: kubectl get configmap coredns -n kube-system -o yaml
+  register: coredns_config
+
+- name: Add Harbor domain to CoreDNS
+  shell: |
+    kubectl patch configmap coredns -n kube-system --type merge -p '
+    {
+      "data": {
+        "Corefile": ".:53 {\n    errors\n    health {\n       lameduck 5s\n    }\n    ready\n    kubernetes cluster.local in-addr.arpa ip6.arpa {\n       pods insecure\n       fallthrough in-addr.arpa ip6.arpa\n       ttl 30\n    }\n    hosts {\n       {{ wildcard_ip }} harbor.{{ main_domain }}\n       fallthrough\n    }\n    prometheus :9153\n    forward . /etc/resolv.conf {\n       max_concurrent 1000\n    }\n    cache 30\n    loop\n    reload\n    loadbalance\n}"
+      }
+    }'
+  when: coredns_config.stdout is not search("harbor.{{ main_domain }}")
+
+- name: Restart CoreDNS deployment
+  shell: kubectl rollout restart deployment/coredns -n kube-system
+
+- name: Wait for CoreDNS rollout to complete
+  shell: kubectl rollout status deployment/coredns -n kube-system --timeout=300s
+
+- name: Verify Harbor domain resolution
+  shell: kubectl run test-dns --image=busybox --rm -it --restart=Never -- nslookup harbor.{{ main_domain }}
+  register: dns_test
+  ignore_errors: yes
+
+- name: Display DNS test result
+  debug:
+    var: dns_test.stdout_lines
+  when: dns_test is defined
+
+- name: Display CoreDNS configuration completion
+  debug:
+    msg: "CoreDNS Harbor domain configuration completed on {{ inventory_hostname }}"

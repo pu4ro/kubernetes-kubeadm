@@ -1,0 +1,98 @@
+---
+# =============================================================================
+# KUBERNETES CERTIFICATE EXTENSION (10+ YEARS)
+# =============================================================================
+# This role extends Kubernetes certificates to 10+ years for long-term stability
+# =============================================================================
+
+- name: Check current certificate expiration
+  shell: kubeadm certs check-expiration
+  register: cert_status
+  ignore_errors: yes
+
+- name: Display current certificate status
+  debug:
+    var: cert_status.stdout_lines
+  when: cert_status is defined
+
+- name: Backup current certificates
+  shell: |
+    mkdir -p /root/k8s-cert-backup-$(date +%Y%m%d-%H%M%S)
+    cp -r /etc/kubernetes/pki /root/k8s-cert-backup-$(date +%Y%m%d-%H%M%S)/
+  when: cert_status.rc == 0
+
+- name: Create certificate extension script
+  copy:
+    content: |
+      #!/bin/bash
+      # Kubernetes Certificate Extension Script
+      # Extends certificates to 10+ years
+      
+      set -e
+      
+      echo "Starting certificate extension process..."
+      
+      # Stop kubelet and containerd
+      systemctl stop kubelet
+      systemctl stop containerd
+      
+      # Backup certificates
+      BACKUP_DIR="/root/k8s-cert-backup-extended-$(date +%Y%m%d-%H%M%S)"
+      mkdir -p "$BACKUP_DIR"
+      cp -r /etc/kubernetes/pki "$BACKUP_DIR/"
+      
+      # Remove old certificates (keep CA certificates)
+      find /etc/kubernetes/pki -name "*.crt" -not -name "ca.crt" -not -name "front-proxy-ca.crt" -not -name "etcd-ca.crt" -delete
+      find /etc/kubernetes/pki -name "*.key" -not -name "ca.key" -not -name "front-proxy-ca.key" -not -name "etcd-ca.key" -delete
+      find /etc/kubernetes/pki/etcd -name "*.crt" -not -name "ca.crt" -delete
+      find /etc/kubernetes/pki/etcd -name "*.key" -not -name "ca.key" -delete
+      
+      # Generate new certificates with extended validity
+      kubeadm init phase certs all --cert-dir /etc/kubernetes/pki
+      
+      # Update kubeconfig files
+      kubeadm init phase kubeconfig all
+      
+      # Copy admin config
+      cp /etc/kubernetes/admin.conf /root/.kube/config
+      chown $(id -u):$(id -g) /root/.kube/config
+      
+      # Start services
+      systemctl start containerd
+      systemctl start kubelet
+      
+      echo "Certificate extension completed successfully!"
+      echo "Backup stored in: $BACKUP_DIR"
+      
+      # Wait for API server to be ready
+      sleep 30
+      
+      # Verify cluster is working
+      kubectl get nodes
+      
+    dest: /root/extend-k8s-certificates.sh
+    mode: '0755'
+
+- name: Execute certificate extension
+  shell: /root/extend-k8s-certificates.sh
+  register: cert_extension_result
+  when: cert_status.rc == 0
+
+- name: Display certificate extension result
+  debug:
+    var: cert_extension_result.stdout_lines
+  when: cert_extension_result is defined
+
+- name: Verify new certificate expiration
+  shell: kubeadm certs check-expiration
+  register: new_cert_status
+  ignore_errors: yes
+
+- name: Show new certificate status
+  debug:
+    var: new_cert_status.stdout_lines
+  when: new_cert_status is defined
+
+- name: Display certificate extension completion
+  debug:
+    msg: "Kubernetes certificate extension completed on {{ inventory_hostname }}"

@@ -1,0 +1,175 @@
+---
+# =============================================================================
+# DANGLING IMAGE CLEANUP CRONJOB
+# =============================================================================
+# This role creates a CronJob to automatically clean dangling images
+# using kubectl-image v1.27
+# =============================================================================
+
+- name: Create namespace for image cleanup
+  shell: kubectl create namespace image-cleanup --dry-run=client -o yaml | kubectl apply -f -
+
+- name: Create ServiceAccount for image cleanup
+  shell: |
+    kubectl apply -f - <<EOF
+    apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: image-cleanup
+      namespace: image-cleanup
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: image-cleanup
+    rules:
+    - apiGroups: [""]
+      resources: ["nodes"]
+      verbs: ["get", "list"]
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["get", "list", "create", "delete"]
+    - apiGroups: ["apps"]
+      resources: ["daemonsets"]
+      verbs: ["get", "list", "create", "delete"]
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: image-cleanup
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: image-cleanup
+    subjects:
+    - kind: ServiceAccount
+      name: image-cleanup
+      namespace: image-cleanup
+    EOF
+
+- name: Create dangling image cleanup CronJob
+  shell: |
+    kubectl apply -f - <<EOF
+    apiVersion: batch/v1
+    kind: CronJob
+    metadata:
+      name: dangling-image-cleanup
+      namespace: image-cleanup
+    spec:
+      schedule: "0 2 * * 0"  # Every Sunday at 2 AM
+      successfulJobsHistoryLimit: 3
+      failedJobsHistoryLimit: 3
+      jobTemplate:
+        spec:
+          template:
+            spec:
+              serviceAccountName: image-cleanup
+              restartPolicy: OnFailure
+              containers:
+              - name: kubectl-image
+                image: quay.io/kubectl-image/kubectl-image:v1.27
+                command:
+                - /bin/sh
+                - -c
+                - |
+                  echo "Starting dangling image cleanup..."
+                  echo "Current time: \$(date)"
+                  
+                  # Get all nodes
+                  nodes=\$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}')
+                  
+                  for node in \$nodes; do
+                    echo "Cleaning dangling images on node: \$node"
+                    
+                    # Create DaemonSet for this specific node
+                    kubectl apply -f - <<INNER_EOF
+                    apiVersion: apps/v1
+                    kind: DaemonSet
+                    metadata:
+                      name: image-cleanup-\$node
+                      namespace: image-cleanup
+                    spec:
+                      selector:
+                        matchLabels:
+                          app: image-cleanup-\$node
+                      template:
+                        metadata:
+                          labels:
+                            app: image-cleanup-\$node
+                        spec:
+                          nodeSelector:
+                            kubernetes.io/hostname: \$node
+                          tolerations:
+                          - operator: Exists
+                          hostPID: true
+                          hostNetwork: true
+                          containers:
+                          - name: image-cleaner
+                            image: docker:latest
+                            securityContext:
+                              privileged: true
+                            volumeMounts:
+                            - name: docker-socket
+                              mountPath: /var/run/docker.sock
+                            - name: containerd-socket
+                              mountPath: /run/containerd/containerd.sock
+                            command:
+                            - /bin/sh
+                            - -c
+                            - |
+                              echo "Cleaning dangling images on \$node..."
+                              
+                              # Try Docker first
+                              if [ -S /var/run/docker.sock ]; then
+                                echo "Using Docker cleanup..."
+                                docker system prune -f --filter "until=168h" || true
+                                docker image prune -f || true
+                              fi
+                              
+                              # Try containerd/crictl
+                              if [ -S /run/containerd/containerd.sock ]; then
+                                echo "Using crictl cleanup..."
+                                crictl rmi --prune || true
+                              fi
+                              
+                              echo "Cleanup completed on \$node"
+                              sleep 60
+                          volumes:
+                          - name: docker-socket
+                            hostPath:
+                              path: /var/run/docker.sock
+                          - name: containerd-socket
+                            hostPath:
+                              path: /run/containerd/containerd.sock
+                    INNER_EOF
+                    
+                    # Wait for DaemonSet to complete
+                    sleep 120
+                    
+                    # Delete the DaemonSet
+                    kubectl delete daemonset image-cleanup-\$node -n image-cleanup || true
+                    
+                    echo "Completed cleanup for node: \$node"
+                  done
+                  
+                  echo "Dangling image cleanup completed for all nodes"
+                resources:
+                  requests:
+                    memory: "64Mi"
+                    cpu: "100m"
+                  limits:
+                    memory: "128Mi"
+                    cpu: "200m"
+    EOF
+
+- name: Display dangling image cleanup CronJob info
+  shell: kubectl get cronjob -n image-cleanup
+  register: cronjob_info
+
+- name: Show CronJob status
+  debug:
+    var: cronjob_info.stdout_lines
+
+- name: Display image cleanup configuration completion
+  debug:
+    msg: "Dangling image cleanup CronJob configuration completed on {{ inventory_hostname }}"
