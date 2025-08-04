@@ -42,8 +42,6 @@ insecure_registries:
   - "cr.makina.rocks"
 docker_log_max_size: "2000m"
 
-# Master Node remove taint
-remove_taints: true
 
 rook_ceph_values:
   cephClusterSpec:
@@ -57,7 +55,7 @@ rook_ceph_values:
       enabled: true
   operatorNamespace: rook-ceph
 
-# delete_master_node_taint
+# Master Node taint management
 remove_master_taint: true
 
 # cert_Manager 

@@ -1,31 +1,17 @@
 ---
 - name: Initialize the Kubernetes master
   block:
-#    - name: Check if kube-apiserver is running
-#      shell: docker ps | grep -v pause | grep kube-apiserver
-#      register: kube_apiserver
-#      ignore_errors: true
-#      retries: 5
-#      delay: 60
-#      until: kube_apiserver.rc == 0
-#      changed_when: False
-#      ignore_errors: true
-#
-#    - name: Proceed with next tasks
-#      debug:
-#        msg: "kube-apiserver is running."
-#      when: kube_apiserver.rc == 0
-#      ignore_errors: true
-#
-#    - name: Proceed with next tasks
-#      debug:
-#        msg: "kube-apiserver is running."
-#      when: kube_apiserver.rc == 0
+    - name: Check if Kubernetes cluster is already initialized
+      stat:
+        path: /etc/kubernetes/admin.conf
+      register: k8s_admin_conf
 
     - name: Check if any Kubernetes nodes are already set up
       command: kubectl get nodes
       register: kubectl_nodes
       ignore_errors: true
+      changed_when: false
+      when: k8s_admin_conf.stat.exists
 
     - name: Template kubeadm config file
       template:
@@ -34,43 +20,57 @@
 
     - name: Initialize Kubernetes cluster with kubeadm
       command: kubeadm init --config=/root/kubeadm-init.yml
-      when: inventory_hostname in groups['masters'] and kubectl_nodes.rc != 0 
+      when: 
+        - inventory_hostname in groups['masters']
+        - not k8s_admin_conf.stat.exists
+      register: kubeadm_init_result
+      failed_when: kubeadm_init_result.rc != 0 and "already exists" not in kubeadm_init_result.stderr 
 
     - name: Create .kube directory
       file:
         path: "{{ ansible_env.HOME }}/.kube"
         state: directory
         mode: 0755
-      when: inventory_hostname in groups['masters'] and kubectl_nodes.rc != 0
+      when: inventory_hostname in groups['masters']
 
     - name: Copy admin kubeconfig to user's home directory
-      become: true
       copy:
         src: "/etc/kubernetes/admin.conf"
         dest: "{{ ansible_env.HOME }}/.kube/config"
         remote_src: yes
         mode: 0644
-      when: inventory_hostname in groups['masters'] and kubectl_nodes.rc != 0
+        backup: yes
+      when: 
+        - inventory_hostname in groups['masters']
+        - k8s_admin_conf.stat.exists
 
     - name: Change ownership of the kubeconfig
-      become: true
       file:
         path: "{{ ansible_env.HOME }}/.kube/config"
         owner: "{{ ansible_env.USER }}"
         group: "{{ ansible_env.USER }}"
         mode: 0644
-      when: inventory_hostname in groups['masters'] and kubectl_nodes.rc != 0 
+      when: 
+        - inventory_hostname in groups['masters']
+        - k8s_admin_conf.stat.exists 
 
     - name: Get kubeadm join command
       command: kubeadm token create --print-join-command
       register: join_command
-      changed_when: False
-      when: inventory_hostname in groups['masters'] 
+      changed_when: false
+      when: 
+        - inventory_hostname in groups['masters']
+        - k8s_admin_conf.stat.exists
+      retries: 3
+      delay: 5
 
     - name: Set join command as fact
       set_fact:
         join_cmd: "{{ join_command.stdout }}"
-      when: inventory_hostname in groups['masters'] 
+      when: 
+        - inventory_hostname in groups['masters']
+        - join_command is defined
+        - join_command.stdout is defined
       delegate_to: "{{ groups['masters'][0] }}"
       run_once: true 
 
@@ -82,6 +82,13 @@
 
 - name: Join the Kubernetes worker nodes
   command: "{{ hostvars[groups['masters'][0]]['join_cmd'] }}"
-  when: inventory_hostname in groups['workers'] and not node_already_joined.stat.exists
-  ignore_errors: true
+  when: 
+    - inventory_hostname in groups['workers'] 
+    - not node_already_joined.stat.exists
+    - hostvars[groups['masters'][0]]['join_cmd'] is defined
+  register: join_result
+  retries: 3
+  delay: 10
+  until: join_result.rc == 0
+  failed_when: join_result.rc != 0 and "already a member" not in join_result.stderr
 

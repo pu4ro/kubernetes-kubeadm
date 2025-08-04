@@ -11,13 +11,9 @@ ubuntu_packages:
   - openssh-server
   - net-tools
   - ca-certificates
-  - docker-ce
-  - containerd
   - chrony
 
 centos_packages:
-  - docker-ce
-  - containerd.io
   - kubelet
   - kubeadm
   - kubectl

@@ -6,7 +6,3 @@
 - name: Configure repository for Ubuntu
   include_tasks: setup_ubuntu_repo.yml
   when: ansible_facts['os_family'] == "Debian"
-
-- name: Configure repository for Ubuntu
-  include_tasks: setup_ubuntu_repo.yml
-  when: ansible_facts['os_family'] == "Debian"

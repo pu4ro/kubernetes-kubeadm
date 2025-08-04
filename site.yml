@@ -1,20 +1,18 @@
 ---
-- hosts: installs #pre-install
+- hosts: all #System preparation and configuration
   roles:
-    - configure_repo 
-    - install_os_package
-    - install_docker
-    - install_dnsmasq # set dns-server, tags=dns
-
-- hosts: all #Infra settings
-  roles:
-    - configure_repo   
+    - configure_repo
+    - common # set_timezone & chrony, set_kernel, tags=timezone
     - configure_chrony
-    - configure_dns # tags=set_dns                
-    - common # set_timezone & chrony, set_kernel, tags=timezone                 
-    - configure_sysctl           
+    - configure_dns # tags=set_dns
+    - configure_sysctl
     - install_os_package
     - install_docker
+  tags: system_setup
+
+- hosts: installs #DNS and Kubernetes setup
+  roles:
+    - install_dnsmasq # set dns-server, tags=dns
     - install_kubernetes
 #    - copy_config # offline is not install, docker_config_copy    
 
