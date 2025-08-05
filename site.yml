@@ -59,6 +59,7 @@
 # -----------------------------------------------------------------------------
 # Initializes Kubernetes cluster and sets up networking
 # - Installs and configures DNS masquerading (dnsmasq) on install nodes
+# - Installs kube-vip for HA (only if ha_mode is enabled)
 # - Initializes Kubernetes master node with kubeadm
 # - Joins worker nodes to the cluster
 # Note: Only runs on 'installs' group (typically master nodes)
@@ -66,6 +67,7 @@
   name: "Kubernetes Cluster and DNS Setup"
   roles:
     - install_dnsmasq        # DNS server for cluster (tags: dns)
+    - install_kubevip        # kube-vip HA setup (conditional on ha_mode)
     - install_kubernetes     # Cluster initialization and node joining
   tags: kubernetes_setup
 
@@ -139,6 +141,18 @@
   roles:
     - post_image_cleanup     # Setup automated dangling image cleanup
   tags: post_cleanup
+
+# -----------------------------------------------------------------------------
+# STAGE 6: MASTER TOKEN MANAGEMENT (OPTIONAL)
+# -----------------------------------------------------------------------------
+# 마스터 노드 토큰 관리 및 추가 마스터 노드 조인
+# 토큰 재생성 및 새로운 마스터 노드 추가를 위한 관리 기능
+- hosts: masters
+  name: "Master Token Management and Node Addition"
+  roles:
+    - manage_master_tokens   # 마스터 토큰 재생성 및 노드 조인 관리
+  tags: master_tokens
+  when: token_auto_regenerate | default(false) | bool
 
 # -----------------------------------------------------------------------------
 # MAINTENANCE AND CLEANUP (COMMENTED OUT)

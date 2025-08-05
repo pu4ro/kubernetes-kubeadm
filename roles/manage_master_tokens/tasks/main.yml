@@ -1,0 +1,223 @@
+---
+# =============================================================================
+# KUBERNETES MASTER TOKEN 관리 역할
+# =============================================================================
+# 마스터 노드 추가 및 토큰 재생성을 위한 관리 기능
+# 기존 클러스터에 새로운 마스터 노드를 안전하게 추가
+
+# -----------------------------------------------------------------------------
+# 토큰 상태 확인 및 재생성
+# -----------------------------------------------------------------------------
+# 기존 토큰의 유효성을 확인하고 필요시 새 토큰 생성
+
+- name: 마스터 토큰 관리 및 재생성
+  block:
+    # 현재 클러스터 상태 확인
+    # 클러스터가 정상 동작 중인지 검증
+    - name: 클러스터 상태 확인
+      command: kubectl get nodes
+      register: cluster_status
+      failed_when: false
+      changed_when: false
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - token_auto_regenerate | default(true) | bool
+
+    # 기존 bootstrap 토큰 목록 조회
+    # 만료된 토큰이나 재사용 가능한 토큰 확인
+    - name: 기존 bootstrap 토큰 확인
+      command: kubeadm token list
+      register: existing_tokens
+      failed_when: false
+      changed_when: false
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - cluster_status.rc == 0
+        - token_auto_regenerate | default(true) | bool
+
+    # 유효한 토큰이 없거나 만료된 경우 새 토큰 생성
+    # TTL(Time To Live)을 설정하여 보안성 향상
+    - name: 새로운 bootstrap 토큰 생성
+      command: "kubeadm token create --ttl {{ token_ttl | default('24h') }}"
+      register: new_bootstrap_token
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - cluster_status.rc == 0
+        - token_auto_regenerate | default(true) | bool
+        - existing_tokens.stdout_lines | length == 1  # 헤더만 있는 경우 (토큰 없음)
+
+    # 마스터 조인용 certificate key 생성
+    # 다중 마스터 환경에서 control plane 인증서 공유를 위해 필요
+    - name: certificate key 생성 (마스터 노드 조인용)
+      command: kubeadm init phase upload-certs --upload-certs
+      register: cert_key_output
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - cluster_status.rc == 0
+        - ha_mode | default(false) | bool
+        - token_auto_regenerate | default(true) | bool
+
+    # 생성된 certificate key 추출
+    # kubeadm 출력에서 실제 key 값만 추출
+    - name: certificate key 추출
+      set_fact:
+        certificate_key: "{{ cert_key_output.stdout_lines[-1] }}"
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - cert_key_output is defined
+        - cert_key_output.stdout_lines is defined
+        - cert_key_output.stdout_lines | length > 0
+        - ha_mode | default(false) | bool
+
+    # 마스터 노드 조인 명령 생성 (HA 모드)
+    # controlPlaneEndpoint와 certificate-key를 포함한 완전한 조인 명령
+    - name: 마스터 노드 조인 명령 생성 (HA 모드)
+      command: >
+        kubeadm token create --print-join-command 
+        --certificate-key {{ certificate_key }}
+      register: master_join_command_ha
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - cluster_status.rc == 0
+        - ha_mode | default(false) | bool
+        - certificate_key is defined
+        - token_auto_regenerate | default(true) | bool
+
+    # 마스터 노드 조인 명령 생성 (단일 마스터 -> HA 전환)
+    # 단일 마스터에서 다중 마스터로 전환할 때 사용
+    - name: 마스터 노드 조인 명령 생성 (단일 -> HA 전환)
+      shell: |
+        JOIN_CMD=$(kubeadm token create --print-join-command)
+        echo "${JOIN_CMD} --control-plane --certificate-key {{ certificate_key }}"
+      register: master_join_command_single_to_ha
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - cluster_status.rc == 0
+        - not (ha_mode | default(false) | bool)  # 현재는 단일 마스터
+        - certificate_key is defined
+        - token_auto_regenerate | default(true) | bool
+
+    # 조인 명령을 Ansible 팩트로 저장
+    # 다른 태스크에서 재사용할 수 있도록 저장
+    - name: 마스터 조인 명령을 팩트로 설정
+      set_fact:
+        master_join_cmd: >
+          {% if ha_mode | default(false) | bool %}
+          {{ master_join_command_ha.stdout if master_join_command_ha is defined and master_join_command_ha.stdout is defined else '' }}
+          {% else %}
+          {{ master_join_command_single_to_ha.stdout if master_join_command_single_to_ha is defined and master_join_command_single_to_ha.stdout is defined else '' }}
+          {% endif %}
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - (master_join_command_ha is defined or master_join_command_single_to_ha is defined)
+      delegate_to: "{{ groups['masters'][0] }}"
+      run_once: true
+
+    # 토큰 정보 출력 (디버그용)
+    # 관리자가 수동으로 노드를 추가할 때 참고할 수 있도록 정보 제공
+    - name: 생성된 토큰 정보 출력
+      debug:
+        msg: |
+          ===========================================
+          마스터 노드 추가 정보
+          ===========================================
+          {% if new_bootstrap_token is defined and new_bootstrap_token.stdout is defined %}
+          새 Bootstrap Token: {{ new_bootstrap_token.stdout }}
+          {% endif %}
+          {% if certificate_key is defined %}
+          Certificate Key: {{ certificate_key }}
+          {% endif %}
+          {% if master_join_cmd is defined and master_join_cmd != '' %}
+          
+          마스터 노드 조인 명령:
+          {{ master_join_cmd }}
+          {% endif %}
+          
+          주의사항:
+          - Certificate key는 {{ token_ttl | default('24h') }} 후 만료됩니다
+          - 보안을 위해 조인 완료 후 토큰을 삭제하세요
+          ===========================================
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - token_auto_regenerate | default(true) | bool
+        - cluster_status.rc == 0
+
+  rescue:
+    # 토큰 관리 실패 시 오류 처리
+    # 문제 해결을 위한 가이드 제공
+    - name: 토큰 관리 실패 오류 메시지
+      debug:
+        msg: |
+          토큰 관리에 실패했습니다.
+          다음 사항을 확인해주세요:
+          1. kubectl이 정상적으로 작동하는지 확인
+          2. 현재 사용자가 클러스터 관리 권한을 가지고 있는지 확인
+          3. 클러스터 상태가 정상인지 확인 (kubectl get nodes)
+          4. kubeadm 명령이 사용 가능한지 확인
+      when: inventory_hostname == groups['masters'][0]
+
+# -----------------------------------------------------------------------------
+# 새 마스터 노드 조인 (inventory에 새로 추가된 마스터가 있는 경우)
+# -----------------------------------------------------------------------------
+# inventory에 새로 추가된 마스터 노드를 자동으로 클러스터에 조인
+
+- name: 새로운 마스터 노드 클러스터 조인
+  block:
+    # 새 마스터 노드인지 확인
+    # /etc/kubernetes/kubelet.conf가 없으면 새 노드로 판단
+    - name: 마스터 노드 조인 상태 확인
+      stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: master_already_joined
+      when: 
+        - inventory_hostname in groups['masters']
+        - inventory_hostname != groups['masters'][0]  # 첫 번째 마스터 제외
+
+    # 새 마스터 노드를 클러스터에 조인
+    # HA 모드에서는 VIP를 통해 조인, 단일 모드에서는 직접 조인
+    - name: 새 마스터 노드 클러스터 조인 실행
+      shell: "{{ hostvars[groups['masters'][0]]['master_join_cmd'] }}"
+      when: 
+        - inventory_hostname in groups['masters']
+        - inventory_hostname != groups['masters'][0]
+        - not master_already_joined.stat.exists
+        - hostvars[groups['masters'][0]]['master_join_cmd'] is defined
+        - hostvars[groups['masters'][0]]['master_join_cmd'] != ''
+      register: master_join_result
+      retries: 3
+      delay: 30
+      until: master_join_result.rc == 0
+
+    # 조인 결과 확인
+    # 새로 조인된 마스터 노드의 상태 검증
+    - name: 새 마스터 노드 조인 결과 확인
+      command: kubectl get nodes
+      register: new_master_status
+      when: 
+        - inventory_hostname in groups['masters']
+        - inventory_hostname != groups['masters'][0]
+        - master_join_result is defined
+        - master_join_result.rc == 0
+      delegate_to: "{{ groups['masters'][0] }}"
+
+    # 조인 성공 메시지 출력
+    - name: 마스터 노드 조인 성공 메시지
+      debug:
+        msg: |
+          마스터 노드 {{ inventory_hostname }}이(가) 성공적으로 클러스터에 조인되었습니다.
+          클러스터 상태를 확인하세요: kubectl get nodes
+      when: 
+        - master_join_result is defined
+        - master_join_result.rc == 0
+
+  rescue:
+    # 마스터 조인 실패 시 오류 처리
+    - name: 마스터 노드 조인 실패 오류 메시지
+      debug:
+        msg: |
+          마스터 노드 조인에 실패했습니다.
+          다음 명령을 수동으로 실행해보세요:
+          {{ hostvars[groups['masters'][0]]['master_join_cmd'] | default('조인 명령을 먼저 생성하세요') }}
+      when: 
+        - inventory_hostname in groups['masters']
+        - inventory_hostname != groups['masters'][0]

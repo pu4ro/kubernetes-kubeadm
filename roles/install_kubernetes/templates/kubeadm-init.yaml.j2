@@ -1,6 +1,10 @@
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
 clusterName: kubernetes
+{% if ha_mode | default(false) | bool %}
+# HA 모드: kube-vip VIP를 controlPlaneEndpoint로 사용
+controlPlaneEndpoint: "{{ kubevip_address }}:6443"
+{% endif %}
 etcd:
   local:
     dataDir: /var/lib/etcd
@@ -18,8 +22,14 @@ apiServer:
     authorization-mode: Node,RBAC
   certSANs:
     - 127.0.0.1
+    - localhost
+  {% if ha_mode | default(false) | bool %}
+    # HA 모드: VIP 주소를 certificate SAN에 추가
+    - "{{ kubevip_address }}"
+  {% endif %}
   {% for host in groups['masters'] %}
-  - "{{ hostvars[host].ansible_host }}"
+    # 모든 마스터 노드 IP를 certificate SAN에 추가
+    - "{{ hostvars[host].ansible_host }}"
   {% endfor %}
 controllerManager: {}
 scheduler: {}

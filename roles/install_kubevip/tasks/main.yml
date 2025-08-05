@@ -1,0 +1,198 @@
+---
+# =============================================================================
+# KUBE-VIP HIGH AVAILABILITY CONFIGURATION ROLE
+# =============================================================================
+# kube-vip를 사용하여 Kubernetes API 서버의 고가용성을 제공
+# Virtual IP(VIP)를 통한 로드밸런싱 및 자동 페일오버 지원
+
+# -----------------------------------------------------------------------------
+# KUBE-VIP 설치 및 구성 (HA 모드에서만 실행)
+# -----------------------------------------------------------------------------
+# HA 모드가 활성화된 경우에만 kube-vip를 설치하고 구성
+# 단일 마스터 모드에서는 건너뜀
+
+- name: kube-vip 구성 및 설치
+  block:
+    # kube-vip 매니페스트를 위한 디렉터리 생성
+    # static pod가 배치될 위치 준비
+    - name: kube-vip static pod 디렉터리 생성
+      file:
+        path: /etc/kubernetes/manifests
+        state: directory
+        mode: '0755'
+      when: 
+        - inventory_hostname in groups['masters']
+        - ha_mode | default(false) | bool
+
+    # kube-vip 이미지 다운로드 및 매니페스트 생성
+    # 첫 번째 마스터 노드에서만 실행하여 중복 방지
+    - name: 사용 가능한 컨테이너 런타임 확인
+      shell: |
+        if command -v nerdctl >/dev/null 2>&1; then
+          echo "nerdctl"
+        elif command -v docker >/dev/null 2>&1; then
+          echo "docker"
+        elif command -v crictl >/dev/null 2>&1; then
+          echo "crictl"
+        else
+          echo "none"
+        fi
+      register: container_runtime
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - ha_mode | default(false) | bool
+
+    - name: kube-vip 매니페스트 생성 (nerdctl 사용)
+      shell: |
+        nerdctl run --rm --net=host {{ kubevip_image }} manifest pod \
+          --interface {{ kubevip_interface }} \
+          --address {{ kubevip_address }} \
+          --controlplane \
+          --services \
+          --arp \
+          --leaderElection > /etc/kubernetes/manifests/kube-vip.yaml
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - ha_mode | default(false) | bool
+        - container_runtime.stdout == "nerdctl"
+      register: kubevip_manifest_nerdctl
+      retries: 3
+      delay: 10
+      until: kubevip_manifest_nerdctl.rc == 0
+
+    - name: kube-vip 매니페스트 생성 (docker 사용)
+      shell: |
+        docker run --rm --net=host {{ kubevip_image }} manifest pod \
+          --interface {{ kubevip_interface }} \
+          --address {{ kubevip_address }} \
+          --controlplane \
+          --services \
+          --arp \
+          --leaderElection > /etc/kubernetes/manifests/kube-vip.yaml
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - ha_mode | default(false) | bool
+        - container_runtime.stdout == "docker"
+      register: kubevip_manifest_docker
+      retries: 3
+      delay: 10
+      until: kubevip_manifest_docker.rc == 0
+
+    # 컨테이너 런타임을 사용할 수 없는 경우 템플릿으로 생성
+    - name: kube-vip 매니페스트 템플릿으로 생성 (fallback)
+      template:
+        src: kube-vip-pod.yaml.j2
+        dest: /etc/kubernetes/manifests/kube-vip.yaml
+        mode: '0644'
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - ha_mode | default(false) | bool
+        - container_runtime.stdout == "none"
+      register: kubevip_manifest_template
+
+    # 매니페스트 생성 결과 확인
+    - name: kube-vip 매니페스트 생성 결과 설정
+      set_fact:
+        kubevip_manifest_result: >-
+          {% if kubevip_manifest_nerdctl is defined and kubevip_manifest_nerdctl.rc == 0 %}
+          {{ kubevip_manifest_nerdctl }}
+          {% elif kubevip_manifest_docker is defined and kubevip_manifest_docker.rc == 0 %}
+          {{ kubevip_manifest_docker }}
+          {% elif kubevip_manifest_template is defined %}
+          {{ kubevip_manifest_template }}
+          {% else %}
+          {"rc": 1, "failed": true}
+          {% endif %}
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - ha_mode | default(false) | bool
+
+    # 생성된 kube-vip 매니페스트를 다른 마스터 노드로 복사
+    # 모든 마스터 노드에서 동일한 kube-vip 설정 보장
+    - name: kube-vip 매니페스트를 다른 마스터 노드로 복사
+      fetch:
+        src: /etc/kubernetes/manifests/kube-vip.yaml
+        dest: /tmp/kube-vip.yaml
+        flat: yes
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - ha_mode | default(false) | bool
+      delegate_to: "{{ groups['masters'][0] }}"
+      run_once: true
+
+    # 다른 마스터 노드들에 kube-vip 매니페스트 배포
+    # 첫 번째 마스터를 제외한 모든 마스터 노드에 적용
+    - name: 다른 마스터 노드에 kube-vip 매니페스트 배포
+      copy:
+        src: /tmp/kube-vip.yaml
+        dest: /etc/kubernetes/manifests/kube-vip.yaml
+        mode: '0644'
+      when: 
+        - inventory_hostname in groups['masters']
+        - inventory_hostname != groups['masters'][0]
+        - ha_mode | default(false) | bool
+
+    # kube-vip static pod 상태 확인
+    # pod가 정상적으로 시작되었는지 검증
+    - name: kube-vip static pod 상태 확인
+      wait_for:
+        path: /var/log/pods
+        timeout: 60
+      when: 
+        - inventory_hostname in groups['masters']
+        - ha_mode | default(false) | bool
+      ignore_errors: true
+
+    # VIP 주소 연결 가능성 테스트
+    # 생성된 VIP가 정상적으로 작동하는지 확인
+    - name: VIP 연결 테스트
+      wait_for:
+        host: "{{ kubevip_address }}"
+        port: 6443
+        timeout: 120
+        delay: 30
+      when: 
+        - inventory_hostname == groups['masters'][0]
+        - ha_mode | default(false) | bool
+      retries: 3
+      delay: 10
+
+  rescue:
+    # kube-vip 설치 실패 시 오류 메시지 출력
+    # 디버깅을 위한 상세 정보 제공
+    - name: kube-vip 설치 실패 오류 메시지
+      debug:
+        msg: |
+          kube-vip 설치에 실패했습니다.
+          다음 사항을 확인해주세요:
+          1. 네트워크 인터페이스: {{ kubevip_interface }}
+          2. VIP 주소: {{ kubevip_address }}
+          3. 이미지 접근 가능성: {{ kubevip_image }}
+          4. 방화벽 설정 (포트 6443)
+      when: ha_mode | default(false) | bool
+
+    # 실패한 kube-vip 매니페스트 정리
+    # 불완전한 설정 파일 제거
+    - name: 실패한 kube-vip 매니페스트 정리
+      file:
+        path: /etc/kubernetes/manifests/kube-vip.yaml
+        state: absent
+      when: 
+        - inventory_hostname in groups['masters']
+        - ha_mode | default(false) | bool
+
+# -----------------------------------------------------------------------------
+# HA 모드 비활성화 시 정보 메시지
+# -----------------------------------------------------------------------------
+# 단일 마스터 모드로 실행 중임을 사용자에게 알림
+
+- name: 단일 마스터 모드 알림
+  debug:
+    msg: |
+      단일 마스터 모드로 실행 중입니다.
+      kube-vip는 설치되지 않습니다.
+      HA가 필요한 경우 group_vars/all.yml에서 ha_mode: true로 설정하세요.
+  when: 
+    - not (ha_mode | default(false) | bool)
+    - inventory_hostname == groups['masters'][0]
+  run_once: true

@@ -14,6 +14,31 @@
 main_domain: onboarding1.com
 
 # =============================================================================
+# HIGH AVAILABILITY (HA) CONFIGURATION
+# =============================================================================
+# Kubernetes 클러스터 고가용성 설정
+# 단일 마스터 vs 다중 마스터 모드 제어
+
+# -----------------------------------------------------------------------------
+# HA 모드 설정
+# -----------------------------------------------------------------------------
+# true: kube-vip를 사용한 다중 마스터 HA 모드
+# false: 단일 마스터 모드 (기본값)
+ha_mode: false
+
+# kube-vip 설정 (HA 모드에서만 사용)
+# VIP(Virtual IP)를 통한 API 서버 로드밸런싱
+kubevip_enabled: "{{ ha_mode | default(false) | bool }}"
+kubevip_interface: "eth0"                    # 네트워크 인터페이스 (환경에 맞게 변경)
+kubevip_address: "{{ wildcard_ip }}"         # VIP 주소 (wildcard_ip 재사용)
+kubevip_image: "ghcr.io/kube-vip/kube-vip:v0.6.4"  # kube-vip 이미지 버전
+
+# 마스터 노드 토큰 관리
+# 마스터 노드 추가 시 토큰 자동 재생성 설정
+token_auto_regenerate: true                  # 토큰 자동 재생성 활성화
+token_ttl: "24h"                            # 토큰 유효 시간 (24시간)
+
+# =============================================================================
 # OS-SPECIFIC PACKAGE CONFIGURATION
 # =============================================================================
 # Centralized package management for Ubuntu/Debian and CentOS/RHEL systems

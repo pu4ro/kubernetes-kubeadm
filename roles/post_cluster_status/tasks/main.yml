@@ -1,34 +1,194 @@
 ---
 # =============================================================================
-# CLUSTER STATUS CHECK TASKS
+# 강화된 클러스터 상태 검증 및 모니터링
 # =============================================================================
-# This role displays cluster status and information after installation
-# =============================================================================
+# 설치 후 클러스터 상태를 종합적으로 검증하고 HA 구성 확인
+# kube-vip 상태, 마스터 노드 고가용성, 클러스터 건강성 체크
 
-- name: Display cluster status
+# -----------------------------------------------------------------------------
+# 기본 클러스터 상태 확인
+# -----------------------------------------------------------------------------
+
+- name: 클러스터 노드 상태 확인
   shell: kubectl get nodes -o wide
   register: cluster_nodes
+  retries: 3
+  delay: 10
+  until: cluster_nodes.rc == 0
   
-- name: Show cluster nodes status
-  debug:
-    var: cluster_nodes.stdout_lines
-
-- name: Display cluster info
+- name: 클러스터 정보 확인
   shell: kubectl cluster-info
   register: cluster_info
-  
-- name: Show cluster information
-  debug:
-    var: cluster_info.stdout_lines
+  retries: 3
+  delay: 5
+  until: cluster_info.rc == 0
 
-- name: Check pod status in all namespaces
-  shell: kubectl get pods --all-namespaces
+- name: 모든 네임스페이스 Pod 상태 확인
+  shell: kubectl get pods --all-namespaces -o wide
   register: all_pods
-  
-- name: Show all pods status
-  debug:
-    var: all_pods.stdout_lines
+  retries: 3
+  delay: 5
+  until: all_pods.rc == 0
 
-- name: Display cluster status completion
+# -----------------------------------------------------------------------------
+# HA 모드 특별 검증 (kube-vip 상태 확인)
+# -----------------------------------------------------------------------------
+
+- name: kube-vip Pod 상태 확인 (HA 모드)
+  shell: kubectl get pods -n kube-system | grep kube-vip
+  register: kubevip_status
+  failed_when: false
+  when: ha_mode | default(false) | bool
+
+- name: kube-vip VIP 연결성 테스트 (HA 모드)
+  wait_for:
+    host: "{{ kubevip_address }}"
+    port: 6443
+    timeout: 30
+  register: vip_connectivity
+  failed_when: false
+  when: ha_mode | default(false) | bool
+
+- name: API 서버 엔드포인트 확인 (HA 모드)
+  uri:
+    url: "https://{{ kubevip_address }}:6443/healthz"
+    method: GET
+    validate_certs: no
+    timeout: 10
+  register: api_server_health
+  failed_when: false
+  when: ha_mode | default(false) | bool
+
+# -----------------------------------------------------------------------------
+# 클러스터 구성 요소 건강성 검사
+# -----------------------------------------------------------------------------
+
+- name: etcd 클러스터 상태 확인
+  shell: kubectl get componentstatuses
+  register: component_status
+  failed_when: false
+
+- name: CoreDNS Pod 상태 확인
+  shell: kubectl get pods -n kube-system -l k8s-app=kube-dns
+  register: coredns_status
+  failed_when: false
+
+- name: CNI 네트워크 Plugin 상태 확인 (Flannel)
+  shell: kubectl get pods -n kube-system -l app=flannel
+  register: flannel_status
+  failed_when: false
+
+- name: 클러스터 이벤트 확인 (최근 경고/오류)
+  shell: kubectl get events --all-namespaces --field-selector type=Warning --sort-by='.lastTimestamp' | tail -10
+  register: cluster_warnings
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# 마스터 노드 특별 검증
+# -----------------------------------------------------------------------------
+
+- name: 마스터 노드 개수 확인
+  shell: kubectl get nodes --selector='node-role.kubernetes.io/control-plane' --no-headers | wc -l
+  register: master_count
+
+- name: 마스터 노드 Ready 상태 확인
+  shell: kubectl get nodes --selector='node-role.kubernetes.io/control-plane' --no-headers | grep -c " Ready "
+  register: ready_master_count
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# 종합 상태 리포트 출력
+# -----------------------------------------------------------------------------
+
+- name: 클러스터 상태 종합 리포트
   debug:
-    msg: "Cluster status check completed successfully on {{ inventory_hostname }}"
+    msg: |
+      ================================================================
+      KUBERNETES 클러스터 상태 리포트
+      ================================================================
+      
+      📊 클러스터 기본 정보:
+      {{ cluster_info.stdout_lines | join('\n      ') }}
+      
+      🖥️  노드 상태:
+      {{ cluster_nodes.stdout_lines | join('\n      ') }}
+      
+      {% if ha_mode | default(false) | bool %}
+      🔄 고가용성(HA) 상태:
+      - HA 모드: 활성화
+      - kube-vip VIP: {{ kubevip_address }}
+      {% if vip_connectivity.failed is defined and not vip_connectivity.failed %}
+      - VIP 연결성: ✅ 정상
+      {% else %}
+      - VIP 연결성: ❌ 실패
+      {% endif %}
+      {% if api_server_health.status is defined and api_server_health.status == 200 %}
+      - API 서버 Health: ✅ 정상
+      {% else %}
+      - API 서버 Health: ❌ 확인 필요
+      {% endif %}
+      {% if kubevip_status.rc == 0 %}
+      - kube-vip Pod: ✅ 실행 중
+      {% else %}
+      - kube-vip Pod: ❌ 확인 필요
+      {% endif %}
+      {% else %}
+      🔄 고가용성(HA) 상태:
+      - HA 모드: 비활성화 (단일 마스터)
+      {% endif %}
+      
+      👥 마스터 노드 현황:
+      - 전체 마스터 노드: {{ master_count.stdout }}개
+      - Ready 상태 마스터: {{ ready_master_count.stdout | default('확인 불가') }}개
+      
+      🏃 실행 중인 Pod 요약:
+      {% for line in all_pods.stdout_lines[1:6] %}
+      {{ line }}
+      {% endfor %}
+      {% if all_pods.stdout_lines | length > 6 %}
+      ... (더 많은 Pod가 있습니다)
+      {% endif %}
+      
+      ⚠️  최근 경고 이벤트:
+      {% if cluster_warnings.stdout_lines | length > 1 %}
+      {% for warning in cluster_warnings.stdout_lines[-5:] %}
+      {{ warning }}
+      {% endfor %}
+      {% else %}
+      경고 이벤트 없음 ✅
+      {% endif %}
+      
+      📋 네트워크 구성 요소:
+      {% if coredns_status.rc == 0 %}
+      - CoreDNS: ✅ 정상
+      {% else %}
+      - CoreDNS: ❌ 확인 필요
+      {% endif %}
+      {% if flannel_status.rc == 0 %}
+      - Flannel CNI: ✅ 정상
+      {% else %}
+      - Flannel CNI: ❌ 확인 필요
+      {% endif %}
+      
+      ================================================================
+      
+      💡 추가 확인 명령어:
+      - kubectl get nodes -o wide
+      - kubectl get pods --all-namespaces
+      {% if ha_mode | default(false) | bool %}
+      - kubectl get pods -n kube-system | grep kube-vip
+      {% endif %}
+      - kubectl cluster-info dump
+      
+      ================================================================
+
+- name: 클러스터 상태 검증 완료 메시지
+  debug:
+    msg: |
+      클러스터 상태 검증이 완료되었습니다.
+      {% if ha_mode | default(false) | bool %}
+      HA 모드로 구성된 안정적인 Kubernetes 클러스터가 준비되었습니다.
+      {% else %}
+      단일 마스터 모드로 구성된 Kubernetes 클러스터가 준비되었습니다.
+      HA가 필요한 경우 group_vars/all.yml에서 ha_mode: true로 설정 후 재실행하세요.
+      {% endif %}
