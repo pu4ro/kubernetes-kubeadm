@@ -1,26 +1,58 @@
 ---
+# Ubuntu/Debian packages
 ubuntu_packages:
   - kubelet
   - kubeadm
   - kubectl
-  - nfs-common
-  - nfs-kernel-server
   - bash-completion
   - dnsmasq
   - jq
   - openssh-server
-  - net-tools
   - ca-certificates
-  - docker-ce
-  - containerd
+  - nfs-common
+  - nfs-kernel-server
+  - net-tools
+  - containerd.io
   - chrony
+  - curl
+  - wget
+  - k9s
 
-centos_packages:
+
+# RHEL/CentOS packages
+rhel_packages:
   - kubelet
   - kubeadm
   - kubectl
-  - tree
+  - bash-completion
   - dnsmasq
+  - jq
+  - openssh-server
+  - ca-certificates
   - nfs-utils
+  - tree
+  - yum-utils
+  - device-mapper-persistent-data
+  - lvm2
+  - chrony
+  - curl
+  - wget
+  - which
+  - k9s
+
+# Package names that differ between distributions
+package_map:
+  nfs_client:
+    Debian: nfs-common
+    RedHat: nfs-utils
+  nfs_server:
+    Debian: nfs-kernel-server
+    RedHat: nfs-utils
+  network_tools:
+    Debian: net-tools
+    RedHat: net-tools
+  time_sync:
+    Debian: chrony
+    RedHat: chrony
 
   

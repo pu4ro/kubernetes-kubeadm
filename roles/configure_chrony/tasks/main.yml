@@ -1,57 +1,108 @@
 ---
-- name: Install chrony package
-  ansible.builtin.package:
+# Cross-platform Chrony NTP Configuration
+# Supports both local NTP server setup and external NTP usage
+
+- name: Install chrony package (Ubuntu/Debian)
+  apt:
     name: chrony
     state: present
-
-- name: Ensure chrony service is enabled and started
-  ansible.builtin.service:
-    name: chronyd
-    enabled: yes
-    state: started
-
-- name: Check if this is the first host in the masters group
-  set_fact:
-    is_first_master: "{{ inventory_hostname == groups['masters'][0] }}"
-
-- name: Configure chrony as a server on CentOS
-  template:
-    src: chrony_server.conf.j2
-    dest: /etc/chrony.conf
-  when: is_first_master and ansible_os_family == "RedHat"
-
-- name: Configure chrony as a server on Ubuntu
-  template:
-    src: chrony_server.conf.j2
-    dest: /etc/chrony/chrony.conf
-  when: is_first_master and ansible_os_family == "Debian"
-
-- name: Check if this host is not the first master
-  set_fact:
-    is_not_first_master: "{{ inventory_hostname != groups['masters'][0] }}"
-
-- name: Configure chrony as a client on CentOS
-  template:
-    src: chrony_client.conf.j2
-    dest: /etc/chrony.conf
-  when: is_not_first_master and ansible_os_family == "RedHat"
-
-- name: Configure chrony as a client on Ubuntu
-  template:
-    src: chrony_client.conf.j2
-    dest: /etc/chrony/chrony.conf
-  when: is_not_first_master and ansible_os_family == "Debian"
-
-- name: Ensure chrony service is enabled and started on CentOS
-  ansible.builtin.service:
-    name: chronyd
-    enabled: yes
-    state: restarted
-  when: ansible_os_family == "RedHat"
-  
-- name: Ensure chrony service is enabled and started on Ubuntu
-  ansible.builtin.service:
-    name: chrony
-    enabled: yes
-    state: restarted
+    update_cache: yes
   when: ansible_os_family == "Debian"
+
+- name: Install chrony package (RHEL/CentOS)
+  package:
+    name: chrony
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Stop chrony service before configuration
+  systemd:
+    name: "{{ chrony_service_name }}"
+    state: stopped
+
+# Local NTP Server Configuration (master1 becomes NTP server)
+- name: Configure chrony as NTP server (master1 only)
+  template:
+    src: chrony_server.conf.j2
+    dest: "{{ chrony_config_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  when: 
+    - use_local_ntp | default(true)
+    - inventory_hostname == groups['masters'][0]
+  notify: restart chrony
+
+# Local NTP Client Configuration (other nodes point to master1)
+- name: Configure chrony as NTP client (non-master1 nodes)
+  template:
+    src: chrony_client.conf.j2
+    dest: "{{ chrony_config_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  when: 
+    - use_local_ntp | default(true)
+    - inventory_hostname != groups['masters'][0]
+  notify: restart chrony
+
+# External NTP Configuration (all nodes use external servers)
+- name: Configure chrony for external NTP servers
+  template:
+    src: chrony_external.conf.j2
+    dest: "{{ chrony_config_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  when: not (use_local_ntp | default(true))
+  notify: restart chrony
+
+- name: Start and enable chrony service
+  systemd:
+    name: "{{ chrony_service_name }}"
+    state: started
+    enabled: yes
+
+- name: Wait for chrony to synchronize
+  wait_for:
+    timeout: 30
+  delegate_to: localhost
+  run_once: true
+
+- name: Check chrony synchronization status
+  command: chronyc tracking
+  register: chrony_status
+  changed_when: false
+  failed_when: false
+
+- name: Display chrony status
+  debug:
+    msg: "{{ chrony_status.stdout_lines }}"
+  when: chrony_status.stdout_lines is defined
+
+# Open NTP port on master1 if it's acting as NTP server
+- name: Open NTP port 123/UDP on master1 (local NTP server)
+  firewalld:
+    port: 123/udp
+    permanent: yes
+    state: enabled
+    immediate: yes
+  when: 
+    - use_local_ntp | default(true)
+    - inventory_hostname == groups['masters'][0]
+    - ansible_os_family == "RedHat"
+  ignore_errors: true
+
+- name: Open NTP port 123/UDP on master1 (local NTP server) - Ubuntu
+  ufw:
+    rule: allow
+    port: 123
+    proto: udp
+  when: 
+    - use_local_ntp | default(true)
+    - inventory_hostname == groups['masters'][0]
+    - ansible_os_family == "Debian"
+  ignore_errors: true

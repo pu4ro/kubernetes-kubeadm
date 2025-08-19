@@ -28,7 +28,7 @@
       template:
         src: kube-vip.yaml.j2
         dest: /etc/kubernetes/manifests/kube-vip.yaml
-      when: inventory_hostname in groups['masters'] and master_ha and kube_vip_address is defined
+      when: inventory_hostname in groups['masters'] and kube_vip_address is defined
 
     - name: Initialize Kubernetes cluster with kubeadm (single master)
       command: kubeadm init --config=/root/kubeadm-init.yml
@@ -61,27 +61,27 @@
     - name: Generate kubeadm token on first master node
       shell: kubeadm token create
       register: kubeadm_token
-      when: master_ha | bool and inventory_hostname == groups['masters'][0]
+      when: master_ha and inventory_hostname == groups['masters'][0]
 
     - name: Get discovery token CA cert hash on first master node
       shell: openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256
       register: discovery_token_ca_cert_hash
-      when: master_ha | bool and inventory_hostname == groups['masters'][0]
+      when: master_ha and inventory_hostname == groups['masters'][0]
 
     - name: Generate certificate key on first master node
       shell: kubeadm init phase upload-certs --upload-certs
       register: certificate_key_output
-      when: master_ha | bool and inventory_hostname == groups['masters'][0]
+      when: master_ha and inventory_hostname == groups['masters'][0]
 
     - name: Extract certificate key on first master node
       set_fact:
         certificate_key: "{{ certificate_key_output.stdout_lines[-1] }}"
-      when: master_ha | bool and inventory_hostname == groups['masters'][0]
+      when: master_ha and inventory_hostname == groups['masters'][0]
 
     - name: Extract discovery token CA cert hash value
       set_fact:
         discovery_token_ca_cert_hash_value: "{{ discovery_token_ca_cert_hash.stdout.split('=')[-1].strip() }}"
-      when: master_ha | bool and inventory_hostname == groups['masters'][0]
+      when: master_ha and inventory_hostname == groups['masters'][0]
 
     - name: Join the node to the Kubernetes cluster
       shell: |
@@ -89,12 +89,12 @@
           --discovery-token-ca-cert-hash sha256:{{ hostvars[groups['masters'][0]].discovery_token_ca_cert_hash_value }} \
           --control-plane --certificate-key {{ hostvars[groups['masters'][0]].certificate_key }}
       register: join_output
-      when: master_ha | bool and inventory_hostname in groups['masters'][1:3]
+      when: master_ha and inventory_hostname in groups['masters'][1:3]
 
     - name: Display join command output
       debug:
         var: join_output.stdout
-      when: master_ha | bool and inventory_hostname in groups['masters'][1:3]
+      when: master_ha and inventory_hostname in groups['masters'][1:3]
 
     - name: Copy admin kubeconfig to user's home directory
       become: true
@@ -103,7 +103,7 @@
         dest: "{{ ansible_env.HOME }}/.kube/config"
         remote_src: yes
         mode: 0644
-      when: master_ha | bool and inventory_hostname in groups['masters'] and kubectl_nodes.rc != 0
+      when: master_ha and inventory_hostname in groups['masters'] and kubectl_nodes.rc != 0
 
     - name: Get kubeadm join command
       command: kubeadm token create --print-join-command
@@ -129,5 +129,30 @@
 - name: Join the Kubernetes worker nodes
   command: "{{ hostvars[groups['masters'][0]]['join_cmd'] }}"
   when: inventory_hostname in groups['workers'] and not node_already_joined.stat.exists
-  ignore_errors: true
+  register: join_result
+  until: join_result.rc == 0 or 'already exists' in join_result.stderr
+  retries: 3
+  delay: 30
+  failed_when: join_result.rc != 0 and 'already exists' not in join_result.stderr
+
+- name: Verify node joined successfully
+  command: kubectl get nodes {{ inventory_hostname }}
+  delegate_to: "{{ groups['masters'][0] }}"
+  when: inventory_hostname in groups['workers'] and join_result is defined and join_result.rc == 0
+  retries: 5
+  delay: 10
+
+- name: Add kubectl alias to bashrc
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.bashrc"
+    line: 'alias k=kubectl'
+    create: yes
+  when: inventory_hostname in groups['masters']
+
+- name: Add kubectl alias to root bashrc
+  lineinfile:
+    path: /root/.bashrc
+    line: 'alias k=kubectl'
+    create: yes
+  become: yes
 

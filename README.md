@@ -1,293 +1,371 @@
-# Ansible 설치 가이드 작성
+# Kubernetes Cluster Basic Installation with Ansible
 
-### 기본 정보
+Automated basic Kubernetes cluster deployment using Ansible.
 
----
+## 📋 Table of Contents
 
-- OS: ubuntu20.04.06 LTS
-- DISK: 300G이상
-- NODE:  MASTER  1식 WORKER 2식 + α
-- k8s_Version: 1.23.17
+- [Overview](#overview)
+- [System Requirements](#system-requirements)
+- [Supported Platforms](#supported-platforms)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Installation](#installation)
+- [Post-Installation](#post-installation)
+- [Troubleshooting](#troubleshooting)
 
-### 설치 패키지 정보
+## 🎯 Overview
 
----
+This Ansible playbook automates the deployment of a basic Kubernetes cluster with:
 
-- ansible_install.sh :  ansible을 설치하기 위한 쉘 스크립트
-- create_harbor_user.sh :  harbor 계정 생성 및 PW 생성
-- makina_runway_helm.tar.gz :  runway 구성을 위한 helm chart
-- makina-runway.tar.gz  : runway 구성을 위한  container_image
-- external-hub.tar.gz :  k8s add on 구성을 위한  container_image
-- kubernetes-kubeadm.tar.gz : runway 설치를 위한 ansible 파일
-- docker.tar.gz : docker registry container_image 입력
-- ubuntu_20.04_repo.tar.gz:  OS 설치 파일
+- **Core Kubernetes**: Kubernetes 1.27.14 cluster installation
+- **Container Runtime**: containerd configuration
+- **Network Plugin**: Flannel CNI for pod networking
+- **System Preparation**: OS packages, kernel modules, firewall configuration
+- **Cross-Platform**: Ubuntu and RHEL/CentOS support
 
-### 설치 사전 준비
+## 💻 System Requirements
 
----
+### Minimum Hardware Requirements
 
-- 먼저 기본 적인 세팅은 되어 있는 상태
-    - IP 설정
-    - root password 설정
-    - 위에 설치된 설치 패키지 정보는 `/root` 디렉토리에 옮겨져 있는 상태
-    
+| Component | Master Node | Worker Node |
+|-----------|-------------|-------------|
+| **CPU** | 2 cores | 2 cores |
+| **Memory** | 4GB RAM | 2GB RAM |
+| **Storage** | 50GB SSD | 30GB SSD |
+| **Network** | 1Gbps | 1Gbps |
 
-### 설치 진행
+### Recommended Production Setup
 
----
+| Component | Master Node | Worker Node |
+|-----------|-------------|-------------|
+| **CPU** | 4+ cores | 2+ cores |
+| **Memory** | 8+ GB RAM | 4+ GB RAM |
+| **Storage** | 100+ GB SSD | 50+ GB SSD |
+| **Network** | 1Gbps+ | 1Gbps+ |
 
-- 먼저 `shell script` 실행을 위해  권한 변경 및 실행을 진행
-    
-    ```jsx
-    $ chmod +x /root/ansible_install.sh
-    $ ./ansible_install.sh
-    ```
-    
+## 🐧 Supported Platforms
 
-- ansible파일 풀기
-    
-    ```jsx
-    $ tar -xvf kubernetes-kubeadm.tar.gz  
-    $ cd kubernetes-kubeadm
-    ```
-    
+### Operating Systems
+- **Ubuntu**: 20.04 LTS, 22.04 LTS
+- **RHEL/CentOS**: 8.x, 9.x
+- **Rocky Linux**: 8.x, 9.x
 
-- ansible 파일 list 확인
+### Kubernetes Versions
+- **Current**: 1.27.14 (default)
+- **Supported**: 1.25.x - 1.28.x
 
-```jsx
-drwxr-xr-x  2 root root 4096 May 21 07:57 group_vars
--rw-r--r--  1 root root  259 May 22 00:47 inventory.ini
--rw-r--r--  1 root root  997 May 21 07:57 README.md
-drwxr-xr-x 36 root root 4096 May 21 07:57 roles
--rw-r--r--  1 root root 1378 May 22 07:16 site.yml
+## 🚀 Quick Start
+
+### Prerequisites
+
+1. **Control Node Setup** (where Ansible runs):
+   ```bash
+   # Install Ansible (Ubuntu/Debian)
+   sudo apt update
+   sudo apt install ansible python3-pip
+   
+   # Install Ansible (RHEL/CentOS)
+   sudo yum install epel-release
+   sudo yum install ansible python3-pip
+   ```
+
+2. **Target Nodes Preparation**:
+   - Fresh OS installation (Ubuntu 20.04+ or RHEL 8+)
+   - Root access or sudo user
+   - Network connectivity between all nodes
+   - SSH key-based authentication
+
+### SSH Key Setup
+
+1. **Generate SSH key pair** (on control node):
+   ```bash
+   ssh-keygen -t rsa -b 4096 -C "ansible@kubernetes"
+   ```
+
+2. **Copy public key to all target nodes**:
+   ```bash
+   ssh-copy-id root@<master-node-ip>
+   ssh-copy-id root@<worker-node-ip>
+   ```
+
+3. **Test connectivity**:
+   ```bash
+   ssh root@<node-ip> "uptime"
+   ```
+
+### Project Structure
+
+```
+kubernetes-kubeadm/
+├── group_vars/
+│   └── all.yml                 # Global variables
+├── inventory.ini               # Inventory file
+├── roles/                      # Ansible roles
+│   ├── common/                 # Base system setup
+│   ├── install_kubernetes/     # K8s installation
+│   ├── install_containerd/     # Container runtime
+│   └── install_flannel/        # CNI plugin
+├── site.yml                    # Main playbook
+└── README.md                   # This file
 ```
 
-- ansible 파일 변수 변경 진행
-    - group_vars/all.yml
-    - inventory.ini
-    - ( 변수 )만 변경 진행 해주면 default 설치는 가능하다
-- group_vars/all.yml
+## ⚙️ Configuration
 
-```jsx
-#! group_vars/all.yml
-# how to set domain
-main_domain: onboarding1.com # (변수) 사용할 도메인에 주소 입력 필요
+### 1. Inventory Configuration
 
-# docker-registry setting - to install k8s or runway in offline
-docker_registry_ip: "192.168.135.21" # (변수) docker registry로 사용할 IP 작성 필요 ex) master 1번의 IP
-registry_port: 5000
-registry_version: "2"
-registry_data_dir: "/opt/docker-registry"
-registry_name: "registry"
-load_image: "/root/docker.tar.gz"
-docker_image_directories:
-  - external-hub
-  - makina-runway
+Edit `inventory.ini` to match your infrastructure:
 
-# timezone && chrony
-set_timezone: Asia/Seoul
-ntp_client_network: 192.168.135.0/23 # (변수) 환경에 맞는 네트워크 주소 입력 필요
-chrony_server: "192.168.135.21" # (변수) 시간 동기화를 위한 IP 변수 ex) master 1번의 IP
+```ini
+[masters]
+master1 ansible_host=192.168.1.10
 
-# kubeadm-init.yaml create
-kubernetes_version: '1.23.17'
+[workers]
+worker1 ansible_host=192.168.1.11
+worker2 ansible_host=192.168.1.12
+
+[installs]
+master1 ansible_host=192.168.1.10
+
+[all:vars]
+ansible_user=root
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+```
+
+### 2. Global Variables Configuration
+
+Edit `group_vars/all.yml` with your environment-specific values:
+
+```yaml
+# Basic Kubernetes Configuration
+kubernetes_version: '1.27.14'
 dns_domain: cluster.local
 service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
 
-# DNS wildcard_ip
-wildcard_ip: "192.168.135.30" # (변수) metal lb 또는 L4에 ip를 작성해줌 Ingress 용도
-main_nameserver: "192.168.135.21" # (변수) nameserver로 사용할 서버의 IP  ex) master 1번의 IP
-enable_forwarding: false
-forward_servers:
-  - "168.126.63.1"
-  - "168.126.63.2"
-enable_wildcard: true
+# Container Runtime
+containerd_version: "1.7.6"
 
-# helm command && OS package repo
+# System Configuration
+set_timezone: Asia/Seoul
+
+# NTP/Time Synchronization
+use_local_ntp: true                    # true: master1 as NTP server, false: external NTP
+external_ntp_servers:                  # External NTP servers (fallback or primary)
+  - "pool.ntp.org"
+  - "time.google.com" 
+cluster_network: "192.168.0.0/16"     # Network allowed to access local NTP server
+
+# Cluster Configuration
+allow_master_scheduling: false         # Set to true for single-node cluster
+network_plugin: "flannel"              # CNI plugin
+
+# High Availability (for multi-master setup)
+master_ha: false
+kube_vip_port: 6443
+kube_vip_interface: ens18
+# kube_vip_address: 192.168.1.100      # Uncomment for HA setup
+
+# Package Repository URLs (modify for your environment)
 repo_url:
-  centos: "http://192.168.135.21:8080/repo" # (변수) 기본 OS repoistory로 사용할 IP ex) master 1번의 IP
-  ubuntu: "http://192.168.135.21:8080/repo/" # (변수) 기본 OS repoistory로 사용할 IP ex) master 1번의 IP
+  centos: "http://192.168.1.10:8080/repo/"
+  ubuntu: "http://192.168.1.10:8080/repo/"
 
-base_directory: "/root/makina-runway-1.1.0.1/helm" # (변수) helm chart의 압축이 풀린 디렉토리 위치 
-helm_repo_ip: "192.168.135.21:8080" # use http_port # (변수) helm repo로 사용할 IP ex) master 1번의 IP:8080
-
-# Docker 관련 변수
-insecure_registries:
-  - "harbor.{{ main_domain }}"
-  - "cr.makina.rocks"
-docker_log_max_size: "2000m"
-
-# Master Node remove taint
-remove_taints: true
-
-rook_ceph_values:
-  cephClusterSpec:
-    dataDirHostPath: /var/lib/rook
-    mon:
-      count: 3
-    storage:
-      useAllNodes: true
-      useAllDevices: true
-    dashboard:
-      enabled: true
-  operatorNamespace: rook-ceph
-
-# delete_master_node_taint
-remove_master_taint: true
-
-# cert_Manager
-cert_manager_version: "v1.11.0"
-cert_manager_values:
-  installCRDs: true
-  prometheus:
-    enabled: false
-
-# istio_service_type
-istio_service_type: "LoadBalancer"
-
-# metalLb-vars
-metallb_namespace: metallb-system
-metallb_ip_pool_name: default
-metallb_l2adv_name: default
-metallb_ip_range: "192.168.135.30/32" # (변수) VIP로 사용할 IP 마스터노드와 워커노드에 IP가 아닌 IP 작성하기
-
-# harbor
-harbor_values:
-  expose:
-    tls:
-      enabled: false
-    type: clusterIP
-  externalURLs:
-    - "http://harbor.{{ main_domain }}"
-  persistence:
-    enabled: true
-    persistentVolumeClaim:
-      registry:
-        size: "50Gi"
-  trivy:
-    enabled: false
-
-# elastic-search replicas
-elastic_replicas: 2
-
-#backend
-image_registry_url: "http://harbor.{{ main_domain }}/api/v2.0"
-image_registry_username: "mrx.dev"
-image_registry_password: "klw9pcSDWkpY4udGaGjQP7KrjGoegdIw"
-image_registry_api_token: "YWRtaW46SGaFyYm9yMTIzNDU="
-grafana_public_url: "grafana.runway.{{ main_domain }}"
-runway_url: "runway.{{ main_domain }}"
-postgresql_replica_count: "3"
-project_shared_volume_storage_class: "ceph-filesystem"
-nfs_pv_path: "/nfs" # (변수)  nfs서버로 쓸 mount 경로 작성하기
-nfs_pv_server: "master1" # (변수) master 서버 작성
-link_instance_max_cpu: "8" # (변수) 최소 노드 크기의 cpu 개수 작성
-link_instance_max_memory: "16" # (변수) 최소 노드 크기의 memory 개수 작성
-link_instance_max_gpu: "0"
-pod_commit_image_repository: "makina-runway/commit-link-"
-pip_trusted_host: "pubpypi.makina.rocks" 
-pip_index_url: "http://pubpypi.makina.rocks/simple/" 
-pgpool_username: "kidi" # (변수) 사용할 계정 db_username
-pgpool_password: "kidi" # (변수) 사용할 계정 db_password
-backend_tag: "v1.1.0.1" # (변수) 사용할 이미지의 tag 작성
-
-# create_docker_config.json in kubelet, only use public
-docker_username: "admin"
-docker_password: "Mak1nar0cks!"
-docker_registry: "cr.makina.rocks"
-
-# frontend-vars
-helm_namespace: "runway" 
-global_production: true
-image_tag: "v1.1.0.1" # (변수) 사용할 이미지의 tag 작성
-
-#Gpu-operator
-gpu_operator_values:
-  driver:
-    enabled: false
-  mig:
-    strategy: false
-  toolkit:
-    enabled: false
-  dcgmExporter:
-    enabled: true
-
+# Container Registry Settings
+insecure_registries:                   # HTTP registries (no TLS)
+  - "192.168.1.10:5000"               # Local registry
+  # - "harbor.yourdomain.com"         # Harbor registry
 ```
 
-- inventory.ini
+### 3. Optional Settings
 
-```jsx
-[masters]
-master1 ansible_host=192.168.135.21 #변수  master로 사용할 IP 
+Customize cluster behavior:
 
-[workers]
-worker1 ansible_host=192.168.135.22 #변수  worker로 사용할 IP 추가적으로 필요하다면 아래 추가 진행
-worker2 ansible_host=192.168.135.23 
+```yaml
+# Single-node cluster (allow master scheduling)
+allow_master_scheduling: true
 
-[installs]
-master1 ansible_host=192.168.135.21 #변수  master로 사용할 IP 
-
-[pre-installs]
-master1 ansible_host=192.168.135.21 #변수  master로 사용할 IP 
-
-[all:vars]
-ansible_user=root
-
+# High Availability (multi-master)
+master_ha: true
+kube_vip_address: 192.168.1.100
 ```
 
-- keygen 생성
-    - ssh-keygen 명령어을 입력하고 `Enter` 누르면 keygen이 생성 완료 된다.
+## 🚀 Installation
 
-```jsx
-root@worker2:~# ssh-keygen
-Generating public/private rsa key pair.
-Enter file in which to save the key (/root/.ssh/id_rsa):
-Enter passphrase (empty for no passphrase):
-Enter same passphrase again:
-Your identification has been saved in /root/.ssh/id_rsa
-Your public key has been saved in /root/.ssh/id_rsa.pub
-The key fingerprint is:
-SHA256:J4ZUWRczi+i40QlMgCFfbYEJB5B7l+aiWg+QRsmuN24 root@worker2
-The key's randomart image is:
-+---[RSA 3072]----+
-|oo+=+=o..o. =.   |
-|ooooooo... o +   |
-| =.  o+ . . .    |
-|+.. +. * .       |
-|o+ +  + S .      |
-|o.. .  + o       |
-|..=.  .          |
-|.+E+             |
-|o.. .            |
-+----[SHA256]-----+
+### Step 1: Clone and Configure
 
+```bash
+git clone <repository-url>
+cd kubernetes-kubeadm
+
+# Edit configuration files
+vim inventory.ini
+vim group_vars/all.yml
 ```
 
-- 그리고 설치할 노드에 copy를 진행한다.
+### Step 2: Test Connectivity
 
-```jsx
-$ ssh-copy-id <master_node IP>
-$ ssh-copy-id <worker_node IP>
+```bash
+ansible all -i inventory.ini -m ping
 ```
 
-- 마지막으로 playbook 설치를 진행하면 설치가 끝난다.
+### Step 3: Deploy Kubernetes Cluster
 
-```jsx
-$ ansible-playbook -i inventory site.yml 
+```bash
+# Install basic Kubernetes cluster
+ansible-playbook -i inventory.ini site.yml
 ```
 
-### 설치 이후 작업
+### Available Tags (Optional)
+
+| Tag | Components |
+|-----|------------|
+| `base` | System preparation |
+| `system` | OS configuration |
+| `packages` | Package installation |
+| `container` | Container runtime |
+| `kubernetes` | K8s cluster |
+| `networking` | CNI plugin |
+| `scheduling` | Master node scheduling |
+
+## 🔧 Post-Installation
+
+### 1. Verify Cluster Status
+
+```bash
+# Check cluster nodes
+kubectl get nodes -o wide
+
+# Check system pods
+kubectl get pods -A
+
+# Check cluster info
+kubectl cluster-info
+```
+
+### 2. Configure kubectl (on master node)
+
+```bash
+# Copy kubeconfig for regular user
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+```
+
+### 3. Deploy Sample Application
+
+```bash
+# Deploy nginx example
+kubectl create deployment nginx --image=nginx
+kubectl expose deployment nginx --port=80 --type=NodePort
+
+# Check deployment
+kubectl get pods
+kubectl get services
+```
+
+### 4. Basic Cluster Operations
+
+```bash
+# Scale deployment
+kubectl scale deployment nginx --replicas=3
+
+# Check node resources
+kubectl top nodes
+
+# Check pod logs
+kubectl logs deployment/nginx
+```
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+1. **Node NotReady Status**
+   ```bash
+   # Check kubelet logs
+   sudo journalctl -u kubelet -f
+   
+   # Check CNI (Flannel)
+   kubectl get pods -n kube-system | grep flannel
+   ```
+
+2. **Pod Stuck in Pending**
+   ```bash
+   # Describe pod to see events
+   kubectl describe pod <pod-name>
+   
+   # Check node resources
+   kubectl describe nodes
+   ```
+
+3. **Join Command Issues**
+   ```bash
+   # On master, regenerate join command
+   kubeadm token create --print-join-command
+   
+   # Check if node already joined
+   kubectl get nodes
+   ```
+
+4. **Network Issues**
+   ```bash
+   # Check Flannel pods
+   kubectl get pods -n kube-system -l app=flannel
+   
+   # Check pod-to-pod communication
+   kubectl exec -it <pod-name> -- ping <target-ip>
+   ```
+
+### Health Check Script
+
+```bash
+#!/bin/bash
+echo "=== Basic Cluster Health Check ==="
+echo "Cluster Info:"
+kubectl cluster-info
+echo -e "\nNodes:"
+kubectl get nodes -o wide
+echo -e "\nSystem Pods:"
+kubectl get pods -n kube-system
+echo -e "\nNetwork Plugin (Flannel):"
+kubectl get pods -n kube-system -l app=flannel
+```
+
+### Required Ports
+
+| Port | Protocol | Source | Purpose |
+|------|----------|--------|---------|
+| 6443 | TCP | All | Kubernetes API |
+| 2379-2380 | TCP | Masters | etcd |
+| 10250 | TCP | All | kubelet |
+| 10251 | TCP | Masters | kube-scheduler |
+| 10252 | TCP | Masters | kube-controller |
+| 8472 | UDP | All | Flannel VXLAN |
 
 ---
 
-harbor에 계정 생성을 위해  필요한 스크립트 돌리기
+## 📝 Next Steps
 
-- create_harbor_user.sh을 통한 계정생
+After basic cluster installation, you can:
 
-```jsx
-$ chmod +x create_harbor_user.sh
-$ ./create_harbor_user.sh
-Enter the domain: onboarding1.com <domain.name>
+1. **Install Kubernetes Dashboard**
+   ```bash
+   kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+   ```
 
-```
+2. **Install Metrics Server**
+   ```bash
+   kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+   ```
+
+3. **Deploy Applications**
+   - Use `kubectl create deployment`
+   - Apply YAML manifests
+   - Use Helm charts
+
+## 📚 Additional Resources
+
+- [Kubernetes Documentation](https://kubernetes.io/docs/)
+- [kubectl Cheat Sheet](https://kubernetes.io/docs/reference/kubectl/cheatsheet/)
+- [Ansible Documentation](https://docs.ansible.com/)
+- [Flannel Documentation](https://github.com/flannel-io/flannel)

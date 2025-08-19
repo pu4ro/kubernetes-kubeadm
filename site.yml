@@ -1,54 +1,38 @@
 ---
-- hosts: installs #pre-install
-  roles:
-    #- common
-    #- configure_sysctl 
-    #- install_apache2 #install repository-server
-    #- configure_repo
-    #- install_os_package
-    #- install_containerd
-    #- create_docker_registry 
-    #- install_dnsmasq # set dns-server, tags=dns
-    #- install_haproxy # image push and create 
-    
-- hosts: all #Infra settings
-  roles:
-    #- configure_repo   
-    #- configure_chrony
-    #- configure_dns # tags=set_dns                
-    #- common # set_timezone & chrony, set_kernel, tags=timezone                 
-    #- configure_sysctl           
-    #- install_os_package
-    #- install_containerd
-    #- install_kubernetes
-    #- copy_config # offline is not install, docker_config_copy    
+# Kubernetes Cluster Basic Installation Playbook
+# Usage: ansible-playbook -i inventory.ini site.yml
 
-- hosts: installs # runway back_ground install && runway install
+# Phase 1: System Preparation
+- name: System Preparation
+  hosts: all
+  become: yes
+  serial: "{{ parallel_execution.system_preparation if parallel_execution.system_preparation > 0 else '100%' }}"
   roles:
-    #- install_tools # set k9s,kubectl,helm tags=tools
-    - create_helm_repository
-    #- install_flannel
-    #- remove_master_taint # if you need Master Node Scheduling
-    #- install_cert_manager
-    #- install_rook_ceph
-    #- install_istio
-    #- install_metal_lb
-    #- install_harbor
-    #- install_prometheus
-    #- install_ef # elastic & fluentd
-    #- install_knative
-    #- install_kserve
-    #- install_minio
-    #- install_argo
-    #- install_pypiserver
-    #- install_stream
-    #- install_postgresql
-    #- install_backend
-    #- install_frontend
-    #- install_gpu_operator
-#
-# remove all_components
-#- hosts: all
-#  roles:
-#    - remove_ceph_cluster
-#    - remove_helm_chart
+    - { role: common, tags: ['base', 'system'] }
+    - { role: configure_sysctl, tags: ['base', 'system'] }
+    - { role: configure_chrony, tags: ['base', 'time'] }
+    - { role: configure_repo, tags: ['base', 'packages'] }
+    - { role: install_os_package, tags: ['base', 'packages'] }
+    - { role: install_containerd, tags: ['base', 'container'] }
+
+# Phase 2: Kubernetes Installation
+- name: Kubernetes Cluster Installation
+  hosts: all
+  become: yes
+  serial: "{{ parallel_execution.kubernetes_installation if parallel_execution.kubernetes_installation > 0 else '100%' }}"
+  roles:
+    - { role: install_kubernetes, tags: ['kubernetes', 'cluster'] }
+
+# Phase 3: Network Plugin Installation
+- name: Network Plugin Setup
+  hosts: masters
+  become: yes
+  roles:
+    - { role: install_flannel, tags: ['kubernetes', 'networking'] }
+
+# Phase 4: Optional Master Node Scheduling (if single node)
+- name: Master Node Scheduling Setup
+  hosts: masters
+  become: yes
+  roles:
+    - { role: remove_master_taint, tags: ['kubernetes', 'scheduling'], when: allow_master_scheduling | default(false) }

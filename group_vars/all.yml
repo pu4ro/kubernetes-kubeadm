@@ -1,158 +1,78 @@
 ---
+# Basic Kubernetes Cluster Configuration
 
-# how to set domain
-main_domain: kwater.or.kr
-
-# kube-vip
-kube_vip_port: 6443
-kube_vip_interface: ens18
-#kube_vip_address: 192.168.135.70 #optional
-master_ha: false
-
-# docker-registry setting - to install k8s or runway in offline 
-docker_registry_ip: ""
-registry_port: 5000
-registry_version: "2"
-registry_data_dir: "/opt/docker-registry"
-registry_name: "registry"
-load_image: "/root/docker.tar.gz"
-docker_image_directories:
-  - external-hub
-  - makina-runway
-
-# timezone && chrony
-set_timezone: Asia/Seoul
-ntp_client_network: 192.168.135.0/23
-chrony_server: "192.168.135.41"
-
-# kubeadm-init.yaml create
+# Kubernetes Settings
 kubernetes_version: '1.27.14'
 dns_domain: cluster.local
 service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
 
-# DNS wildcard_ip
-wildcard_ip: "192.168.135.30"
-main_nameserver: "192.168.135.41"
-enable_forwarding: false
-forward_servers:
-  - "168.126.63.1"
-  - "168.126.63.2"
-enable_wildcard: true
+# High Availability Settings (for multi-master setup)
+master_ha: true
+kube_vip_port: 6443
+kube_vip_interface: eth0
+kube_vip_address: 192.168.135.29  # Uncomment for HA setup
 
-#containerd - set 
+# Container Runtime
 containerd_version: "1.7.6"
 
-# helm command && OS package repo && containerd repo 
+# System Configuration
+set_timezone: Asia/Seoul
+
+# NTP/Chrony Configuration
+use_local_ntp: true                    # true: master1 as NTP server, false: use external NTP
+external_ntp_servers:                  # External NTP servers
+  - "pool.ntp.org"
+  - "time.google.com"
+  - "time.cloudflare.com"
+cluster_network: "192.168.0.0/16"     # Network range allowed to access local NTP server
+
+# Cross-platform service and config paths
+chrony_service_name: "{{ 'chronyd' if ansible_os_family == 'RedHat' else 'chrony' }}"
+chrony_config_path: "{{ '/etc/chrony.conf' if ansible_os_family == 'RedHat' else '/etc/chrony/chrony.conf' }}"
+
+# Network Plugin (flannel is default)
+network_plugin: "flannel"
+
+# Master Node Scheduling (allow pods on master for single-node setup)
+allow_master_scheduling: false
+
+# Parallel Execution Control
+# Set how many hosts to run simultaneously during installation
+# 1 = sequential (one at a time), 0 = all hosts in parallel
+parallel_execution:
+  system_preparation: 1     # How many hosts for system prep phase (packages, containerd)
+  package_installation: 1   # How many hosts for apt/yum operations simultaneously
+  kubernetes_installation: 0  # How many hosts for kubernetes installation (0 = all parallel)
+
+# Example configurations:
+# For fast installation on reliable network (all parallel):
+# parallel_execution:
+#   system_preparation: 0
+#   package_installation: 0  
+#   kubernetes_installation: 0
+#
+# For mixed approach (packages sequential, k8s parallel):
+# parallel_execution:
+#   system_preparation: 1
+#   package_installation: 1
+#   kubernetes_installation: 0
+#
+# For completely sequential installation:
+# parallel_execution:
+#   system_preparation: 1
+#   package_installation: 1
+#   kubernetes_installation: 1
+
+# Package Repository URLs (for offline installation)
 repo_url:
-  centos: "http://192.168.135.51:8080/repo/"
-  ubuntu: "http://192.168.135.21:8080/repo/"
+  centos: "http://192.168.1.10:8080/repo/"
+  ubuntu: "http://192.168.134.102/ubuntu_22.04.5"
 
-base_directory: "/root/makina-runway-1.5.0.2/helm"
-helm_repo_ip: "192.168.135.161:8080" # use http_port 
- 
-# Docker 관련 변수
-insecure_registries:
-  - "harbor.{{ main_domain }}"
-  - "cr.makina.rocks"
-docker_log_max_size: "2000m"
-
-# Master Node remove taint
-remove_taints: true
-
-rook_ceph_values:
-  cephClusterSpec:
-    dataDirHostPath: /var/lib/rook
-    mon:
-      count: 3
-    storage:
-      useAllNodes: true
-      useAllDevices: true
-    dashboard:
-      enabled: true
-  operatorNamespace: rook-ceph
-
-# delete_master_node_taint
-remove_master_taint: true
-
-# cert_Manager 
-cert_manager_version: "v1.11.0"
-cert_manager_values:
-  installCRDs: true
-  prometheus:
-    enabled: false
-
-# istio_service_type
-istio_service_type: "LoadBalancer"
-
-# metalLb-vars
-metallb_namespace: metallb-system
-metallb_ip_pool_name: default
-metallb_l2adv_name: default
-metallb_ip_range: "192.168.135.50/32"
-
-# harbor
-harbor_values:
-  expose:
-    tls:
-      enabled: false
-    type: clusterIP
-  externalURLs:
-    - "http://harbor.{{ main_domain }}"
-  persistence:
-    enabled: true
-    persistentVolumeClaim:
-      registry:
-        size: "50Gi"
-  trivy:
-    enabled: false
-
-
-# elastic-search replicas
-elastic_replicas: 2
-
-#backend
-image_registry_url: "http://harbor.{{ main_domain }}/api/v2.0"
-image_registry_username: "mrx.dev"
-image_registry_password: "klw9pcSDWkpY4udGaGjQP7KrjGoegdIw"
-image_registry_api_token: "YWRtaW46SGaFyYm9yMTIzNDU="
-grafana_public_url: "grafana.{{ main_domain }}"
-runway_url: "{{ main_domain }}"
-postgresql_replica_count: "3"
-project_shared_volume_storage_class: "ceph-filesystem"
-nfs_pv_path: "/nfs"
-nfs_pv_server: "master1"
-link_instance_max_cpu: "0"
-link_instance_max_memory: "0"
-link_instance_max_gpu: "0"
-pod_commit_image_repository: "makina-runway/commit-link-"
-pip_trusted_host: "pubpypi.makina.rocks"
-pip_index_url: "http://pubpypi.makina.rocks/simple/"
-pgpool_username: "kidi"
-pgpool_password: "kidi"
-backend_tag: "v1.6.0.1"
-manual_tag : "v1.6.0"
-
-# create_docker_config.json in kubelet, only use public
-docker_username: "admin"
-docker_password: "Mak1nar0cks!"
-docker_registry: "cr.makina.rocks"
-
-
-# frontend-vars
-helm_namespace: "runway"
-global_production: true
-image_tag: "v1.6.0.1"
-
-#Gpu-operator
-gpu_operator_values:
-  driver:
-    enabled: false
-  mig:
-    strategy: false
-  toolkit:
-    enabled: true
-  dcgmExporter:
-    enabled: true
-driver_version: "535.161.07"
+# Container Registry Settings (basic Docker configuration)
+insecure_registries: 
+  #- "192.168.1.10:5000"           # Local registry example
+  # - "harbor.yourdomain.com"     # Harbor registry example
+  # - "registry.local"            # Custom registry example
+docker_log_max_size: "100m"
 

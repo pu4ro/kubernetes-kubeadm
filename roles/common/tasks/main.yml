@@ -12,26 +12,20 @@
     state: present
   tags: common
 
-- name: Disable firewalld (CentOS/RHEL)
+- name: Disable firewall services
   service:
-    name: firewalld
+    name: "{{ item }}"
     state: stopped
     enabled: no
-  when: ansible_os_family == "RedHat"
+  loop:
+    - "{{ 'firewalld' if ansible_os_family == 'RedHat' else 'ufw' }}"
+  ignore_errors: true
   tags: common
 
 - name: Disable SELinux (CentOS/RHEL)
   selinux:
     state: disabled
   when: ansible_os_family == "RedHat"
-  tags: common
-
-- name: Disable ufw (Ubuntu)
-  service:
-    name: ufw
-    state: stopped
-    enabled: no
-  when: ansible_os_family == "Debian"
   tags: common
 
 - name: Gather facts from all hosts
@@ -127,45 +121,35 @@
   tags: common
   ignore_errors: true
 
+- name: Check current swap status
+  command: swapon --show
+  register: swap_status
+  failed_when: false
+  changed_when: false
+
 - name: Turn off all swap spaces immediately
   command: swapoff -a
-  changed_when: false
+  when: swap_status.stdout | length > 0
+  register: swapoff_result
+  failed_when: false
 
 - name: Backup /etc/fstab file
   copy:
     src: /etc/fstab
-    dest: /etc/fstab.backup
+    dest: "/etc/fstab.backup.{{ ansible_date_time.epoch }}"
+    remote_src: yes
     owner: root
     group: root
     mode: '0644'
+  register: fstab_backup
 
-- name: Permanently disable swap by commenting swap line in /etc/fstab
-  lineinfile:
+- name: Disable swap in fstab
+  replace:
     path: /etc/fstab
     regexp: '^([^#].*\sswap\s.*)$'
-    line: '#\1'
-    backrefs: yes
-
-- name: Ensure no swap entries exist in /etc/fstab
-  lineinfile:
-    path: /etc/fstab
-    state: absent
-    regexp: '^\s*UUID=\S+\s+none\s+swap\s+sw\s+0\s+0\s*$'
-  
-
-- name: Ensure no swap label entries exist in /etc/fstab
-  lineinfile:
-    path: /etc/fstab
-    state: absent
-    regexp: '^\s*LABEL=\S+\s+none\s+swap\s+sw\s+0\s+0\s*$'
-
-- name: Disable firewalld (CentOS/RHEL)
-  service:
-    name: firewalld
-    state: stopped
-    enabled: no
-  when: ansible_os_family == "RedHat"
-  tags: common
+    replace: '#\1'
+    backup: yes
+  register: fstab_swap_disabled
 
 - name: Disable snapd (Ubuntu)
   service:
@@ -173,4 +157,6 @@
     state: stopped
     enabled: no
   when: ansible_os_family == "Debian"
+  ignore_errors: true
+  tags: common
   

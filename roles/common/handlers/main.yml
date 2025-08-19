@@ -5,8 +5,29 @@
     state: restarted
     enabled: true
 
-- name: Restart Chrony service
+- name: restart chrony
   systemd:
-    name: chronyd
+    name: "{{ 'chronyd' if ansible_os_family == 'RedHat' else 'chrony' }}"
     state: restarted
     enabled: true
+
+- name: restart containerd
+  systemd:
+    name: containerd
+    state: restarted
+    enabled: true
+
+- name: restart kubelet
+  systemd:
+    name: kubelet
+    state: restarted
+    enabled: true
+
+- name: reload systemctl daemon
+  systemd:
+    daemon_reload: yes
+
+- name: reboot system
+  reboot:
+    reboot_timeout: 600
+    test_command: uptime

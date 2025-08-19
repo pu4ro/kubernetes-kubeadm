@@ -1,10 +1,7 @@
-# Chrony NTP Client Configuration
-# This node synchronizes time with the local NTP server (master1)
+# Chrony External NTP Configuration
+# All nodes use external NTP servers directly
 
-# Use master1 as the primary NTP server
-server {{ hostvars[groups['masters'][0]]['ansible_host'] }} iburst
-
-# Fallback to external NTP servers if master1 is unavailable
+# External NTP servers
 {% for server in external_ntp_servers %}
 server {{ server }} iburst
 {% endfor %}
