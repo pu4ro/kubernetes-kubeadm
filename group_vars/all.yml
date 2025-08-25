@@ -21,10 +21,10 @@ set_timezone: Asia/Seoul
 
 # NTP/Chrony Configuration
 use_local_ntp: true                    # true: master1 as NTP server, false: use external NTP
-external_ntp_servers:                  # External NTP servers
-  - "pool.ntp.org"
-  - "time.google.com"
-  - "time.cloudflare.com"
+external_ntp_servers: {}             # External NTP servers
+  #  - "pool.ntp.org"
+  #  - "time.google.com"
+  #  - "time.cloudflare.com"
 cluster_network: "192.168.0.0/16"     # Network range allowed to access local NTP server
 
 # Cross-platform service and config paths
@@ -35,7 +35,10 @@ chrony_config_path: "{{ '/etc/chrony.conf' if ansible_os_family == 'RedHat' else
 network_plugin: "flannel"
 
 # Master Node Scheduling (allow pods on master for single-node setup)
-allow_master_scheduling: false
+allow_master_scheduling: true
+
+# Certificate Extension (extend certificates to 10 years)
+extend_k8s_certificates: true
 
 # Parallel Execution Control
 # Set how many hosts to run simultaneously during installation
@@ -67,7 +70,7 @@ parallel_execution:
 # Package Repository URLs (for offline installation)
 repo_url:
   centos: "http://192.168.1.10:8080/repo/"
-  ubuntu: "http://192.168.134.102/ubuntu_22.04.5"
+  ubuntu: "http://192.168.134.102/ubuntu_24.04.3"
 
 # Container Registry Settings (basic Docker configuration)
 insecure_registries: 

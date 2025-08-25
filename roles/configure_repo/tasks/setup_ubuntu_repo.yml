@@ -1,4 +1,11 @@
 ---
+- name: Backup Ubuntu 24.04 default sources (ubuntu.sources -> ubuntu.sources.bak)
+  command: mv /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.bak
+  args:
+    creates: /etc/apt/sources.list.d/ubuntu.sources.bak
+  when: ansible_distribution == "Ubuntu" and ansible_distribution_version == "24.04"
+  ignore_errors: true
+
 - name: Configure Ubuntu sources list
   copy:
     content: |

@@ -12,13 +12,14 @@ ubuntu_packages:
   - nfs-common
   - nfs-kernel-server
   - net-tools
-  - containerd.io
+  - containerd
   - chrony
   - curl
   - wget
   - k9s
-
-
+  - nerdctl
+  - buildkit
+  
 # RHEL/CentOS packages
 rhel_packages:
   - kubelet

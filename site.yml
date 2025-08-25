@@ -6,7 +6,7 @@
 - name: System Preparation
   hosts: all
   become: yes
-  serial: "{{ parallel_execution.system_preparation if parallel_execution.system_preparation > 0 else '100%' }}"
+  serial: "{{ (parallel_execution | default({})).system_preparation | default(1) }}"
   roles:
     - { role: common, tags: ['base', 'system'] }
     - { role: configure_sysctl, tags: ['base', 'system'] }
@@ -19,7 +19,7 @@
 - name: Kubernetes Cluster Installation
   hosts: all
   become: yes
-  serial: "{{ parallel_execution.kubernetes_installation if parallel_execution.kubernetes_installation > 0 else '100%' }}"
+  serial: "{{ (parallel_execution | default({})).kubernetes_installation | default(0) or '100%' }}"
   roles:
     - { role: install_kubernetes, tags: ['kubernetes', 'cluster'] }
 
@@ -36,3 +36,10 @@
   become: yes
   roles:
     - { role: remove_master_taint, tags: ['kubernetes', 'scheduling'], when: allow_master_scheduling | default(false) }
+
+# Phase 5: Certificate Extension (Optional)
+- name: Extend Kubernetes Certificates to 10 Years
+  hosts: masters
+  become: yes
+  roles:
+    - { role: extend_k8s_certs, tags: ['kubernetes', 'certificates', 'k8s-certs'], when: extend_k8s_certificates | default(false) }

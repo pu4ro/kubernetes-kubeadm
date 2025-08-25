@@ -1,0 +1,29 @@
+---
+# Certificate Extension Variables
+
+# Certificate validity in days (10 years = 3650 days)
+cert_validity_days: 3650
+
+# Certificate extension mode: 'master', 'check'
+cert_extend_mode: 'master'
+
+# Container runtime (docker or containerd)
+container_runtime: 'containerd'
+
+# Kubernetes paths
+kubernetes_config_path: /etc/kubernetes
+kubernetes_pki_path: /etc/kubernetes/pki
+
+# Certificate files to extend
+certificates_to_extend:
+  - apiserver
+  - apiserver-kubelet-client
+  - front-proxy-client
+
+# Kubeconfig files to update
+kubeconfigs_to_update:
+  - controller-manager
+  - scheduler
+  - admin
+  - kubelet
+  - super-admin  # Added in k8s v1.30+

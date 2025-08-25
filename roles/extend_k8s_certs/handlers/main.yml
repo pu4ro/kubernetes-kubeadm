@@ -1,0 +1,24 @@
+---
+- name: restart kubelet
+  systemd:
+    name: kubelet
+    state: restarted
+  become: yes
+
+- name: restart kubernetes components
+  shell: |
+    # Restart Kubernetes control plane components
+    case {{ container_runtime | default('containerd') }} in
+      "docker")
+        for component in apiserver controller-manager scheduler; do
+          docker ps | awk '/k8s_kube-'${component}'/{print$1}' | xargs -r -I '{}' docker restart {} >/dev/null 2>&1 || true
+        done
+        ;;
+      "containerd")
+        for component in apiserver controller-manager scheduler; do
+          crictl ps | awk '/kube-'${component}'-/{print $(NF-1)}' | xargs -r -I '{}' crictl stopp {} >/dev/null 2>&1 || true
+        done
+        ;;
+    esac
+  become: yes
+  when: inventory_hostname in groups['masters']

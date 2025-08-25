@@ -1,0 +1,79 @@
+---
+# Kubernetes Certificate Extension Role
+# Extends Kubernetes certificates to 10 years validity
+
+- name: Check if this is a master node
+  stat:
+    path: /etc/kubernetes/pki
+  register: k8s_pki_exists
+
+- name: Check current certificate expiration
+  shell: |
+    if [[ -f "/etc/kubernetes/pki/apiserver.crt" ]]; then
+      openssl x509 -text -noout -in /etc/kubernetes/pki/apiserver.crt | awk -F ": " '/Not After/{print$2}'
+    else
+      echo "Certificate not found"
+    fi
+  register: current_cert_expiration
+  when: k8s_pki_exists.stat.exists
+
+- name: Display current certificate expiration
+  debug:
+    msg: "Current API server certificate expires: {{ current_cert_expiration.stdout }}"
+  when: k8s_pki_exists.stat.exists and current_cert_expiration.stdout != "Certificate not found"
+
+- name: Create certificate extension script
+  template:
+    src: k8s_cert_extend.sh.j2
+    dest: /tmp/k8s_cert_extend.sh
+    mode: '0755'
+  when: k8s_pki_exists.stat.exists
+
+- name: Backup current kubernetes configuration
+  command: cp -rp /etc/kubernetes /etc/kubernetes.backup-{{ ansible_date_time.date }}
+  args:
+    creates: /etc/kubernetes.backup-{{ ansible_date_time.date }}
+  when: k8s_pki_exists.stat.exists
+
+- name: Extend kubernetes certificates to 10 years
+  shell: /tmp/k8s_cert_extend.sh {{ cert_extend_mode | default('master') }}
+  register: cert_extend_result
+  when: k8s_pki_exists.stat.exists
+  notify:
+    - restart kubelet
+    - restart kubernetes components
+
+- name: Display certificate extension results
+  debug:
+    var: cert_extend_result.stdout_lines
+  when: k8s_pki_exists.stat.exists
+
+- name: Verify new certificate expiration
+  shell: |
+    if [[ -f "/etc/kubernetes/pki/apiserver.crt" ]]; then
+      openssl x509 -text -noout -in /etc/kubernetes/pki/apiserver.crt | awk -F ": " '/Not After/{print$2}'
+    else
+      echo "Certificate not found"
+    fi
+  register: new_cert_expiration
+  when: k8s_pki_exists.stat.exists
+
+- name: Display new certificate expiration
+  debug:
+    msg: "New API server certificate expires: {{ new_cert_expiration.stdout }}"
+  when: k8s_pki_exists.stat.exists and new_cert_expiration.stdout != "Certificate not found"
+
+- name: Copy admin.conf to user home directory
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ ansible_env.HOME }}/.kube/config"
+    remote_src: yes
+    backup: yes
+    mode: '0600'
+  when: k8s_pki_exists.stat.exists and inventory_hostname in groups['masters']
+
+- name: Cleanup certificate extension script
+  file:
+    path: /tmp/k8s_cert_extend.sh
+    state: absent
+  when: k8s_pki_exists.stat.exists

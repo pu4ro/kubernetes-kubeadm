@@ -1,0 +1,309 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o pipefail
+
+# Color definitions
+NC='\033[0m'
+RED='\033[31m'
+GREEN='\033[32m'
+YELLOW='\033[33m'
+BLUE='\033[34m'
+
+# Set default CRI
+CRI="{{ container_runtime | default('containerd') }}"
+
+log::err() {
+  printf "[$(date +'%Y-%m-%dT%H:%M:%S.%2N%z')][${RED}ERROR${NC}] %b\n" "$@"
+}
+
+log::info() {
+  printf "[$(date +'%Y-%m-%dT%H:%M:%S.%2N%z')][INFO] %b\n" "$@"
+}
+
+log::warning() {
+  printf "[$(date +'%Y-%m-%dT%H:%M:%S.%2N%z')][${YELLOW}WARNING${NC}] \033[0m%b\n" "$@"
+}
+
+check_file() {
+  if [[ ! -r ${1} ]]; then
+    log::err "can not find ${1}"
+    exit 1
+  fi
+}
+
+# Get x509v3 subject alternative name from the old certificate
+cert::get_subject_alt_name() {
+  local cert=${1}.crt
+  local alt_name
+
+  check_file "${cert}"
+  alt_name=$(openssl x509 -text -noout -in "${cert}" | grep -A1 'Alternative' | tail -n1 | sed 's/[[:space:]]*Address//g')
+  printf "%s\n" "${alt_name}"
+}
+
+# Get subject from the old certificate
+cert::get_subj() {
+  local cert=${1}.crt
+  local subj
+
+  check_file "${cert}"
+  subj=$(openssl x509 -text -noout -in "${cert}" | grep "Subject:" | sed 's/Subject:/\//g;s/\,/\//;s/[[:space:]]//g')
+  printf "%s\n" "${subj}"
+}
+
+# Check certificate expiration
+cert::check_cert_expiration() {
+  local cert=${1}.crt
+  local cert_expires
+
+  cert_expires=$(openssl x509 -text -noout -in "${cert}" | awk -F ": " '/Not After/{print$2}')
+  printf "%s\n" "${cert_expires}"
+}
+
+# Check kubeconfig expiration
+cert::check_kubeconfig_expiration() {
+  local config=${1}.conf
+  local cert
+  local cert_expires
+
+  cert=$(grep "client-certificate-data" "${config}" | awk '{print$2}' | base64 -d)
+  cert_expires=$(openssl x509 -text -noout -in <(printf "%s" "${cert}") | awk -F ": " '/Not After/{print$2}')
+  printf "%s\n" "${cert_expires}"
+}
+
+# Generate certificate with client, server or peer type
+cert::gen_cert() {
+  local cert_name=${1}
+  local cert_type=${2}
+  local subj=${3}
+  local cert_days=${4}
+  local ca_name=${5}
+  local alt_name=${6}
+  local ca_cert=${ca_name}.crt
+  local ca_key=${ca_name}.key
+  local cert=${cert_name}.crt
+  local key=${cert_name}.key
+  local csr=${cert_name}.csr
+  local common_csr_conf='distinguished_name = dn\n[dn]\n[v3_ext]\nkeyUsage = critical, digitalSignature, keyEncipherment\n'
+
+  for file in "${ca_cert}" "${ca_key}" "${cert}" "${key}"; do
+    check_file "${file}"
+  done
+
+  case "${cert_type}" in
+  client)
+    csr_conf=$(printf "%bextendedKeyUsage = clientAuth\n" "${common_csr_conf}")
+    ;;
+  server)
+    csr_conf=$(printf "%bextendedKeyUsage = serverAuth\nsubjectAltName = %b\n" "${common_csr_conf}" "${alt_name}")
+    ;;
+  peer)
+    csr_conf=$(printf "%bextendedKeyUsage = serverAuth, clientAuth\nsubjectAltName = %b\n" "${common_csr_conf}" "${alt_name}")
+    ;;
+  *)
+    log::err "unknown, unsupported cert type: ${YELLOW}${cert_type}${NC}, supported type: client, server, peer"
+    exit 1
+    ;;
+  esac
+
+  # Generate CSR
+  openssl req -new -key "${key}" -subj "${subj}" -reqexts v3_ext \
+    -config <(printf "%b" "${csr_conf}") \
+    -out "${csr}" >/dev/null 2>&1
+  # Generate certificate
+  openssl x509 -in "${csr}" -req -CA "${ca_cert}" -CAkey "${ca_key}" -CAcreateserial -extensions v3_ext \
+    -extfile <(printf "%b" "${csr_conf}") \
+    -days "${cert_days}" -out "${cert}" >/dev/null 2>&1
+
+  rm -f "${csr}"
+}
+
+# Update kubeconfig
+cert::update_kubeconf() {
+  local cert_name=${1}
+  local kubeconf_file=${cert_name}.conf
+  local cert=${cert_name}.crt
+  local key=${cert_name}.key
+  local subj
+  local cert_base64
+
+  check_file "${kubeconf_file}"
+  # Get the key from the old kubeconf
+  grep "client-key-data" "${kubeconf_file}" | awk '{print$2}' | base64 -d >"${key}"
+  # Get the old certificate from the old kubeconf
+  grep "client-certificate-data" "${kubeconf_file}" | awk '{print$2}' | base64 -d >"${cert}"
+  # Get subject from the old certificate
+  subj=$(cert::get_subj "${cert_name}")
+  cert::gen_cert "${cert_name}" "client" "${subj}" "${CERT_DAYS}" "${CERT_CA}"
+  # Get certificate base64 code
+  cert_base64=$(base64 -w 0 "${cert}")
+
+  # Set certificate base64 code to kubeconf
+  sed -i 's/client-certificate-data:.*/client-certificate-data: '"${cert_base64}"'/g' "${kubeconf_file}"
+
+  rm -f "${cert}"
+  rm -f "${key}"
+}
+
+# Check master certificates expiration
+cert::check_master_certs_expiration() {
+  local certs
+  local kubeconfs
+  local cert
+  local conf
+
+  certs=(
+    "${CERT_CA}"
+    "${CERT_APISERVER}"
+    "${CERT_APISERVER_KUBELET_CLIENT}"
+    "${FRONT_PROXY_CA}"
+    "${FRONT_PROXY_CLIENT}"
+  )
+
+  # Add support for super_admin.conf, which was added after k8s v1.30
+  if [ -f "${CONF_SUPER_ADMIN}.conf" ]; then
+    kubeconfs=(
+      "${CONF_CONTROLLER_MANAGER}"
+      "${CONF_SCHEDULER}"
+      "${CONF_ADMIN}"
+      "${CONF_SUPER_ADMIN}"
+    )
+  else
+    kubeconfs=(
+      "${CONF_CONTROLLER_MANAGER}"
+      "${CONF_SCHEDULER}"
+      "${CONF_ADMIN}"
+    )
+  fi
+
+  printf "%-50s%-30s\n" "CERTIFICATE" "EXPIRES"
+
+  for conf in "${kubeconfs[@]}"; do
+    if [[ -f ${conf}.conf ]]; then
+      printf "%-50s%-30s\n" "${conf}.conf" "$(cert::check_kubeconfig_expiration "${conf}")"
+    fi
+  done
+
+  for cert in "${certs[@]}"; do
+    if [[ -f ${cert}.crt ]]; then
+      printf "%-50s%-30s\n" "${cert}.crt" "$(cert::check_cert_expiration "${cert}")"
+    fi
+  done
+}
+
+# Update master certificates
+cert::update_master_cert() {
+  local subj
+  local subject_alt_name
+  local conf
+
+  log::info "${GREEN}Updating master certificates...${NC}"
+
+  # Generate apiserver server certificate
+  subj=$(cert::get_subj "${CERT_APISERVER}")
+  subject_alt_name=$(cert::get_subject_alt_name "${CERT_APISERVER}")
+  cert::gen_cert "${CERT_APISERVER}" "server" "${subj}" "${CERT_DAYS}" "${CERT_CA}" "${subject_alt_name}"
+  log::info "${GREEN}Updated ${BLUE}${CERT_APISERVER}.crt${NC}"
+
+  # Generate apiserver-kubelet-client certificate
+  subj=$(cert::get_subj "${CERT_APISERVER_KUBELET_CLIENT}")
+  cert::gen_cert "${CERT_APISERVER_KUBELET_CLIENT}" "client" "${subj}" "${CERT_DAYS}" "${CERT_CA}"
+  log::info "${GREEN}Updated ${BLUE}${CERT_APISERVER_KUBELET_CLIENT}.crt${NC}"
+
+  # Generate kubeconf for controller-manager, scheduler, admin, and kubelet
+  if [ -f "${CONF_SUPER_ADMIN}.conf" ]; then
+    conf_list="${CONF_CONTROLLER_MANAGER} ${CONF_SCHEDULER} ${CONF_ADMIN} ${CONF_KUBELET} ${CONF_SUPER_ADMIN}"
+  else
+    conf_list="${CONF_CONTROLLER_MANAGER} ${CONF_SCHEDULER} ${CONF_ADMIN} ${CONF_KUBELET}"
+  fi
+
+  for conf in ${conf_list}; do
+    if [[ ${conf##*/} == "kubelet" ]]; then
+      # Check if kubelet certificate auto-update is enabled
+      set +e
+      grep kubelet-client-current.pem /etc/kubernetes/kubelet.conf >/dev/null 2>&1
+      kubelet_cert_auto_update=$?
+      set -e
+      if [[ "$kubelet_cert_auto_update" == "0" ]]; then
+        log::info "Does not need to update kubelet.conf (auto-update enabled)"
+        continue
+      fi
+    fi
+
+    if [[ -f ${conf}.conf ]]; then
+      # Update kubeconf
+      cert::update_kubeconf "${conf}"
+      log::info "${GREEN}Updated ${BLUE}${conf}.conf${NC}"
+
+      # Copy admin.conf to ${HOME}/.kube/config
+      if [[ ${conf##*/} == "admin" ]]; then
+        mkdir -p "${HOME}/.kube"
+        local config=${HOME}/.kube/config
+        if [[ -f ${config} ]]; then
+          cp -fp "${config}" "${config}.bak-$(date +%Y%m%d-%H%M%S)"
+        fi
+        cp -fp "${conf}.conf" "${HOME}/.kube/config"
+        log::info "Copied admin.conf to ${HOME}/.kube/config"
+      fi
+    fi
+  done
+
+  # Generate front-proxy-client certificate
+  subj=$(cert::get_subj "${FRONT_PROXY_CLIENT}")
+  cert::gen_cert "${FRONT_PROXY_CLIENT}" "client" "${subj}" "${CERT_DAYS}" "${FRONT_PROXY_CA}"
+  log::info "${GREEN}Updated ${BLUE}${FRONT_PROXY_CLIENT}.crt${NC}"
+
+  log::info "${GREEN}Master certificates update completed${NC}"
+}
+
+main() {
+  local node_type=${1:-master}
+
+  # Set certificate validity to 10 years (3650 days)
+  CERT_DAYS={{ cert_validity_days | default(3650) }}
+
+  KUBE_PATH=/etc/kubernetes
+  PKI_PATH=${KUBE_PATH}/pki
+
+  # Master certificates path
+  CERT_CA=${PKI_PATH}/ca
+  CERT_APISERVER=${PKI_PATH}/apiserver
+  CERT_APISERVER_KUBELET_CLIENT=${PKI_PATH}/apiserver-kubelet-client
+  CONF_CONTROLLER_MANAGER=${KUBE_PATH}/controller-manager
+  CONF_SCHEDULER=${KUBE_PATH}/scheduler
+  CONF_ADMIN=${KUBE_PATH}/admin
+  CONF_SUPER_ADMIN=${KUBE_PATH}/super-admin
+  CONF_KUBELET=${KUBE_PATH}/kubelet
+  # Front-proxy
+  FRONT_PROXY_CA=${PKI_PATH}/front-proxy-ca
+  FRONT_PROXY_CLIENT=${PKI_PATH}/front-proxy-client
+
+  case ${node_type} in
+  master|check)
+    if [[ ${node_type} == "check" ]]; then
+      # Check certificates expiration only
+      cert::check_master_certs_expiration
+    else
+      # Check certificates expiration before update
+      log::info "${BLUE}Current certificate expiration:${NC}"
+      cert::check_master_certs_expiration
+      
+      # Update master certificates and kubeconf
+      cert::update_master_cert
+      
+      # Check certificates expiration after update
+      log::info "${BLUE}New certificate expiration:${NC}"
+      cert::check_master_certs_expiration
+      
+      log::info "${GREEN}Certificate extension completed successfully!${NC}"
+    fi
+    ;;
+  *)
+    log::err "Unknown cert type: ${node_type}, supported type: \"master\", \"check\""
+    exit 1
+    ;;
+  esac
+}
+
+main "$@"
