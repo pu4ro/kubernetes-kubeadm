@@ -44,8 +44,8 @@ extend_k8s_certificates: true
 # Set how many hosts to run simultaneously during installation
 # 1 = sequential (one at a time), 0 = all hosts in parallel
 parallel_execution:
-  system_preparation: 1     # How many hosts for system prep phase (packages, containerd)
-  package_installation: 1   # How many hosts for apt/yum operations simultaneously
+  system_preparation: 0     # How many hosts for system prep phase (packages, containerd)
+  package_installation: 0   # How many hosts for apt/yum operations simultaneously
   kubernetes_installation: 0  # How many hosts for kubernetes installation (0 = all parallel)
 
 # Example configurations:
@@ -78,4 +78,10 @@ insecure_registries:
   # - "harbor.yourdomain.com"     # Harbor registry example
   # - "registry.local"            # Custom registry example
 docker_log_max_size: "100m"
+
+# Kubernetes pause container image
+pause_image: "cr.makina.rocks/external-hub/kubernetes/pause:3.9"
+
+# NVIDIA runtime support for containerd
+nvidia_runtime: false
 

@@ -1,0 +1,21 @@
+---
+# Kubernetes Cluster Reset Playbook
+# Usage: ansible-playbook -i inventory.ini reset_cluster.yml
+
+- name: Reset Kubernetes Cluster
+  hosts: all
+  become: yes
+  serial: 1  # Reset one node at a time for safety
+  roles:
+    - { role: reset_k8s_cluster, tags: ['reset', 'cleanup'] }
+
+# Optional: Reboot nodes after reset
+- name: Reboot nodes after reset (optional)
+  hosts: all
+  become: yes
+  tasks:
+    - name: Reboot system
+      reboot:
+        reboot_timeout: 600
+      when: reboot_after_reset | default(false)
+  tags: ['reboot']

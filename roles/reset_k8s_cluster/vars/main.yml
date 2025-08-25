@@ -1,0 +1,47 @@
+---
+# Kubernetes Cluster Reset Variables
+
+# Container runtime (docker or containerd)
+container_runtime: "containerd"
+
+# Confirmation settings
+require_reset_confirmation: false  # Set to false for automated reset
+
+# Cleanup options
+remove_container_images: false    # Remove all container images
+remove_k8s_packages: false       # Remove kubelet, kubeadm, kubectl packages
+remove_container_runtime: false  # Remove containerd/docker
+reset_iptables: false            # Reset all iptables rules (dangerous!)
+
+# Swap settings
+disable_swap: true               # Keep swap disabled
+enable_swap_after_reset: false   # Re-enable swap after reset
+
+# Directories to clean up
+cleanup_directories:
+  - /var/lib/kubelet
+  - /var/lib/kubeadm
+  - /var/lib/kubernetes
+  - /etc/cni/net.d
+  - /opt/cni/bin
+  - /var/lib/calico
+  - /var/lib/flannel
+  - /var/lib/etcd
+  - /var/log/pods
+  - /var/log/containers
+  - /var/cache/kubernetes
+
+# Network interfaces to clean up
+network_interfaces_patterns:
+  - flannel.1
+  - cni-podman0
+  - docker0
+  - cali*
+  - veth*
+
+# Service files to remove
+service_files:
+  - /etc/systemd/system/kubelet.service
+  - /etc/systemd/system/kubelet.service.d
+  - /usr/lib/systemd/system/kubelet.service
+  - /lib/systemd/system/kubelet.service

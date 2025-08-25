@@ -224,8 +224,38 @@ ansible-playbook -i inventory.ini site.yml
 | `packages` | Package installation |
 | `container` | Container runtime |
 | `kubernetes` | K8s cluster |
+| `cluster` | K8s core installation |
 | `networking` | CNI plugin |
 | `scheduling` | Master node scheduling |
+| `certificates` | Certificate extension |
+
+### 🎯 Kubernetes-Only Installation
+
+If you want to install only Kubernetes components (skip system preparation):
+
+```bash
+# Install only Kubernetes core + networking
+ansible-playbook -i inventory.ini site.yml --tags "kubernetes,networking"
+
+# Install only Kubernetes cluster (without networking)
+ansible-playbook -i inventory.ini site.yml --tags cluster
+
+# Install networking only (if cluster already exists)
+ansible-playbook -i inventory.ini site.yml --tags networking
+
+# Extend certificates to 10 years
+ansible-playbook -i inventory.ini site.yml --tags certificates
+```
+
+### 🔄 Quick Reinstall After Reset
+
+```bash
+# Reset cluster completely
+ansible-playbook -i inventory.ini reset_cluster.yml
+
+# Reinstall only Kubernetes (fast)
+ansible-playbook -i inventory.ini site.yml --tags "kubernetes,networking"
+```
 
 ## 🔧 Post-Installation
 

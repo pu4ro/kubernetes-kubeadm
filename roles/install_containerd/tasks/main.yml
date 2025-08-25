@@ -40,24 +40,25 @@
     state: directory
     mode: '0755'
 
-- name: Generate containerd default configuration
-  command: containerd config default
-  register: containerd_config
-  changed_when: false
-
-- name: Write containerd configuration
-  copy:
-    content: "{{ containerd_config.stdout }}"
+- name: Write containerd configuration (NVIDIA support)
+  template:
+    src: containerd_nvidia.j2
     dest: /etc/containerd/config.toml
     backup: yes
+    mode: '0644'
+  when: nvidia_runtime | default(false)
   notify: restart containerd
 
-- name: Enable systemd cgroup in containerd
-  replace:
-    path: /etc/containerd/config.toml
-    regexp: 'SystemdCgroup = false'
-    replace: 'SystemdCgroup = true'
+- name: Write containerd configuration (Standard)
+  template:
+    src: containerd_config.toml.j2
+    dest: /etc/containerd/config.toml
+    backup: yes
+    mode: '0644'
+  when: not (nvidia_runtime | default(false))
   notify: restart containerd
+
+# SystemdCgroup is already set to true in templates
 
 - name: Configure insecure registries in containerd
   blockinfile:

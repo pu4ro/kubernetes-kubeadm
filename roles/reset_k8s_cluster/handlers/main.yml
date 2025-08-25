@@ -1,0 +1,22 @@
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: restart network
+  service:
+    name: networking
+    state: restarted
+  failed_when: false
+
+- name: restart containerd
+  systemd:
+    name: containerd
+    state: restarted
+  when: container_runtime == "containerd"
+
+- name: restart docker
+  systemd:
+    name: docker
+    state: restarted
+  when: container_runtime == "docker"

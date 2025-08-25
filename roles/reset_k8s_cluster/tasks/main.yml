@@ -1,0 +1,263 @@
+---
+# Kubernetes Cluster Reset Role
+# Completely removes Kubernetes cluster and related files
+
+- name: Check if kubeadm is installed
+  command: which kubeadm
+  register: kubeadm_installed
+  failed_when: false
+  changed_when: false
+
+- name: Display reset warning
+  debug:
+    msg: |
+      WARNING: This will completely reset the Kubernetes cluster!
+      - All pods and services will be stopped
+      - All Kubernetes configuration will be removed
+      - Container images will be removed (if specified)
+      - Network interfaces will be cleaned up
+
+- name: Confirm cluster reset
+  pause:
+    prompt: "Are you sure you want to reset the Kubernetes cluster? (yes/no)"
+  register: reset_confirmation
+  when: 
+    - kubeadm_installed.rc == 0
+    - require_reset_confirmation | default(true)
+
+- name: Abort if not confirmed
+  fail:
+    msg: "Cluster reset aborted by user"
+  when: 
+    - kubeadm_installed.rc == 0
+    - require_reset_confirmation | default(true)
+    - reset_confirmation.user_input != "yes"
+
+- name: Stop kubelet service
+  systemd:
+    name: kubelet
+    state: stopped
+    enabled: no
+  failed_when: false
+
+- name: Stop containerd service
+  systemd:
+    name: containerd
+    state: stopped
+  failed_when: false
+  when: container_runtime == "containerd"
+
+- name: Stop docker service
+  systemd:
+    name: docker
+    state: stopped
+  failed_when: false
+  when: container_runtime == "docker"
+
+- name: Run kubeadm reset
+  command: kubeadm reset --force
+  register: kubeadm_reset_result
+  when: kubeadm_installed.rc == 0
+  failed_when: false
+
+- name: Display kubeadm reset output
+  debug:
+    var: kubeadm_reset_result.stdout_lines
+  when: kubeadm_reset_result is defined
+
+- name: Remove Kubernetes configuration directory
+  file:
+    path: /etc/kubernetes
+    state: absent
+
+- name: Remove kubelet configuration and data directories
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/cni/net.d
+
+- name: Remove etcd data directory
+  file:
+    path: /var/lib/etcd
+    state: absent
+  when: inventory_hostname in groups['masters']
+
+- name: Remove user kube config
+  file:
+    path: "{{ ansible_env.HOME }}/.kube"
+    state: absent
+
+- name: Remove root kube config
+  file:
+    path: /root/.kube
+    state: absent
+
+- name: Clean up container images (containerd)
+  shell: |
+    crictl rmi --prune || true
+    ctr --namespace k8s.io images prune || true
+    ctr --namespace k8s.io containers rm $(ctr --namespace k8s.io containers list -q) 2>/dev/null || true
+  when: 
+    - container_runtime == "containerd"
+    - remove_container_images | default(false)
+  failed_when: false
+
+- name: Clean up container images (docker)
+  shell: |
+    docker system prune -af || true
+    docker volume prune -f || true
+  when: 
+    - container_runtime == "docker"
+    - remove_container_images | default(false)
+  failed_when: false
+
+- name: Remove CNI network interfaces
+  shell: |
+    # Remove flannel interfaces
+    ip link delete flannel.1 2>/dev/null || true
+    ip link delete cni-podman0 2>/dev/null || true
+    ip link delete docker0 2>/dev/null || true
+    
+    # Remove calico interfaces
+    for iface in $(ip link show | grep cali | cut -d: -f2 | tr -d ' '); do
+      ip link delete $iface 2>/dev/null || true
+    done
+    
+    # Remove other CNI interfaces
+    for iface in $(ip link show | grep veth | cut -d: -f2 | tr -d ' '); do
+      ip link delete $iface 2>/dev/null || true
+    done
+  failed_when: false
+
+- name: Remove iptables rules (if specified)
+  shell: |
+    # Flush all iptables rules
+    iptables -F
+    iptables -t nat -F
+    iptables -t mangle -F
+    iptables -t raw -F
+    
+    # Delete all custom chains
+    iptables -X
+    iptables -t nat -X
+    iptables -t mangle -X
+    iptables -t raw -X
+    
+    # Reset default policies
+    iptables -P INPUT ACCEPT
+    iptables -P FORWARD ACCEPT
+    iptables -P OUTPUT ACCEPT
+    
+    # Remove KUBE-* chains specifically
+    iptables-save | grep -E "KUBE-|CALICO-|cali-" | sed 's/-A/-D/' | while read line; do
+      iptables $line 2>/dev/null || true
+    done
+  when: reset_iptables | default(false)
+  failed_when: false
+
+- name: Remove systemd service files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/kubelet.service
+    - /etc/systemd/system/kubelet.service.d
+    - /usr/lib/systemd/system/kubelet.service
+    - /lib/systemd/system/kubelet.service
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+- name: Remove Kubernetes packages (if specified)
+  package:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+  when: remove_k8s_packages | default(false)
+  failed_when: false
+
+- name: Remove containerd (if specified)
+  package:
+    name: containerd.io
+    state: absent
+  when: 
+    - container_runtime == "containerd"
+    - remove_container_runtime | default(false)
+  failed_when: false
+
+- name: Remove docker (if specified)  
+  package:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - docker-ce
+    - docker-ce-cli
+    - docker-compose-plugin
+  when: 
+    - container_runtime == "docker"
+    - remove_container_runtime | default(false)
+  failed_when: false
+
+- name: Clean up remaining files and directories
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /var/log/pods
+    - /var/log/containers
+    - /var/cache/kubernetes
+    - /tmp/kubeadm-*
+    - /etc/systemd/system/multi-user.target.wants/kubelet.service
+    - /etc/kubernetes/manifests
+
+- name: Remove swap configuration (if it was disabled)
+  replace:
+    path: /etc/fstab
+    regexp: '^([^#].*swap.*)$'
+    replace: '# \1'
+  when: disable_swap | default(true)
+
+- name: Re-enable swap
+  command: swapon -a
+  failed_when: false
+  when: enable_swap_after_reset | default(false)
+
+- name: Restart containerd service
+  systemd:
+    name: containerd
+    state: started
+    enabled: yes
+  when: 
+    - container_runtime == "containerd"
+    - not (remove_container_runtime | default(false))
+
+- name: Restart docker service
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  when: 
+    - container_runtime == "docker"
+    - not (remove_container_runtime | default(false))
+
+- name: Display reset completion message
+  debug:
+    msg: |
+      Kubernetes cluster reset completed successfully!
+      
+      What was removed:
+      - Kubernetes configuration (/etc/kubernetes)
+      - kubelet data (/var/lib/kubelet)
+      - etcd data (/var/lib/etcd) [masters only]
+      - CNI configuration and data
+      - Container images (if specified)
+      - User kube configs
+      
+      Next steps:
+      - Reboot the system (recommended)
+      - Re-run the installation playbook to create a new cluster

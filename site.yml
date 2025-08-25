@@ -2,11 +2,12 @@
 # Kubernetes Cluster Basic Installation Playbook
 # Usage: ansible-playbook -i inventory.ini site.yml
 
-# Phase 1: System Preparation
+# Phase 1: System Preparation  
 - name: System Preparation
   hosts: all
   become: yes
-  serial: "{{ (parallel_execution | default({})).system_preparation | default(1) }}"
+  serial: "100%"
+  strategy: "{{ 'free' if (parallel_execution | default({})).system_preparation | default(1) == 0 else 'linear' }}"
   roles:
     - { role: common, tags: ['base', 'system'] }
     - { role: configure_sysctl, tags: ['base', 'system'] }
@@ -19,7 +20,8 @@
 - name: Kubernetes Cluster Installation
   hosts: all
   become: yes
-  serial: "{{ (parallel_execution | default({})).kubernetes_installation | default(0) or '100%' }}"
+  serial: "100%"
+  strategy: "{{ 'free' if (parallel_execution | default({})).kubernetes_installation | default(1) == 0 else 'linear' }}"
   roles:
     - { role: install_kubernetes, tags: ['kubernetes', 'cluster'] }
 

@@ -11,7 +11,7 @@
   retries: 5
   delay: 30
   until: apt_cache_result is succeeded
-  throttle: "{{ parallel_execution.package_installation }}"
+  throttle: "{{ 999 if (parallel_execution | default({})).package_installation | default(1) == 0 else (parallel_execution | default({})).package_installation | default(1) }}"
 
 - name: Install packages on Debian/Ubuntu
   apt:
@@ -22,7 +22,7 @@
   retries: 5
   delay: 30
   until: apt_install_result is succeeded
-  throttle: "{{ parallel_execution.package_installation }}"
+  throttle: "{{ 999 if (parallel_execution | default({})).package_installation | default(1) == 0 else (parallel_execution | default({})).package_installation | default(1) }}"
 
 - name: Install packages on RHEL/CentOS
   package:
