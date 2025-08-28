@@ -1,0 +1,12 @@
+---
+# Harbor configuration extracted from docker_registries
+# This will be automatically set based on harbor domains in docker_registries
+harbor_domain: ""
+harbor_protocol: "https"
+harbor_admin_user: ""
+harbor_admin_password: ""
+
+# Registry hosts mapping (domain -> IP)
+registry_hosts: {}
+#  harbor.runway.test: "192.168.1.100"
+#  cr.makina.rocks: "192.168.1.101"

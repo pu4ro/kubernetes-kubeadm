@@ -85,3 +85,41 @@ pause_image: "cr.makina.rocks/external-hub/kubernetes/pause:3.9"
 # NVIDIA runtime support for containerd
 nvidia_runtime: false
 
+# Docker Registry Credentials Configuration
+# Set docker_login_required to true to enable registry authentication
+# Supports multiple registries with different protocols (http/https)
+# 
+# Usage with tags:
+#   ansible-playbook site.yml --tags docker-credentials        # Full setup
+#   ansible-playbook site.yml --tags nerdctl-login            # Login only
+#   ansible-playbook site.yml --tags containerd-config        # Config only
+#   ansible-playbook site.yml --tags restart-kubelet          # Restart only
+#
+docker_login_required: false
+docker_registries:
+  # Example configuration for multiple registries:
+  - registry: "cr.makina.rocks"
+    protocol: "https"  # https (default) or http
+    username: "mrx.dev"
+    password: "GMflzHdAeR3KhGgXoecXR3lTKO0lSX5O"
+  - registry: "harbor.runway.test"
+    protocol: "http"   # for insecure registries
+    username: "admin" 
+    password: "Harbor12345"
+  # - registry: "gcr.io"
+  #   protocol: "https"
+  #   username: "_json_key"
+  #   password: "{{ gcp_service_account_key }}"
+
+# Registry Host Mapping (for /etc/hosts configuration)
+# Map registry domains to their IP addresses
+# This will be added to /etc/hosts along with inventory host information
+# 
+# Usage with tags:
+#   ansible-playbook site.yml --tags hosts-config    # Update /etc/hosts only
+#   ansible-playbook site.yml --tags common          # Full common setup
+#
+registry_hosts:
+  "harbor.runway.test": "192.168.135.28"
+  # Add more registry domains and their IPs as needed
+

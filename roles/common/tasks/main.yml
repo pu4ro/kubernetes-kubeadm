@@ -40,7 +40,9 @@
     owner: root
     group: root
     mode: '0644'
-  tags: common
+  tags: 
+    - common
+    - hosts-config
 
 
 - name: Ensure the modules-load.d directory exists

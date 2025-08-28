@@ -1,0 +1,78 @@
+---
+- name: Extract Harbor credentials from docker_registries
+  set_fact:
+    harbor_registry: "{{ docker_registries | selectattr('registry', 'match', '.*harbor.*') | first }}"
+  when: docker_registries is defined and (docker_registries | selectattr('registry', 'match', '.*harbor.*') | list | length > 0)
+  tags:
+    - harbor-setup
+
+- name: Set Harbor connection details
+  set_fact:
+    harbor_domain: "{{ harbor_registry.registry }}"
+    harbor_protocol: "{{ harbor_registry.protocol | default('https') }}"
+    harbor_admin_user: "{{ harbor_registry.username }}"
+    harbor_admin_password: "{{ harbor_registry.password }}"
+  when: harbor_registry is defined
+  tags:
+    - harbor-setup
+
+
+- name: Check Harbor API availability
+  uri:
+    url: "{{ harbor_protocol }}://{{ harbor_domain }}/api/v2.0/projects"
+    method: GET
+    user: "{{ harbor_admin_user }}"
+    password: "{{ harbor_admin_password }}"
+    force_basic_auth: yes
+    validate_certs: "{{ harbor_protocol == 'https' }}"
+    status_code: [200, 401]
+  register: harbor_check
+  tags:
+    - harbor-setup
+    - harbor-api
+
+- name: Create makina-runway project in Harbor
+  uri:
+    url: "{{ harbor_protocol }}://{{ harbor_domain }}/api/v2.0/projects"
+    method: POST
+    user: "{{ harbor_admin_user }}"
+    password: "{{ harbor_admin_password }}"
+    force_basic_auth: yes
+    validate_certs: "{{ harbor_protocol == 'https' }}"
+    body_format: json
+    body:
+      project_name: "makina-runway"
+      public: false
+      storage_limit: -1
+    status_code: [201, 409]  # 409 if project already exists
+  register: project_result
+  tags:
+    - harbor-setup
+    - harbor-api
+
+- name: Create external-hub project in Harbor
+  uri:
+    url: "{{ harbor_protocol }}://{{ harbor_domain }}/api/v2.0/projects"
+    method: POST
+    user: "{{ harbor_admin_user }}"
+    password: "{{ harbor_admin_password }}"
+    force_basic_auth: yes
+    validate_certs: "{{ harbor_protocol == 'https' }}"
+    body_format: json
+    body:
+      project_name: "external-hub"
+      public: false
+      storage_limit: -1
+    status_code: [201, 409]  # 409 if project already exists
+  register: external_hub_result
+  tags:
+    - harbor-setup
+    - harbor-api
+
+- name: Display project creation results
+  debug:
+    msg: |
+      makina-runway project: {{ 'created' if project_result.status == 201 else 'already exists' }}
+      external-hub project: {{ 'created' if external_hub_result.status == 201 else 'already exists' }}
+  tags:
+    - harbor-setup

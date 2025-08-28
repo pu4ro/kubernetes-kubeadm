@@ -1,0 +1,16 @@
+---
+# Docker registry login configuration
+# Set docker_registries to configure multiple registry accounts
+# Example:
+# docker_registries:
+#   - registry: "docker.io"
+#     username: "your-username"
+#     password: "your-password"
+#   - registry: "your-private-registry.com"
+#     username: "private-username"
+#     password: "private-password"
+
+docker_registries: []
+
+# Set to true to enable docker login and kubelet restart
+docker_login_required: false

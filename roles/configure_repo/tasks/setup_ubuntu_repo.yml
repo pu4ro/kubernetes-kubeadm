@@ -15,3 +15,39 @@
 - name: Update and upgrade packages
   apt:
     update_cache: yes
+
+- name: Install linux-modules-extra for Ubuntu 24.04
+  apt:
+    name: "linux-modules-extra-{{ ansible_kernel }}"
+    state: present
+    update_cache: yes
+  when: ansible_distribution == "Ubuntu" and ansible_distribution_version == "24.04"
+
+- name: Create persistent module configuration for storage modules
+  copy:
+    dest: /etc/modules-load.d/storage.conf
+    content: |
+      # Storage modules for Kubernetes
+      rbd
+      ceph
+    owner: root
+    group: root
+    mode: '0644'
+  when: ansible_distribution == "Ubuntu" and ansible_distribution_version == "24.04"
+  tags:
+    - modules
+    - storage
+
+- name: Load rbd module for Ubuntu 24.04
+  modprobe:
+    name: rbd
+    state: present
+  when: ansible_distribution == "Ubuntu" and ansible_distribution_version == "24.04"
+  ignore_errors: true
+
+- name: Load ceph module for Ubuntu 24.04
+  modprobe:
+    name: ceph
+    state: present
+  when: ansible_distribution == "Ubuntu" and ansible_distribution_version == "24.04"
+  ignore_errors: true

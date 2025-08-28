@@ -1,0 +1,106 @@
+---
+- name: Ensure /var/lib/kubelet directory exists
+  file:
+    path: /var/lib/kubelet
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - docker-credentials
+
+- name: Restore containerd configuration if corrupted
+  template:
+    src: "{{ playbook_dir }}/roles/install_containerd/templates/containerd_config.toml.j2"
+    dest: /etc/containerd/config.toml
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  when: docker_registries is defined
+  tags:
+    - docker-credentials
+    - containerd-restore
+
+- name: Configure containerd registry authentication
+  blockinfile:
+    path: /etc/containerd/config.toml
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - Registry Auth"
+    block: |
+      {% for registry in docker_registries %}
+            [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry.registry }}".auth]
+              username = "{{ registry.username }}"
+              password = "{{ registry.password }}"
+      {% if registry.protocol is defined and registry.protocol == 'http' %}
+            [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry.registry }}".tls]
+              insecure_skip_verify = true
+      {% endif %}
+      {% endfor %}
+
+      {% for registry in docker_registries %}
+      {% if registry.protocol is defined and registry.protocol == 'http' %}
+            [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry.registry }}"]
+              endpoint = ["http://{{ registry.registry }}"]
+      {% endif %}
+      {% endfor %}
+    insertafter: '\[plugins\."io\.containerd\.grpc\.v1\.cri"\.registry\.mirrors\]'
+  when: docker_registries is defined
+  notify: restart containerd
+  tags:
+    - docker-credentials
+    - containerd-config
+
+- name: Restart containerd service
+  systemd:
+    name: containerd
+    state: restarted
+    daemon_reload: yes
+  when: docker_registries is defined
+  tags:
+    - docker-credentials
+    - restart-containerd
+
+- name: Perform nerdctl login for HTTPS registries
+  shell: |
+    echo "{{ item.password }}" | nerdctl login {{ item.registry }} --username "{{ item.username }}" --password-stdin
+  loop: "{{ docker_registries }}"
+  when: 
+    - docker_registries is defined
+    - item.protocol | default('https') == 'https'
+  no_log: true
+  tags:
+    - docker-credentials
+    - nerdctl-login
+
+- name: Perform nerdctl login for HTTP registries (insecure)
+  shell: |
+    nerdctl login -u "{{ item.username }}" -p "{{ item.password }}" {{ item.registry }} --insecure-registry
+  loop: "{{ docker_registries }}"
+  when: 
+    - docker_registries is defined
+    - item.protocol | default('https') == 'http'
+  no_log: true
+  ignore_errors: true
+  tags:
+    - docker-credentials
+    - nerdctl-login
+
+- name: Copy nerdctl config.json to kubelet directory
+  copy:
+    src: ~/.docker/config.json
+    dest: /var/lib/kubelet/config.json
+    owner: root
+    group: root
+    mode: '0600'
+    remote_src: yes
+  tags:
+    - docker-credentials
+
+- name: Restart kubelet service
+  systemd:
+    name: kubelet
+    state: restarted
+    daemon_reload: yes
+  tags:
+    - docker-credentials
+    - restart-kubelet

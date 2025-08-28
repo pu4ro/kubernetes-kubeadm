@@ -12,3 +12,10 @@ ff02::2     ip6-allrouters
 {% for host in groups['workers'] %}
 {{ hostvars[host]['ansible_host'] }} {{ host }}
 {% endfor %}
+
+# Registry hosts
+{% if registry_hosts is defined %}
+{% for domain, ip in registry_hosts.items() %}
+{{ ip }} {{ domain }}
+{% endfor %}
+{% endif %}
