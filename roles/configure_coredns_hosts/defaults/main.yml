@@ -1,0 +1,18 @@
+---
+# CoreDNS Hosts Configuration Role Defaults
+
+# Enable/disable CoreDNS hosts configuration
+configure_coredns_hosts: false
+
+# CoreDNS ConfigMap name and namespace
+coredns_configmap_name: coredns
+coredns_namespace: kube-system
+
+# Timeout for kubectl operations
+kubectl_timeout: 60s
+
+# Custom hosts to add to CoreDNS (in addition to registry_hosts from group_vars)
+# Format: hostname: ip_address
+custom_coredns_hosts: {}
+#   example.local: "192.168.1.100"
+#   test.domain.com: "10.0.0.1"

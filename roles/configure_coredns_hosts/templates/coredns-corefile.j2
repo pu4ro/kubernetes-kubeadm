@@ -1,0 +1,30 @@
+.:53 {
+    errors
+    health {
+       lameduck 5s
+    }
+    ready
+    kubernetes {{ dns_domain | default('cluster.local') }} in-addr.arpa ip6.arpa {
+       pods insecure
+       fallthrough in-addr.arpa ip6.arpa
+       ttl 30
+    }
+{% if all_hosts is defined and all_hosts | length > 0 %}
+    hosts {
+{% for hostname, ip in all_hosts.items() %}
+        {{ ip }} {{ hostname }}
+{% endfor %}
+        fallthrough
+    }
+{% else %}
+    # No hosts configured - all_hosts is empty or undefined
+{% endif %}
+    prometheus :9153
+    forward . /etc/resolv.conf {
+       max_concurrent 1000
+    }
+    cache 30
+    loop
+    reload
+    loadbalance
+}

@@ -123,3 +123,7 @@ registry_hosts:
   "harbor.runway.test": "192.168.135.28"
   # Add more registry domains and their IPs as needed
 
+# CoreDNS Hosts Configuration (add registry hosts to CoreDNS)
+configure_coredns_hosts: false
+
+# ansible-playbook -i inventory.ini site.yml --tags coredns-hosts -e 

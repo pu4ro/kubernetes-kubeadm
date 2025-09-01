@@ -1,0 +1,130 @@
+---
+# CoreDNS Hosts Configuration Tasks
+
+- name: Check if CoreDNS hosts configuration is enabled
+  debug:
+    msg: "CoreDNS hosts configuration is {{ 'enabled' if configure_coredns_hosts else 'disabled' }}"
+
+- block:
+    - name: Check if kubectl is available
+      command: kubectl version --client --output=yaml
+      register: kubectl_check
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if kubectl is not available
+      fail:
+        msg: "kubectl is not available. Please ensure Kubernetes is properly installed."
+      when: kubectl_check.rc != 0
+
+    - name: Get current CoreDNS ConfigMap
+      command: kubectl get configmap {{ coredns_configmap_name }} -n {{ coredns_namespace }} -o yaml
+      register: coredns_configmap
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if CoreDNS ConfigMap not found
+      fail:
+        msg: "CoreDNS ConfigMap not found in {{ coredns_namespace }} namespace"
+      when: coredns_configmap.rc != 0
+
+    - name: Extract current Corefile configuration
+      set_fact:
+        current_corefile: "{{ (coredns_configmap.stdout | from_yaml).data.Corefile }}"
+
+    - name: Combine registry_hosts and custom_coredns_hosts
+      set_fact:
+        all_hosts: "{{ (registry_hosts | default({})) | combine(custom_coredns_hosts | default({})) }}"
+
+    - name: Debug hosts configuration
+      debug:
+        msg: |
+          registry_hosts: {{ registry_hosts | default('not defined') }}
+          custom_coredns_hosts: {{ custom_coredns_hosts | default('not defined') }}
+          all_hosts: {{ all_hosts }}
+          all_hosts length: {{ all_hosts | length }}
+
+    - name: Write new Corefile to temporary file
+      copy:
+        content: |
+          .:53 {
+              errors
+              health {
+                 lameduck 5s
+              }
+              ready
+              kubernetes {{ dns_domain | default('cluster.local') }} in-addr.arpa ip6.arpa {
+                 pods insecure
+                 fallthrough in-addr.arpa ip6.arpa
+                 ttl 30
+              }
+          {% if all_hosts is defined and all_hosts | length > 0 %}
+              hosts {
+          {% for hostname, ip in all_hosts.items() %}
+                  {{ ip }} {{ hostname }}
+          {% endfor %}
+                  fallthrough
+              }
+          {% endif %}
+              prometheus :9153
+              forward . /etc/resolv.conf {
+                 max_concurrent 1000
+              }
+              cache 30
+              loop
+              reload
+              loadbalance
+          }
+        dest: /tmp/new-corefile-content
+
+    - name: Update CoreDNS ConfigMap using file replacement
+      shell: |
+        kubectl create configmap {{ coredns_configmap_name }}-temp \
+          --from-file=Corefile=/tmp/new-corefile-content \
+          -n {{ coredns_namespace }} --dry-run=client -o yaml > /tmp/new-configmap.yaml
+        sed -i 's/{{ coredns_configmap_name }}-temp/{{ coredns_configmap_name }}/' /tmp/new-configmap.yaml
+        kubectl replace -f /tmp/new-configmap.yaml
+      register: configmap_update
+
+    - name: Clean up temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/new-corefile-content
+        - /tmp/new-configmap.yaml
+      ignore_errors: true
+
+    - name: Restart CoreDNS pods to apply new configuration
+      command: kubectl delete pods -n {{ coredns_namespace }} -l k8s-app=kube-dns
+      when: configmap_update is succeeded
+      register: pod_restart
+
+    - name: Wait for CoreDNS pods to be ready
+      command: kubectl wait --for=condition=ready pod -l k8s-app=kube-dns -n {{ coredns_namespace }} --timeout={{ kubectl_timeout }}
+      when: configmap_update is succeeded
+      retries: 3
+      delay: 10
+
+    - name: Verify CoreDNS ConfigMap update
+      command: kubectl get configmap {{ coredns_configmap_name }} -n {{ coredns_namespace }} -o yaml
+      register: updated_configmap
+      when: configmap_update is succeeded
+
+    - name: Show updated Corefile (for debugging)
+      debug:
+        msg: "{{ (updated_configmap.stdout | from_yaml).data.Corefile }}"
+      when: configmap_update is succeeded
+
+    - name: Display configured hosts
+      debug:
+        msg: |
+          CoreDNS hosts configuration completed successfully.
+          Configured hosts:
+          {% for hostname, ip in all_hosts.items() %}
+          - {{ hostname }}: {{ ip }}
+          {% endfor %}
+
+  when: configure_coredns_hosts | bool
+  run_once: true
+  delegate_to: "{{ groups['masters'][0] }}"

@@ -19,6 +19,11 @@ ubuntu_packages:
   - k9s
   - nerdctl
   - buildkit
+
+# Master-only packages (for installs group)
+master_only_packages:
+  - make
+  - helmfile
   
 # RHEL/CentOS packages
 rhel_packages:
@@ -40,6 +45,11 @@ rhel_packages:
   - wget
   - which
   - k9s
+
+# Master-only packages (for installs group)  
+master_only_rhel_packages:
+  - make
+  - helmfile
 
 # Package names that differ between distributions
 package_map:

@@ -47,7 +47,14 @@
   roles:
     - { role: extend_k8s_certs, tags: ['kubernetes', 'certificates', 'k8s-certs'], when: extend_k8s_certificates | default(false) }
 
-# Phase 6: Harbor Project Setup (Final)
+# Phase 6: CoreDNS Hosts Configuration (Optional)
+- name: CoreDNS Hosts Configuration
+  hosts: masters
+  become: yes
+  roles:
+    - { role: configure_coredns_hosts, tags: ['coredns-hosts'], when: configure_coredns_hosts | default(false) }
+
+# Phase 7: Harbor Project Setup (Final)
 - name: Harbor Project Setup
   hosts: all
   become: yes

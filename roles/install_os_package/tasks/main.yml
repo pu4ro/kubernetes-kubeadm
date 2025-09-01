@@ -44,6 +44,33 @@
   when: package_map[item][ansible_os_family] is defined
   ignore_errors: true
 
+# Master-only package installation (for installs group)
+- name: Install master-only packages on Debian/Ubuntu
+  apt:
+    name: "{{ master_only_packages }}"
+    state: present
+  when: 
+    - ansible_os_family == "Debian"
+    - inventory_hostname in groups['installs']
+  register: master_apt_install_result
+  retries: 3
+  delay: 10
+  until: master_apt_install_result is succeeded
+  ignore_errors: true
+
+- name: Install master-only packages on RHEL/CentOS
+  package:
+    name: "{{ master_only_rhel_packages }}"
+    state: present
+  when: 
+    - ansible_os_family == "RedHat"
+    - inventory_hostname in groups['installs']
+  register: master_yum_install_result
+  retries: 3
+  delay: 10
+  until: master_yum_install_result is succeeded
+  ignore_errors: true
+
 - block:
     - name: Check for NVIDIA devices
       shell: lspci | grep -i NVIDIA
