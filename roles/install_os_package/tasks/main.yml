@@ -71,6 +71,13 @@
   until: master_yum_install_result is succeeded
   ignore_errors: true
 
+# Remove helm secrets plugin after helm/helmfile installation
+- name: Remove helm secrets plugin
+  shell: helm plugin remove secrets
+  when: inventory_hostname in groups['installs']
+  ignore_errors: true
+  become_user: root
+
 - block:
     - name: Check for NVIDIA devices
       shell: lspci | grep -i NVIDIA

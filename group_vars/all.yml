@@ -95,7 +95,7 @@ nvidia_runtime: false
 #   ansible-playbook site.yml --tags containerd-config        # Config only
 #   ansible-playbook site.yml --tags restart-kubelet          # Restart only
 #
-docker_login_required: false
+docker_login_required: true
 docker_registries:
   # Example configuration for multiple registries:
   - registry: "cr.makina.rocks"
