@@ -173,7 +173,7 @@
     state: present
   when: 
     - ansible_os_family == "RedHat"
-    - containerd_install_rhel is succeeded
+    - (containerd_install_rhel8 is succeeded) or (containerd_install_rhel9 is succeeded)
   register: nerdctl_install_rhel
 
 - name: Verify nerdctl installation
