@@ -4,9 +4,15 @@
 
 - name: Install chrony package (Ubuntu/Debian)
   apt:
-    name: chrony
+    name: "{{ 'chrony=' + chrony_version if (chrony_version is defined and chrony_version | length > 0) else 'chrony' }}"
     state: present
     update_cache: yes
+    lock_timeout: 600
+    allow_downgrade: yes
+  register: chrony_apt_result
+  retries: 5
+  delay: 15
+  until: chrony_apt_result is succeeded
   when: ansible_os_family == "Debian"
 
 - name: Install chrony package (RHEL/CentOS)

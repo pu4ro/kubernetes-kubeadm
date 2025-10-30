@@ -1,0 +1,57 @@
+---
+# NFS Server Installation and Configuration
+- name: Install NFS server packages
+  package:
+    name:
+      - nfs-kernel-server
+      - nfs-common
+    state: present
+  when: nfs_server_enabled | default(false)
+
+- name: Create NFS export directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: nobody
+    group: nogroup
+  loop: "{{ nfs_export_directories }}"
+  when: nfs_server_enabled | default(false)
+
+- name: Configure NFS exports
+  template:
+    src: exports.j2
+    dest: /etc/exports
+    backup: yes
+  notify:
+    - restart nfs-server
+    - reload exports
+  when: nfs_server_enabled | default(false)
+
+- name: Start and enable NFS services
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - nfs-kernel-server
+    - rpcbind
+  when: nfs_server_enabled | default(false)
+
+- name: Configure firewall for NFS (if UFW is enabled)
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+  loop:
+    - "111"      # rpcbind
+    - "2049"     # nfs
+    - "20048"    # mountd
+  when: 
+    - nfs_server_enabled | default(false)
+    - ansible_facts['os_family'] == "Debian"
+  ignore_errors: yes
+
+- name: Display NFS server status
+  debug:
+    msg: "NFS server installed and configured. Export directories: {{ nfs_export_directories | join(', ') }}"
+  when: nfs_server_enabled | default(false)
