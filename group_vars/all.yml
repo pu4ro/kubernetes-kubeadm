@@ -70,18 +70,18 @@ parallel_execution:
 # Local Repository Configuration (for RedHat/CentOS systems)
 # Enable local repository setup with web server
 # Supports both directory-based repo and ISO-based repo
-setup_local_repo: false
+setup_local_repo: true
 
 # Directory-based repository
 # If yum_repo_directory exists, it will be served via HTTP
 use_yum_repo_directory: true
-yum_repo_directory: "/opt/yum-repo"
+yum_repo_directory: "/root/yum-repo"
 yum_repo_web_port: 8080
 
 # ISO-based repository  
 # Mount ISO file and serve via HTTP
-use_iso_repo: true
-iso_file_path: "/root/rhel-9.4-x86_64-dvd.iso"  # Path to ISO file
+use_iso_repo: false
+iso_file_path: "/root/rhel-8.10-x86_64-dvd.iso"  # Path to ISO file
 iso_mount_point: "/mnt/cdrom"
 iso_device: "/dev/sr0"  # Use this if mounting from CD/DVD drive instead of ISO file
 use_iso_device: false   # Set to true to use device instead of ISO file
@@ -92,7 +92,7 @@ local_repo_server_ip: "{{ ansible_default_ipv4.address }}"
 
 # Package Repository URLs (for offline installation)
 repo_url:
-  centos: "http://192.168.1.10:8080/repo/"
+  centos: "http://192.168.135.31:8080/yum-repo"
   ubuntu: "http://192.168.134.102/ubuntu_22.04.5"
 
 # Container Registry Settings (basic Docker configuration)

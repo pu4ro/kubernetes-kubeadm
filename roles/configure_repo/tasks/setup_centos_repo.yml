@@ -13,7 +13,23 @@
   loop: "{{ repo_files.files }}"
   when: repo_files.matched > 0
 
-- name: Configure CentOS local repo
+# Configure local repository based on host
+- name: Configure CentOS local repo (master1 - use local file path)
+  copy:
+    content: |
+      [centos-local]
+      name=CentOS Local Repository
+      baseurl=file://{{ yum_repo_directory }}
+      enabled=1
+      gpgcheck=0
+      priority=1
+    dest: /etc/yum.repos.d/centos-local.repo
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - inventory_hostname == groups['masters'][0]
+
+- name: Configure CentOS local repo (other nodes - use HTTP)
   copy:
     content: |
       [centos-local]
@@ -21,6 +37,23 @@
       baseurl={{ repo_url.centos }}
       enabled=1
       gpgcheck=0
+      priority=1
     dest: /etc/yum.repos.d/centos-local.repo
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - inventory_hostname != groups['masters'][0]
+
+- name: Configure CentOS repo (no local repo setup)
+  copy:
+    content: |
+      [centos-local]
+      name=CentOS Local Repository
+      baseurl={{ repo_url.centos }}
+      enabled=1
+      gpgcheck=0
+      priority=1
+    dest: /etc/yum.repos.d/centos-local.repo
+  when: not (setup_local_repo | default(false))
 
 
