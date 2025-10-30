@@ -254,6 +254,19 @@
     - iso_file.stat.exists
   tags: ['local-repo', 'iso-repo', 'iso-mount']
 
+- name: Create symlink from /root/iso to ISO mount point
+  file:
+    src: "{{ iso_mount_point }}"
+    dest: "{{ iso_symlink_path | default('/root/iso') }}"
+    state: link
+    force: yes
+  when: 
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+    - not use_iso_device | default(false)
+    - iso_file.stat.exists
+  tags: ['local-repo', 'iso-repo', 'iso-mount']
+
 - name: Mount ISO from device (CD/DVD)
   mount:
     path: "{{ iso_mount_point }}"

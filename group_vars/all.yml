@@ -80,11 +80,12 @@ yum_repo_web_port: 8080
 
 # ISO-based repository  
 # Mount ISO file and serve via HTTP
-use_iso_repo: false
+use_iso_repo: true
 iso_file_path: "/root/rhel-8.10-x86_64-dvd.iso"  # Path to ISO file
 iso_mount_point: "/mnt/cdrom"
+iso_symlink_path: "/root/iso"  # Symlink to ISO mount point
 iso_device: "/dev/sr0"  # Use this if mounting from CD/DVD drive instead of ISO file
-use_iso_device: false   # Set to true to use device instead of ISO file
+use_iso_device: false   # Set to false to use ISO file instead of device
 
 # Web server configuration for local repo
 local_repo_web_server: "httpd"  # httpd or nginx
