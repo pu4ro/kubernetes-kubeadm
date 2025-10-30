@@ -192,6 +192,7 @@
   when: 
     - setup_local_repo | default(false)
     - use_yum_repo_directory | default(false)
+  ignore_errors: yes
   tags: ['local-repo', 'yum-repo-dir']
 
 - name: Configure httpd for yum-repo directory
