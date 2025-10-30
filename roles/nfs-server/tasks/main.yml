@@ -1,12 +1,23 @@
 ---
 # NFS Server Installation and Configuration
-- name: Install NFS server packages
+- name: Install NFS server packages (Debian/Ubuntu)
   package:
     name:
       - nfs-kernel-server
       - nfs-common
     state: present
-  when: nfs_server_enabled | default(false)
+  when: 
+    - nfs_server_enabled | default(false)
+    - ansible_os_family == "Debian"
+
+- name: Install NFS server packages (RedHat/CentOS)
+  package:
+    name:
+      - nfs-utils
+    state: present
+  when: 
+    - nfs_server_enabled | default(false)
+    - ansible_os_family == "RedHat"
 
 - name: Create NFS export directories
   file:
@@ -16,7 +27,22 @@
     owner: nobody
     group: nogroup
   loop: "{{ nfs_export_directories }}"
-  when: nfs_server_enabled | default(false)
+  when: 
+    - nfs_server_enabled | default(false)
+    - ansible_os_family == "Debian"
+
+- name: Create NFS export directories (RedHat/CentOS)
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: nfsnobody
+    group: nfsnobody
+  loop: "{{ nfs_export_directories }}"
+  when: 
+    - nfs_server_enabled | default(false)
+    - ansible_os_family == "RedHat"
+  ignore_errors: yes
 
 - name: Configure NFS exports
   template:
@@ -28,7 +54,7 @@
     - reload exports
   when: nfs_server_enabled | default(false)
 
-- name: Start and enable NFS services
+- name: Start and enable NFS services (Debian/Ubuntu)
   systemd:
     name: "{{ item }}"
     state: started
@@ -36,9 +62,23 @@
   loop:
     - nfs-kernel-server
     - rpcbind
-  when: nfs_server_enabled | default(false)
+  when: 
+    - nfs_server_enabled | default(false)
+    - ansible_os_family == "Debian"
 
-- name: Configure firewall for NFS (if UFW is enabled)
+- name: Start and enable NFS services (RedHat/CentOS)
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - nfs-server
+    - rpcbind
+  when: 
+    - nfs_server_enabled | default(false)
+    - ansible_os_family == "RedHat"
+
+- name: Configure firewall for NFS (UFW - Debian/Ubuntu)
   ufw:
     rule: allow
     port: "{{ item }}"
@@ -48,7 +88,40 @@
     - "20048"    # mountd
   when: 
     - nfs_server_enabled | default(false)
-    - ansible_facts['os_family'] == "Debian"
+    - ansible_os_family == "Debian"
+  ignore_errors: yes
+
+- name: Configure firewall for NFS (firewalld - RedHat/CentOS)
+  ansible.posix.firewalld:
+    service: nfs
+    permanent: yes
+    state: enabled
+    immediate: yes
+  when: 
+    - nfs_server_enabled | default(false)
+    - ansible_os_family == "RedHat"
+  ignore_errors: yes
+
+- name: Configure firewall for rpcbind (firewalld - RedHat/CentOS)
+  ansible.posix.firewalld:
+    service: rpc-bind
+    permanent: yes
+    state: enabled
+    immediate: yes
+  when: 
+    - nfs_server_enabled | default(false)
+    - ansible_os_family == "RedHat"
+  ignore_errors: yes
+
+- name: Configure firewall for mountd (firewalld - RedHat/CentOS)
+  ansible.posix.firewalld:
+    service: mountd
+    permanent: yes
+    state: enabled
+    immediate: yes
+  when: 
+    - nfs_server_enabled | default(false)
+    - ansible_os_family == "RedHat"
   ignore_errors: yes
 
 - name: Display NFS server status

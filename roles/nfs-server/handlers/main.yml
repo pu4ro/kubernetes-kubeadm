@@ -2,7 +2,7 @@
 # NFS Server Handlers
 - name: restart nfs-server
   systemd:
-    name: nfs-kernel-server
+    name: "{{ 'nfs-server' if ansible_os_family == 'RedHat' else 'nfs-kernel-server' }}"
     state: restarted
 
 - name: reload exports
