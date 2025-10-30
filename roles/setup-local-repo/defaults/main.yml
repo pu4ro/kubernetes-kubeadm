@@ -1,0 +1,15 @@
+---
+# Default variables for setup-local-repo role
+setup_local_repo: false
+use_yum_repo_directory: false
+yum_repo_directory: "/opt/yum-repo"
+yum_repo_web_port: 8080
+
+use_iso_repo: false
+iso_file_path: "/root/rhel-9.4-x86_64-dvd.iso"
+iso_mount_point: "/mnt/cdrom"
+iso_device: "/dev/sr0"
+use_iso_device: false
+
+local_repo_web_server: "httpd"
+local_repo_server_ip: "{{ ansible_default_ipv4.address }}"

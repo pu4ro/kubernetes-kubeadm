@@ -2,6 +2,14 @@
 # Kubernetes Cluster Basic Installation Playbook
 # Usage: ansible-playbook -i inventory.ini site.yml
 
+# Phase 0: Local Repository Setup (Optional - for RedHat/CentOS only)
+# Applied to master1 only to serve as central repository server
+- name: Local Repository Setup
+  hosts: master1
+  become: yes
+  roles:
+    - { role: setup-local-repo, tags: ['local-repo'], when: setup_local_repo | default(false) }
+
 # Phase 1: System Preparation  
 - name: System Preparation
   hosts: all

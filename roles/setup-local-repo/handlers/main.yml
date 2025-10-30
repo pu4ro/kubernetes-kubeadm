@@ -1,0 +1,18 @@
+---
+# Handlers for setup-local-repo role
+
+- name: restart httpd
+  systemd:
+    name: httpd
+    state: restarted
+    enabled: yes
+
+- name: restart nginx
+  systemd:
+    name: nginx
+    state: restarted
+    enabled: yes
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes

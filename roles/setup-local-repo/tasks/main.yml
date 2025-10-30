@@ -1,0 +1,311 @@
+---
+# Setup Local Repository for RedHat/CentOS systems
+# This role configures a local HTTP repository server using either:
+# 1. A directory containing RPM packages (yum-repo)
+# 2. An ISO file mounted and served via HTTP
+# 3. A CD/DVD device mounted and served via HTTP
+
+- name: Check if running on RedHat/CentOS
+  fail:
+    msg: "This role only supports RedHat/CentOS systems"
+  when: ansible_os_family != "RedHat"
+  tags: ['local-repo']
+
+# Web Server Installation
+- name: Install httpd web server
+  yum:
+    name: httpd
+    state: present
+  when: 
+    - setup_local_repo | default(false)
+    - local_repo_web_server == "httpd"
+  tags: ['local-repo', 'web-server']
+
+- name: Install nginx web server
+  yum:
+    name: nginx
+    state: present
+  when: 
+    - setup_local_repo | default(false)
+    - local_repo_web_server == "nginx"
+  tags: ['local-repo', 'web-server']
+
+- name: Configure firewall for HTTP
+  firewalld:
+    service: http
+    permanent: yes
+    state: enabled
+    immediate: yes
+  when: setup_local_repo | default(false)
+  ignore_errors: yes
+  tags: ['local-repo', 'firewall']
+
+- name: Configure firewall for custom port
+  firewalld:
+    port: "{{ yum_repo_web_port }}/tcp"
+    permanent: yes
+    state: enabled
+    immediate: yes
+  when: 
+    - setup_local_repo | default(false)
+    - yum_repo_web_port != 80
+  ignore_errors: yes
+  tags: ['local-repo', 'firewall']
+
+# Directory-based Repository Setup
+- name: Check if yum-repo directory exists
+  stat:
+    path: "{{ yum_repo_directory }}"
+  register: yum_repo_dir
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+  tags: ['local-repo', 'yum-repo-dir']
+
+- name: Create yum-repo directory if not exists
+  file:
+    path: "{{ yum_repo_directory }}"
+    state: directory
+    mode: '0755'
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - not yum_repo_dir.stat.exists
+  tags: ['local-repo', 'yum-repo-dir']
+
+- name: Create createrepo metadata for yum-repo directory
+  command: createrepo {{ yum_repo_directory }}
+  args:
+    creates: "{{ yum_repo_directory }}/repodata"
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - yum_repo_dir.stat.exists or not yum_repo_dir.stat.exists
+  ignore_errors: yes
+  tags: ['local-repo', 'yum-repo-dir']
+
+- name: Install createrepo if not present
+  yum:
+    name: createrepo
+    state: present
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+  tags: ['local-repo', 'yum-repo-dir']
+
+- name: Configure httpd for yum-repo directory
+  template:
+    src: httpd-yum-repo.conf.j2
+    dest: /etc/httpd/conf.d/yum-repo.conf
+    mode: '0644'
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - local_repo_web_server == "httpd"
+  notify: restart httpd
+  tags: ['local-repo', 'yum-repo-dir', 'web-config']
+
+- name: Configure nginx for yum-repo directory
+  template:
+    src: nginx-yum-repo.conf.j2
+    dest: /etc/nginx/conf.d/yum-repo.conf
+    mode: '0644'
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - local_repo_web_server == "nginx"
+  notify: restart nginx
+  tags: ['local-repo', 'yum-repo-dir', 'web-config']
+
+# ISO-based Repository Setup
+- name: Create ISO mount point directory
+  file:
+    path: "{{ iso_mount_point }}"
+    state: directory
+    mode: '0755'
+  when: 
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+  tags: ['local-repo', 'iso-repo']
+
+- name: Check if ISO file exists
+  stat:
+    path: "{{ iso_file_path }}"
+  register: iso_file
+  when: 
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+    - not use_iso_device | default(false)
+  tags: ['local-repo', 'iso-repo']
+
+- name: Mount ISO file
+  mount:
+    path: "{{ iso_mount_point }}"
+    src: "{{ iso_file_path }}"
+    fstype: iso9660
+    opts: ro,loop
+    state: mounted
+  when: 
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+    - not use_iso_device | default(false)
+    - iso_file.stat.exists
+  tags: ['local-repo', 'iso-repo', 'iso-mount']
+
+- name: Mount ISO from device (CD/DVD)
+  mount:
+    path: "{{ iso_mount_point }}"
+    src: "{{ iso_device }}"
+    fstype: iso9660
+    opts: ro
+    state: mounted
+  when: 
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+    - use_iso_device | default(true)
+  tags: ['local-repo', 'iso-repo', 'iso-mount']
+
+- name: Add ISO mount to fstab (ISO file)
+  mount:
+    path: "{{ iso_mount_point }}"
+    src: "{{ iso_file_path }}"
+    fstype: iso9660
+    opts: ro,loop
+    state: present
+  when: 
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+    - not use_iso_device | default(false)
+    - iso_file.stat.exists
+  tags: ['local-repo', 'iso-repo', 'fstab']
+
+- name: Add ISO mount to fstab (device)
+  mount:
+    path: "{{ iso_mount_point }}"
+    src: "{{ iso_device }}"
+    fstype: iso9660
+    opts: ro
+    state: present
+  when: 
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+    - use_iso_device | default(true)
+  tags: ['local-repo', 'iso-repo', 'fstab']
+
+- name: Configure httpd for ISO repository
+  template:
+    src: httpd-iso-repo.conf.j2
+    dest: /etc/httpd/conf.d/iso-repo.conf
+    mode: '0644'
+  when: 
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+    - local_repo_web_server == "httpd"
+  notify: restart httpd
+  tags: ['local-repo', 'iso-repo', 'web-config']
+
+- name: Configure nginx for ISO repository
+  template:
+    src: nginx-iso-repo.conf.j2
+    dest: /etc/nginx/conf.d/iso-repo.conf
+    mode: '0644'
+  when: 
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+    - local_repo_web_server == "nginx"
+  notify: restart nginx
+  tags: ['local-repo', 'iso-repo', 'web-config']
+
+# Repository Configuration Files
+- name: Create local yum repository configuration for yum-repo directory
+  template:
+    src: local-yum-repo.repo.j2
+    dest: /etc/yum.repos.d/local-yum-repo.repo
+    mode: '0644'
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+  tags: ['local-repo', 'repo-config']
+
+- name: Create local yum repository configuration for ISO
+  template:
+    src: local-iso-repo.repo.j2
+    dest: /etc/yum.repos.d/local-iso-repo.repo
+    mode: '0644'
+  when: 
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+  tags: ['local-repo', 'repo-config']
+
+# Start and Enable Web Server
+- name: Start and enable httpd service
+  systemd:
+    name: httpd
+    state: started
+    enabled: yes
+  when: 
+    - setup_local_repo | default(false)
+    - local_repo_web_server == "httpd"
+  tags: ['local-repo', 'web-server']
+
+- name: Start and enable nginx service
+  systemd:
+    name: nginx
+    state: started
+    enabled: yes
+  when: 
+    - setup_local_repo | default(false)
+    - local_repo_web_server == "nginx"
+  tags: ['local-repo', 'web-server']
+
+- name: Set SELinux context for yum-repo directory
+  sefcontext:
+    target: "{{ yum_repo_directory }}(/.*)?"
+    setype: httpd_sys_content_t
+    state: present
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - ansible_selinux.status == "enabled"
+  ignore_errors: yes
+  tags: ['local-repo', 'selinux']
+
+- name: Apply SELinux context for yum-repo directory
+  command: restorecon -Rv {{ yum_repo_directory }}
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - ansible_selinux.status == "enabled"
+  ignore_errors: yes
+  tags: ['local-repo', 'selinux']
+
+- name: Set SELinux context for ISO mount point
+  sefcontext:
+    target: "{{ iso_mount_point }}(/.*)?"
+    setype: httpd_sys_content_t
+    state: present
+  when: 
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+    - ansible_selinux.status == "enabled"
+  ignore_errors: yes
+  tags: ['local-repo', 'selinux']
+
+- name: Apply SELinux context for ISO mount point
+  command: restorecon -Rv {{ iso_mount_point }}
+  when: 
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+    - ansible_selinux.status == "enabled"
+  ignore_errors: yes
+  tags: ['local-repo', 'selinux']
+
+- name: Display local repository information
+  debug:
+    msg:
+      - "Local Repository Setup Complete!"
+      - "{% if use_yum_repo_directory | default(false) %}YUM Repo Directory: http://{{ local_repo_server_ip }}:{{ yum_repo_web_port }}/yum-repo{% endif %}"
+      - "{% if use_iso_repo | default(false) %}ISO Repo: http://{{ local_repo_server_ip }}:{{ yum_repo_web_port }}/iso-repo{% endif %}"
+      - "Repository configuration files created in /etc/yum.repos.d/"
+  when: setup_local_repo | default(false)
+  tags: ['local-repo']
