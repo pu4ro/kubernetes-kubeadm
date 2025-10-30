@@ -11,6 +11,86 @@
   when: ansible_os_family != "RedHat"
   tags: ['local-repo']
 
+# Pre-setup: Configure local file-based repository first (before installing packages)
+- name: Check if yum-repo directory exists
+  stat:
+    path: "{{ yum_repo_directory }}"
+  register: yum_repo_dir_check
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+  tags: ['local-repo', 'pre-setup']
+
+- name: Check if createrepo is installed
+  command: which createrepo
+  register: createrepo_check
+  ignore_errors: yes
+  changed_when: false
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - yum_repo_dir_check.stat.exists | default(false)
+  tags: ['local-repo', 'pre-setup']
+
+- name: Find createrepo RPM in yum-repo directory
+  find:
+    paths: "{{ yum_repo_directory }}"
+    patterns: "createrepo*.rpm"
+    recurse: yes
+  register: createrepo_rpm
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - yum_repo_dir_check.stat.exists | default(false)
+    - createrepo_check.rc != 0
+  tags: ['local-repo', 'pre-setup']
+
+- name: Install createrepo from RPM
+  command: "rpm -ivh {{ createrepo_rpm.files[0].path }}"
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - yum_repo_dir_check.stat.exists | default(false)
+    - createrepo_check.rc != 0
+    - createrepo_rpm.matched > 0
+  ignore_errors: yes
+  tags: ['local-repo', 'pre-setup']
+
+- name: Create repository metadata
+  command: "createrepo {{ yum_repo_directory }}"
+  args:
+    creates: "{{ yum_repo_directory }}/repodata/repomd.xml"
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - yum_repo_dir_check.stat.exists | default(false)
+  ignore_errors: yes
+  tags: ['local-repo', 'pre-setup']
+
+- name: Configure temporary local file-based repository
+  copy:
+    content: |
+      [local-file-repo]
+      name=Local File Repository
+      baseurl=file://{{ yum_repo_directory }}
+      enabled=1
+      gpgcheck=0
+      priority=1
+    dest: /etc/yum.repos.d/local-file-repo.repo
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - yum_repo_dir_check.stat.exists | default(false)
+  tags: ['local-repo', 'pre-setup']
+
+- name: Clean yum cache
+  command: yum clean all
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - yum_repo_dir_check.stat.exists | default(false)
+  tags: ['local-repo', 'pre-setup']
+
 # Web Server Installation
 - name: Install httpd web server
   yum:
