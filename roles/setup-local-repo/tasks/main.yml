@@ -12,6 +12,27 @@
   tags: ['local-repo']
 
 # Pre-setup: Configure local file-based repository first (before installing packages)
+- name: Find all existing .repo files
+  find:
+    paths: /etc/yum.repos.d
+    patterns: "*.repo"
+  register: existing_repo_files
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+  tags: ['local-repo', 'pre-setup']
+
+- name: Remove all existing .repo files
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ existing_repo_files.files }}"
+  when: 
+    - setup_local_repo | default(false)
+    - use_yum_repo_directory | default(false)
+    - existing_repo_files.matched > 0
+  tags: ['local-repo', 'pre-setup']
+
 - name: Check if yum-repo directory exists
   stat:
     path: "{{ yum_repo_directory }}"
