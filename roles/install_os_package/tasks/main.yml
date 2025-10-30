@@ -34,6 +34,14 @@
   delay: 10
   until: yum_install_result is succeeded
 
+- name: Install optional packages on RHEL/CentOS
+  package:
+    name: "{{ rhel_optional_packages }}"
+    state: present
+  when: ansible_os_family == "RedHat"
+  ignore_errors: yes
+  register: yum_optional_install_result
+
 - name: Install distribution-specific packages
   package:
     name: "{{ package_map[item][ansible_os_family] }}"

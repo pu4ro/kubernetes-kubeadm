@@ -25,7 +25,7 @@ master_only_packages:
   - make
   - helmfile
   
-# RHEL/CentOS packages
+# RHEL/CentOS packages (required for k8s)
 rhel_packages:
   - kubelet
   - kubeadm
@@ -35,9 +35,7 @@ rhel_packages:
   - jq
   - openssh-server
   - ca-certificates
-  - nfs-utils
   - tree
-  - yum-utils
   - device-mapper-persistent-data
   - lvm2
   - chrony
@@ -45,6 +43,11 @@ rhel_packages:
   - wget
   - which
   - k9s
+
+# Optional RHEL/CentOS packages (install if available)
+rhel_optional_packages:
+  - nfs-utils
+  - yum-utils
 
 # Master-only packages (for installs group)  
 master_only_rhel_packages:
