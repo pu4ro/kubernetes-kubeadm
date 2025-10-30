@@ -31,7 +31,7 @@
   tags: ['local-repo', 'web-server']
 
 - name: Configure firewall for HTTP
-  firewalld:
+  ansible.posix.firewalld:
     service: http
     permanent: yes
     state: enabled
@@ -41,7 +41,7 @@
   tags: ['local-repo', 'firewall']
 
 - name: Configure firewall for custom port
-  firewalld:
+  ansible.posix.firewalld:
     port: "{{ yum_repo_web_port }}/tcp"
     permanent: yes
     state: enabled
@@ -259,7 +259,7 @@
   tags: ['local-repo', 'web-server']
 
 - name: Set SELinux context for yum-repo directory
-  sefcontext:
+  community.general.sefcontext:
     target: "{{ yum_repo_directory }}(/.*)?"
     setype: httpd_sys_content_t
     state: present
@@ -280,7 +280,7 @@
   tags: ['local-repo', 'selinux']
 
 - name: Set SELinux context for ISO mount point
-  sefcontext:
+  community.general.sefcontext:
     target: "{{ iso_mount_point }}(/.*)?"
     setype: httpd_sys_content_t
     state: present

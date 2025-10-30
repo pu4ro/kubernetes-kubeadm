@@ -91,7 +91,7 @@
 
 # Open NTP port on master1 if it's acting as NTP server
 - name: Open NTP port 123/UDP on master1 (local NTP server)
-  firewalld:
+  ansible.posix.firewalld:
     port: 123/udp
     permanent: yes
     state: enabled
