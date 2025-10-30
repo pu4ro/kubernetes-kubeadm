@@ -1,5 +1,21 @@
 ---
-# Phase 1: Install containerd package
+# Phase 1: Remove conflicting packages (RHEL/CentOS only)
+- name: Remove conflicting container packages (podman, buildah, runc)
+  yum:
+    name:
+      - podman
+      - buildah
+      - runc
+      - podman-catatonit
+      - cockpit-podman
+      - podman-plugins
+      - podman-gvproxy
+    state: absent
+  when: ansible_os_family == "RedHat"
+  ignore_errors: yes
+  tags: ['base', 'container']
+
+# Phase 2: Install containerd package
 - name: Install containerd package (Ubuntu/Debian)
   apt:
     name: containerd
