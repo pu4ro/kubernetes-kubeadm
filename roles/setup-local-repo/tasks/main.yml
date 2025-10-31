@@ -153,6 +153,18 @@
   ignore_errors: yes
   tags: ['local-repo', 'firewall']
 
+- name: Configure httpd to listen on custom port
+  lineinfile:
+    path: /etc/httpd/conf/httpd.conf
+    line: "Listen {{ yum_repo_web_port }}"
+    insertafter: "^Listen 80"
+    state: present
+  when: 
+    - setup_local_repo | default(false)
+    - local_repo_web_server == "httpd"
+    - yum_repo_web_port != 80
+  tags: ['local-repo', 'web-server']
+
 # Directory-based Repository Setup
 - name: Check if yum-repo directory exists
   stat:
@@ -195,16 +207,40 @@
   ignore_errors: yes
   tags: ['local-repo', 'yum-repo-dir']
 
-- name: Configure httpd for yum-repo directory
-  template:
-    src: httpd-yum-repo.conf.j2
-    dest: /etc/httpd/conf.d/yum-repo.conf
-    mode: '0644'
-  when: 
+- name: Remove old httpd VirtualHost configuration files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/httpd/conf.d/yum-repo.conf
+    - /etc/httpd/conf.d/iso-repo.conf
+  when:
+    - setup_local_repo | default(false)
+    - local_repo_web_server == "httpd"
+  tags: ['local-repo', 'web-config']
+
+- name: Configure httpd Listen port
+  lineinfile:
+    path: /etc/httpd/conf/httpd.conf
+    regexp: '^Listen '
+    line: "Listen {{ yum_repo_web_port }}"
+    backup: yes
+  when:
+    - setup_local_repo | default(false)
+    - local_repo_web_server == "httpd"
+  notify: restart httpd
+  tags: ['local-repo', 'web-config']
+
+- name: Create symlink for yum-repo in DocumentRoot
+  file:
+    src: "{{ yum_repo_directory }}"
+    dest: "/var/www/html/yum-repo"
+    state: link
+    force: yes
+  when:
     - setup_local_repo | default(false)
     - use_yum_repo_directory | default(false)
     - local_repo_web_server == "httpd"
-  notify: restart httpd
   tags: ['local-repo', 'yum-repo-dir', 'web-config']
 
 - name: Configure nginx for yum-repo directory
@@ -307,12 +343,13 @@
     - use_iso_device | default(true)
   tags: ['local-repo', 'iso-repo', 'fstab']
 
-- name: Configure httpd for ISO repository
-  template:
-    src: httpd-iso-repo.conf.j2
-    dest: /etc/httpd/conf.d/iso-repo.conf
-    mode: '0644'
-  when: 
+- name: Create symlink for iso-repo in DocumentRoot
+  file:
+    src: "{{ iso_mount_point }}"
+    dest: "/var/www/html/iso-repo"
+    state: link
+    force: yes
+  when:
     - setup_local_repo | default(false)
     - use_iso_repo | default(false)
     - local_repo_web_server == "httpd"
