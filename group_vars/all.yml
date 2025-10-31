@@ -75,7 +75,7 @@ setup_local_repo: true
 # Directory-based repository
 # If yum_repo_directory exists, it will be served via HTTP
 use_yum_repo_directory: true
-yum_repo_directory: "/opt/yum-repo"
+yum_repo_directory: "/root/yum-repo"
 yum_repo_web_port: 8080
 
 # ISO-based repository  

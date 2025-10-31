@@ -93,12 +93,13 @@
       ignore_errors: true
       tags: installer
 
-    - name: Install NVIDIA container toolkit and driver
+    - name: Install kernel development packages
       yum:
         name:
-          - kernel-devel-5.14.0-427.18.1.el9_4
-          - kernel-5.14.0-427.18.1.el9_4
-          - kernel-tools-5.14.0-427.18.1.el9_4
+          - kernel-devel
+          - kernel-headers
+          - gcc
+          - make
         state: present
       when: nvidia_devices.stdout != ""
 
@@ -120,65 +121,43 @@
       when: nvidia_devices.stdout != ""
       become: yes
 
-    - name: Download NVIDIA driver tarball
-      ansible.builtin.command:
-        cmd: wget -O /tmp/nvidia-driver_535.161.tar.gz {{ repo_url.centos }}nvidia-driver_535.161.tar.gz
-      args:
-        creates: /tmp/nvidia-driver_535.161.tar.gz
+    - name: Check if NVIDIA driver file exists in yum-repo
+      stat:
+        path: "{{ yum_repo_directory }}/NVIDIA-Linux-x86_64-{{ driver_version }}.run"
+      register: nvidia_driver_file
       when: nvidia_devices.stdout != ""
 
-    - name: Extract NVIDIA driver tarball
-      ansible.builtin.unarchive:
-        src: /tmp/nvidia-driver_535.161.tar.gz
-        dest: /tmp/
+    - name: Copy NVIDIA installer to /tmp
+      copy:
+        src: "{{ yum_repo_directory }}/NVIDIA-Linux-x86_64-{{ driver_version }}.run"
+        dest: /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run
+        mode: '0755'
         remote_src: yes
-      when: nvidia_devices.stdout != ""
-
-    - name: Download NVIDIA installer
-      ansible.builtin.command:
-        cmd: wget -O /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run {{ repo_url.centos }}{{ driver_version }}/NVIDIA-Linux-x86_64-{{ driver_version }}.run
-      args:
-        creates: /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run
-      when: nvidia_devices.stdout != ""
-
-    - name: Extract NVIDIA installer
-      ansible.builtin.shell:
-        cmd: sh NVIDIA-Linux-x86_64-{{ driver_version }}.run -x
-      args:
-        chdir: /tmp
-      when: nvidia_devices.stdout != ""
+      when:
+        - nvidia_devices.stdout != ""
+        - nvidia_driver_file.stat.exists
 
     - name: Run NVIDIA installer
       ansible.builtin.shell: |
-        cd /tmp/NVIDIA-Linux-x86_64-{{ driver_version }} &&
-        ./nvidia-installer --silent \
-                           --install-compat32-libs \
-                           --no-nouveau-check \
-                           --no-nvidia-modprobe \
-                           --no-rpms \
-                           --no-backup \
-                           --no-check-for-alternate-installs \
-                           --no-libglx-indirect \
-                           --no-install-libglvnd \
-                           --x-prefix=/tmp/null \
-                           --x-module-path=/tmp/null \
-                           --x-library-path=/tmp/null \
-                           --x-sysconfig-path=/tmp/null
-      when: nvidia_devices.stdout != ""
+        /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run --silent \
+                                                          --disable-nouveau \
+                                                          --no-opengl-files \
+                                                          --no-x-check
+      args:
+        creates: /usr/bin/nvidia-smi
+      when:
+        - nvidia_devices.stdout != ""
+        - nvidia_driver_file.stat.exists
       tags: installer
 
-    - name: Reboot NVIDIA devices only
-      reboot:
-        reboot_timeout: 1200
-      when: nvidia_devices.stdout != ""
-      become: yes
-
-    - name: Ensure the symbolic link /sbin/ldconfig points to /sbin/ldconfig.real
-      ansible.builtin.file:
-        src: /sbin/ldconfig
-        dest: /sbin/ldconfig.real
-        state: link
-      tags: ldconfig
+    - name: Load nvidia module
+      community.general.modprobe:
+        name: nvidia
+        state: present
+      when:
+        - nvidia_devices.stdout != ""
+        - nvidia_driver_file.stat.exists
+      ignore_errors: yes
   when: 
     - ansible_os_family == "RedHat"
     - install_gpu_driver | default(false)
