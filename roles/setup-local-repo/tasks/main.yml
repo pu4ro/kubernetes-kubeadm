@@ -256,14 +256,25 @@
   tags: ['local-repo', 'yum-repo-dir', 'web-config']
 
 # ISO-based Repository Setup
+- name: Check if ISO is already mounted
+  command: mountpoint -q {{ iso_mount_point }}
+  register: iso_mounted
+  failed_when: false
+  changed_when: false
+  when:
+    - setup_local_repo | default(false)
+    - use_iso_repo | default(false)
+  tags: ['local-repo', 'iso-repo']
+
 - name: Create ISO mount point directory
   file:
     path: "{{ iso_mount_point }}"
     state: directory
     mode: '0755'
-  when: 
+  when:
     - setup_local_repo | default(false)
     - use_iso_repo | default(false)
+    - iso_mounted.rc != 0
   tags: ['local-repo', 'iso-repo']
 
 - name: Check if ISO file exists
