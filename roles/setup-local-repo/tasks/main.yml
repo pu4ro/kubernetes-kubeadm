@@ -207,13 +207,16 @@
   ignore_errors: yes
   tags: ['local-repo', 'yum-repo-dir']
 
-- name: Remove old httpd VirtualHost configuration files
+- name: Remove old httpd configuration files
   file:
     path: "{{ item }}"
     state: absent
   loop:
     - /etc/httpd/conf.d/yum-repo.conf
     - /etc/httpd/conf.d/iso-repo.conf
+    - /etc/httpd/conf.d/local-repo-access.conf
+    - /etc/httpd/conf.d/local-repo-symlinks.conf
+    - /etc/httpd/conf.d/local-repo-alias.conf
   when:
     - setup_local_repo | default(false)
     - local_repo_web_server == "httpd"
@@ -231,16 +234,32 @@
   notify: restart httpd
   tags: ['local-repo', 'web-config']
 
-- name: Create symlink for yum-repo in DocumentRoot
+- name: Add execute permission to /root for httpd access
   file:
-    src: "{{ yum_repo_directory }}"
-    dest: "/var/www/html/yum-repo"
-    state: link
-    force: yes
+    path: /root
+    mode: '0755'
+  when:
+    - setup_local_repo | default(false)
+    - local_repo_web_server == "httpd"
+  tags: ['local-repo', 'web-config']
+
+- name: Create httpd Alias configuration for yum-repo
+  copy:
+    content: |
+      # Alias for yum-repo directory
+      Alias /yum-repo {{ yum_repo_directory }}
+      <Directory "{{ yum_repo_directory }}">
+          Options Indexes FollowSymLinks
+          AllowOverride None
+          Require all granted
+      </Directory>
+    dest: /etc/httpd/conf.d/yum-repo-alias.conf
+    mode: '0644'
   when:
     - setup_local_repo | default(false)
     - use_yum_repo_directory | default(false)
     - local_repo_web_server == "httpd"
+  notify: restart httpd
   tags: ['local-repo', 'yum-repo-dir', 'web-config']
 
 - name: Configure nginx for yum-repo directory
@@ -354,12 +373,18 @@
     - use_iso_device | default(true)
   tags: ['local-repo', 'iso-repo', 'fstab']
 
-- name: Create symlink for iso-repo in DocumentRoot
-  file:
-    src: "{{ iso_mount_point }}"
-    dest: "/var/www/html/iso-repo"
-    state: link
-    force: yes
+- name: Create httpd Alias configuration for iso-repo
+  copy:
+    content: |
+      # Alias for ISO repository
+      Alias /iso-repo {{ iso_mount_point }}
+      <Directory "{{ iso_mount_point }}">
+          Options Indexes FollowSymLinks
+          AllowOverride None
+          Require all granted
+      </Directory>
+    dest: /etc/httpd/conf.d/iso-repo-alias.conf
+    mode: '0644'
   when:
     - setup_local_repo | default(false)
     - use_iso_repo | default(false)
