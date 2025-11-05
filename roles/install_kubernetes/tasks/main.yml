@@ -24,11 +24,17 @@
         group: root
         mode: '0755'
 
+    - name: Remove kube-vip manifest file when HA is disabled
+      file:
+        path: /etc/kubernetes/manifests/kube-vip.yaml
+        state: absent
+      when: not master_ha and inventory_hostname in groups['masters']
+
     - name: Template kube-vip manifest file
       template:
         src: kube-vip.yaml.j2
         dest: /etc/kubernetes/manifests/kube-vip.yaml
-      when: inventory_hostname in groups['masters'] and kube_vip_address is defined
+      when: master_ha and kube_vip_address is defined and inventory_hostname in groups['masters']
 
     - name: Initialize Kubernetes cluster with kubeadm (single master)
       command: kubeadm init --config=/root/kubeadm-init.yml
