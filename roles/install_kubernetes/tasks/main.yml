@@ -142,17 +142,70 @@
   retries: 5
   delay: 10
 
-- name: Add kubectl alias to bashrc
-  lineinfile:
+- name: Configure comprehensive PATH in bashrc
+  blockinfile:
     path: "{{ ansible_env.HOME }}/.bashrc"
-    line: 'alias k=kubectl'
+    marker: "# {mark} ANSIBLE MANAGED - Kubernetes environment PATH"
+    block: |
+      export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:/root/bin:$PATH"
     create: yes
   when: inventory_hostname in groups['masters']
 
-- name: Add kubectl alias to root bashrc
-  lineinfile:
+- name: Configure kubectl completion and aliases in bashrc
+  blockinfile:
+    path: "{{ ansible_env.HOME }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED - Kubernetes aliases"
+    block: |
+      # kubectl completion
+      if [ -f /etc/bash_completion.d/kubectl ]; then
+        source /etc/bash_completion.d/kubectl
+      fi
+
+      # kubectl aliases
+      alias k=kubectl
+      alias kgp='kubectl get pods'
+      alias kgs='kubectl get svc'
+      alias kgn='kubectl get nodes'
+      alias kga='kubectl get all'
+      alias kgpa='kubectl get pods -A'
+      complete -F __start_kubectl k
+    create: yes
+  when: inventory_hostname in groups['masters']
+
+- name: Install kubectl completion
+  shell: kubectl completion bash > /etc/bash_completion.d/kubectl
+  args:
+    creates: /etc/bash_completion.d/kubectl
+  when: inventory_hostname in groups['masters']
+  ignore_errors: yes
+
+- name: Configure comprehensive PATH in root bashrc
+  blockinfile:
     path: /root/.bashrc
-    line: 'alias k=kubectl'
+    marker: "# {mark} ANSIBLE MANAGED - Kubernetes environment PATH"
+    block: |
+      export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:/root/bin:$PATH"
+    create: yes
+  become: yes
+
+- name: Configure kubectl completion and aliases in root bashrc
+  blockinfile:
+    path: /root/.bashrc
+    marker: "# {mark} ANSIBLE MANAGED - Kubernetes aliases"
+    block: |
+      # kubectl completion
+      if [ -f /etc/bash_completion.d/kubectl ]; then
+        source /etc/bash_completion.d/kubectl
+      fi
+
+      # kubectl aliases
+      alias k=kubectl
+      alias kgp='kubectl get pods'
+      alias kgs='kubectl get svc'
+      alias kgn='kubectl get nodes'
+      alias kga='kubectl get all'
+      alias kgpa='kubectl get pods -A'
+      complete -F __start_kubectl k
     create: yes
   become: yes
 
