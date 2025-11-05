@@ -1,0 +1,20 @@
+# Serena MCP cache and configuration
+.serena/
+
+# Backup files
+*.backup
+*.bak
+*~
+
+# Ansible retry files
+*.retry
+
+# Python bytecode
+*.pyc
+__pycache__/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+.DS_Store
