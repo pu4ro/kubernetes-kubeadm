@@ -400,15 +400,41 @@ install_k8s_ubuntu() {
     log_info "Kubernetes packages installed"
 }
 
-# Step 8: Setup kubectl bash completion
+# Step 8: Setup kubectl bash completion and environment
 setup_kubectl_completion() {
-    log_step "Step 8: Setting up kubectl completion"
+    log_step "Step 8: Setting up kubectl completion and environment"
 
-    kubectl completion bash > /etc/bash_completion.d/kubectl
-    echo 'alias k=kubectl' >> ~/.bashrc
-    echo 'complete -F __start_kubectl k' >> ~/.bashrc
+    # Setup comprehensive PATH if not already configured
+    if ! grep -q "# Kubernetes environment PATH" ~/.bashrc; then
+        log_info "Configuring comprehensive PATH..."
+        cat >> ~/.bashrc <<'EOF'
 
-    log_info "kubectl completion configured"
+# Kubernetes environment PATH
+export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:/root/bin:$PATH"
+EOF
+    fi
+
+    # Setup kubectl completion
+    kubectl completion bash > /etc/bash_completion.d/kubectl 2>/dev/null || true
+
+    # Add kubectl aliases and completion to ~/.bashrc
+    if ! grep -q "alias k=kubectl" ~/.bashrc; then
+        log_info "Adding kubectl aliases..."
+        cat >> ~/.bashrc <<'EOF'
+
+# Kubernetes aliases
+alias k=kubectl
+alias kgp='kubectl get pods'
+alias kgs='kubectl get svc'
+alias kgn='kubectl get nodes'
+alias kga='kubectl get all'
+alias kgpa='kubectl get pods -A'
+complete -F __start_kubectl k
+EOF
+    fi
+
+    log_info "kubectl completion and environment configured"
+    log_info "Run 'source ~/.bashrc' to apply changes to current session"
 }
 
 # Display summary
