@@ -280,10 +280,6 @@ sysctl: check-root
 		echo "net.bridge.bridge-nf-call-iptables = 1"; \
 		echo "net.bridge.bridge-nf-call-ip6tables = 1"; \
 		echo ""; \
-		echo "# Maximum number of connections"; \
-		echo "net.netfilter.nf_conntrack_max = 1000000"; \
-		echo "net.nf_conntrack_max = 1000000"; \
-		echo ""; \
 		echo "# File descriptors"; \
 		echo "fs.file-max = 2097152"; \
 		echo "fs.inotify.max_user_instances = 8192"; \
@@ -300,7 +296,7 @@ sysctl: check-root
 		echo "br_netfilter"; \
 		echo "overlay"; \
 	} > /etc/modules-load.d/k8s.conf
-	@sysctl -p /etc/sysctl.d/99-kubernetes.conf > /dev/null 2>&1
+	@sysctl -p /etc/sysctl.d/99-kubernetes.conf > /dev/null 2>&1 || true
 	$(call log_info,Kernel parameters configured)
 
 # Install and configure Containerd
