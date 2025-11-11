@@ -209,7 +209,7 @@ repo-ubuntu:
 	else \
 		echo -e "\033[0;32m[INFO]\033[0m Mirror APT repository configured"; \
 	fi
-	@apt-get update > /dev/null 2>&1
+	@apt-get update > /dev/null 2>&1 || true
 	$(call log_info,Repository configuration complete)
 
 # Install required packages
