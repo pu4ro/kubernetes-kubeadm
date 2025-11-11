@@ -76,7 +76,7 @@ help:
 	@echo "  make packages         - Install required packages"
 	@echo "  make system           - Configure system settings"
 	@echo "  make sysctl           - Configure kernel parameters"
-	@echo "  make containerd       - Install and configure containerd"
+	@echo "  make containerd       - Install containerd plus buildkit/nerdctl"
 	@echo "  make chrony           - Configure time synchronization"
 	@echo "  make kubernetes       - Install Kubernetes packages"
 	@echo "  make kubectl-setup    - Setup kubectl completion and aliases"
