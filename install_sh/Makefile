@@ -384,26 +384,22 @@ kubectl-setup: check-root
 	$(call log_step,Step 8: Setting up kubectl completion and environment)
 	@if ! grep -q "# Kubernetes environment PATH" ~/.bashrc; then \
 		echo -e "\033[0;32m[INFO]\033[0m Configuring comprehensive PATH..."; \
-		cat >> ~/.bashrc <<-'EOF'; \
-		; \
-		# Kubernetes environment PATH; \
-		export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:/root/bin:$$PATH"; \
-		EOF; \
+		echo "" >> ~/.bashrc; \
+		echo "# Kubernetes environment PATH" >> ~/.bashrc; \
+		echo 'export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:/root/bin:$$PATH"' >> ~/.bashrc; \
 	fi
 	@kubectl completion bash > /etc/bash_completion.d/kubectl 2>/dev/null || true
 	@if ! grep -q "alias k=kubectl" ~/.bashrc; then \
 		echo -e "\033[0;32m[INFO]\033[0m Adding kubectl aliases..."; \
-		cat >> ~/.bashrc <<-'EOF'; \
-		; \
-		# Kubernetes aliases; \
-		alias k=kubectl; \
-		alias kgp='kubectl get pods'; \
-		alias kgs='kubectl get svc'; \
-		alias kgn='kubectl get nodes'; \
-		alias kga='kubectl get all'; \
-		alias kgpa='kubectl get pods -A'; \
-		complete -F __start_kubectl k; \
-		EOF; \
+		echo "" >> ~/.bashrc; \
+		echo "# Kubernetes aliases" >> ~/.bashrc; \
+		echo "alias k=kubectl" >> ~/.bashrc; \
+		echo "alias kgp='kubectl get pods'" >> ~/.bashrc; \
+		echo "alias kgs='kubectl get svc'" >> ~/.bashrc; \
+		echo "alias kgn='kubectl get nodes'" >> ~/.bashrc; \
+		echo "alias kga='kubectl get all'" >> ~/.bashrc; \
+		echo "alias kgpa='kubectl get pods -A'" >> ~/.bashrc; \
+		echo "complete -F __start_kubectl k" >> ~/.bashrc; \
 	fi
 	$(call log_info,kubectl completion and environment configured)
 	$(call log_info,Run 'source ~/.bashrc' to apply changes to current session)
