@@ -122,14 +122,14 @@ detect-os:
 		. /etc/os-release; \
 		echo "$$ID" > /tmp/.k8s-os; \
 		echo "$$VERSION_ID" > /tmp/.k8s-os-version; \
-		$(call log_info,OS: $$ID $$VERSION_ID); \
+		echo -e "\033[0;32m[INFO]\033[0m OS: $$ID $$VERSION_ID"; \
 	else \
-		$(call log_error,Cannot detect OS); \
+		echo -e "\033[0;31m[ERROR]\033[0m Cannot detect OS"; \
 		exit 1; \
 	fi
 	@MASTER_IP=$$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n1); \
 	echo "$$MASTER_IP" > /tmp/.k8s-master-ip; \
-	$(call log_info,Local IP: $$MASTER_IP)
+	echo -e "\033[0;32m[INFO]\033[0m Local IP: $$MASTER_IP"
 
 # Configure repository
 repo: check-root detect-os
