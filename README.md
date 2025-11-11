@@ -656,24 +656,34 @@ cd install_sh
 # 도움말 확인
 make help
 
-# 전체 설치 (.env 파일이 있으면 자동으로 로드됩니다)
+# Kubernetes 노드 초기화 전 전체 설치 (kubeadm init/join 준비 완료)
+sudo make repo packages system sysctl containerd kubernetes kubectl-setup
+
+# 또는 전체 설치 (chrony 포함, .env 파일이 있으면 자동으로 로드됨)
 sudo make all
 
 # 단계별 설치
-sudo make repo          # 저장소 설정
-sudo make packages      # 패키지 설치
-sudo make system        # 시스템 설정
-sudo make sysctl        # 커널 파라미터
-sudo make containerd    # 컨테이너 런타임
-sudo make chrony        # 시간 동기화
-sudo make kubernetes    # K8s 패키지
-sudo make kubectl-setup # kubectl 설정
-sudo make summary       # 설치 요약
+sudo make repo          # 1단계: 저장소 설정
+sudo make packages      # 2단계: 패키지 설치
+sudo make system        # 3단계: 시스템 설정 (방화벽, swap, 타임존, hosts)
+sudo make sysctl        # 4단계: 커널 파라미터 설정
+sudo make containerd    # 5단계: 컨테이너 런타임 설치
+sudo make chrony        # 6단계: 시간 동기화 (선택사항)
+sudo make kubernetes    # 7단계: Kubernetes 패키지 설치
+sudo make kubectl-setup # 8단계: kubectl 환경 설정
+sudo make summary       # 설치 요약 확인
 
 # 조합 타겟
 sudo make minimal       # 최소 설치 (repo + packages + kubernetes)
-sudo make system-only   # 시스템 설정만
+sudo make system-only   # 시스템 설정만 (system + sysctl)
 sudo make runtime       # containerd만
+
+# Kubernetes 클러스터 초기화 후 실행
+# Master 노드에서:
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --service-cidr=10.96.0.0/12
+
+# Worker 노드에서 (Master 초기화 후 생성된 join 명령어 실행):
+sudo kubeadm join <master-ip>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>
 ```
 
 **주요 기능:**
