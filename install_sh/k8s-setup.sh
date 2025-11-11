@@ -7,12 +7,23 @@
 
 set -e
 
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Load environment variables from .env file if it exists
+if [ -f "${SCRIPT_DIR}/.env" ]; then
+    log_info "Loading configuration from .env file..."
+    set -a
+    source "${SCRIPT_DIR}/.env"
+    set +a
+fi
+
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+RED='[0;31m'
+GREEN='[0;32m'
+YELLOW='[1;33m'
+BLUE='[0;34m'
+NC='[0m' # No Color
 
 # Log functions
 log_info() {
@@ -34,31 +45,42 @@ log_step() {
     echo -e "${BLUE}========================================${NC}"
 }
 
-# Configuration (edit these values as needed)
-KUBERNETES_VERSION="1.27.14"
-CONTAINERD_VERSION="1.7.6"
-POD_SUBNET="10.244.0.0/16"
-SERVICE_SUBNET="10.96.0.0/12"
-TIMEZONE="Asia/Seoul"
+# Configuration (can be overridden by .env file)
+KUBERNETES_VERSION="${KUBERNETES_VERSION:-1.27.14}"
+CONTAINERD_VERSION="${CONTAINERD_VERSION:-1.7.6}"
+POD_SUBNET="${POD_SUBNET:-10.244.0.0/16}"
+SERVICE_SUBNET="${SERVICE_SUBNET:-10.96.0.0/12}"
+TIMEZONE="${TIMEZONE:-Asia/Seoul}"
 
 # Master node settings
-MASTER_IP=""
-KUBE_VIP_ADDRESS="192.168.135.30"
-KUBE_VIP_INTERFACE="ens18"
+MASTER_IP="${MASTER_IP:-}"
+KUBE_VIP_ADDRESS="${KUBE_VIP_ADDRESS:-192.168.135.30}"
+KUBE_VIP_INTERFACE="${KUBE_VIP_INTERFACE:-ens18}"
 
-# Local repository settings
-USE_LOCAL_REPO="true"
-USE_ISO_REPO="true"
-ISO_MOUNT_POINT="/mnt/cdrom"
-ISO_FILE_PATH="/root/rhel-9.4-x86_64-dvd.iso"
-YUM_REPO_DIR="/root/yum-repo"
-REPO_WEB_PORT="8080"
+# Repository settings - RHEL/CentOS
+USE_LOCAL_REPO="${USE_LOCAL_REPO:-true}"
+USE_ISO_REPO="${USE_ISO_REPO:-true}"
+ISO_MOUNT_POINT="${ISO_MOUNT_POINT:-/mnt/cdrom}"
+ISO_FILE_PATH="${ISO_FILE_PATH:-/root/rhel-9.4-x86_64-dvd.iso}"
+YUM_REPO_DIR="${YUM_REPO_DIR:-/root/yum-repo}"
+REPO_WEB_PORT="${REPO_WEB_PORT:-8080}"
 
-# Registry settings
-INSECURE_REGISTRIES=(
-    "cr.makina.rocks"
-    "harbor.runway.test"
-)
+# Repository settings - Ubuntu
+USE_LOCAL_APT_REPO="${USE_LOCAL_APT_REPO:-true}"
+APT_REPO_URL="${APT_REPO_URL:-http://192.168.135.1:8080/ubuntu}"
+APT_REPO_MIRROR="${APT_REPO_MIRROR:-http://kr.archive.ubuntu.com/ubuntu}"
+APT_REPO_DISTRIBUTION="${APT_REPO_DISTRIBUTION:-jammy}"
+APT_COMPONENTS="${APT_COMPONENTS:-main restricted universe multiverse}"
+
+# Registry settings (convert space-separated string to array)
+if [ -n "${INSECURE_REGISTRIES:-}" ]; then
+    IFS=' ' read -ra INSECURE_REGISTRIES <<< "${INSECURE_REGISTRIES}"
+else
+    INSECURE_REGISTRIES=(
+        "cr.makina.rocks"
+        "harbor.runway.test"
+    )
+fi
 
 # Check if running as root
 check_root() {
@@ -152,8 +174,37 @@ EOF
 
 configure_ubuntu_repo() {
     log_info "Configuring Ubuntu repository"
-    # Ubuntu repository configuration if needed
+    
+    # Backup original sources.list
+    if [ -f /etc/apt/sources.list ] && [ ! -f /etc/apt/sources.list.backup ]; then
+        cp /etc/apt/sources.list /etc/apt/sources.list.backup
+        log_info "Backed up original sources.list"
+    fi
+    
+    if [[ "$USE_LOCAL_APT_REPO" == "true" ]]; then
+        log_info "Configuring local APT repository..."
+        cat > /etc/apt/sources.list <<EOF
+# Local APT Repository
+deb [trusted=yes] $APT_REPO_URL $APT_REPO_DISTRIBUTION $APT_COMPONENTS
+deb [trusted=yes] $APT_REPO_URL $APT_REPO_DISTRIBUTION-updates $APT_COMPONENTS
+deb [trusted=yes] $APT_REPO_URL $APT_REPO_DISTRIBUTION-backports $APT_COMPONENTS
+deb [trusted=yes] $APT_REPO_URL $APT_REPO_DISTRIBUTION-security $APT_COMPONENTS
+EOF
+        log_info "Local APT repository configured"
+    else
+        log_info "Configuring mirror APT repository..."
+        cat > /etc/apt/sources.list <<EOF
+# Ubuntu Mirror Repository
+deb $APT_REPO_MIRROR $APT_REPO_DISTRIBUTION $APT_COMPONENTS
+deb $APT_REPO_MIRROR $APT_REPO_DISTRIBUTION-updates $APT_COMPONENTS
+deb $APT_REPO_MIRROR $APT_REPO_DISTRIBUTION-backports $APT_COMPONENTS
+deb $APT_REPO_MIRROR $APT_REPO_DISTRIBUTION-security $APT_COMPONENTS
+EOF
+        log_info "Mirror APT repository configured"
+    fi
+    
     apt-get update
+    log_info "Repository configuration complete"
 }
 
 # Step 2: Install required packages

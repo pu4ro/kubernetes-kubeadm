@@ -596,12 +596,117 @@ ansible-playbook -i inventory.ini reset_cluster.yml --limit worker1
 
 ### 독립 실행 스크립트 (Ansible 없이)
 
+스크립트와 Makefile은 `install_sh/` 디렉토리에 있습니다.
+
+#### 1단계: 환경 설정
+
 ```bash
+cd install_sh
+
+# .env.example을 복사하여 .env 파일 생성
+cp .env.example .env
+
+# .env 파일을 편집하여 환경에 맞게 설정
+vim .env
+```
+
+**.env 주요 설정 항목:**
+
+```bash
+# Kubernetes 버전
+KUBERNETES_VERSION=1.27.14
+
+# 네트워크 설정
+POD_SUBNET=10.244.0.0/16
+SERVICE_SUBNET=10.96.0.0/12
+
+# RHEL/CentOS 저장소
+USE_LOCAL_REPO=true
+USE_ISO_REPO=true
+ISO_FILE_PATH=/root/rhel-9.4-x86_64-dvd.iso
+
+# Ubuntu 저장소
+USE_LOCAL_APT_REPO=true
+APT_REPO_URL=http://192.168.135.1:8080/ubuntu
+APT_REPO_DISTRIBUTION=jammy
+
+# 레지스트리
+INSECURE_REGISTRIES="cr.makina.rocks harbor.runway.test"
+```
+
+#### 옵션 1: Shell 스크립트 사용
+
+```bash
+cd install_sh
+
 # Ansible 없이 단일 노드에 설치
 chmod +x k8s-setup.sh
 ./k8s-setup.sh
 
-# 자세한 사용법은 k8s-setup-README.md 참조
+# .env 파일이 있으면 자동으로 로드됩니다
+```
+
+#### 옵션 2: Makefile 사용 (권장)
+
+Makefile을 사용하면 단계별 설치 및 모듈식 실행이 가능합니다.
+
+```bash
+cd install_sh
+
+# 도움말 확인
+make help
+
+# 전체 설치 (.env 파일이 있으면 자동으로 로드됩니다)
+sudo make all
+
+# 단계별 설치
+sudo make repo          # 저장소 설정
+sudo make packages      # 패키지 설치
+sudo make system        # 시스템 설정
+sudo make sysctl        # 커널 파라미터
+sudo make containerd    # 컨테이너 런타임
+sudo make chrony        # 시간 동기화
+sudo make kubernetes    # K8s 패키지
+sudo make kubectl-setup # kubectl 설정
+sudo make summary       # 설치 요약
+
+# 조합 타겟
+sudo make minimal       # 최소 설치 (repo + packages + kubernetes)
+sudo make system-only   # 시스템 설정만
+sudo make runtime       # containerd만
+```
+
+**주요 기능:**
+- ✅ `.env` 파일로 중앙 집중식 설정 관리
+- ✅ 단계별 실행 및 재실행 가능
+- ✅ RHEL/CentOS 및 Ubuntu 모두 지원
+- ✅ 로컬 저장소 및 미러 서버 지원
+
+**Ubuntu APT 저장소 예시**
+
+로컬 APT 저장소를 사용하는 경우:
+```bash
+# 로컬 저장소 생성 예시
+# 1. ISO 마운트 또는 패키지 디렉토리 준비
+sudo mkdir -p /var/www/html/ubuntu
+sudo mount -o loop ubuntu-22.04-server-amd64.iso /mnt
+sudo rsync -av /mnt/ /var/www/html/ubuntu/
+
+# 2. Python HTTP 서버로 제공
+cd /var/www/html
+python3 -m http.server 8080
+
+# 3. Makefile 설정
+# USE_LOCAL_APT_REPO := true
+# APT_REPO_URL := http://192.168.135.1:8080/ubuntu
+```
+
+미러 서버를 사용하는 경우:
+```bash
+# Makefile에서 설정 변경
+# USE_LOCAL_APT_REPO := false
+# APT_REPO_MIRROR := http://kr.archive.ubuntu.com/ubuntu  # 한국 미러
+# APT_REPO_MIRROR := http://archive.ubuntu.com/ubuntu     # 공식 저장소
 ```
 
 ### 인증서 10년 연장
