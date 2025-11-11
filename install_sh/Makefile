@@ -110,7 +110,7 @@ help:
 check-root:
 	$(call log_step,Checking Root Privileges)
 	@if [ "$$(id -u)" -ne 0 ]; then \
-		$(call log_error,This must be run as root); \
+		echo -e "\033[0;31m[ERROR]\033[0m This must be run as root"; \
 		exit 1; \
 	fi
 	$(call log_info,Running as root ✓)
@@ -146,37 +146,39 @@ repo-rhel:
 	@rm -f /etc/yum.repos.d/*.repo
 	@if [ "$(USE_ISO_REPO)" = "true" ]; then \
 		if ! mountpoint -q "$(ISO_MOUNT_POINT)"; then \
-			$(call log_info,Mounting ISO...); \
+			echo -e "\033[0;32m[INFO]\033[0m Mounting ISO..."; \
 			mkdir -p "$(ISO_MOUNT_POINT)"; \
-			mount -o loop,ro "$(ISO_FILE_PATH)" "$(ISO_MOUNT_POINT)" || $(call log_warn,Failed to mount ISO); \
+			mount -o loop,ro "$(ISO_FILE_PATH)" "$(ISO_MOUNT_POINT)" || echo -e "\033[1;33m[WARN]\033[0m Failed to mount ISO"; \
 		fi; \
-		cat > /etc/yum.repos.d/local-iso.repo <<-'REPO'; \
-		[local-iso-baseos]; \
-		name=Local ISO BaseOS Repository; \
-		baseurl=file://$(ISO_MOUNT_POINT)/BaseOS; \
-		enabled=1; \
-		gpgcheck=0; \
-		priority=1; \
-		; \
-		[local-iso-appstream]; \
-		name=Local ISO AppStream Repository; \
-		baseurl=file://$(ISO_MOUNT_POINT)/AppStream; \
-		enabled=1; \
-		gpgcheck=0; \
-		priority=1; \
-		REPO; \
-		$(call log_info,ISO repository configured); \
+	fi
+	@if [ "$(USE_ISO_REPO)" = "true" ]; then \
+		echo "[local-iso-baseos]" > /etc/yum.repos.d/local-iso.repo; \
+		echo "name=Local ISO BaseOS Repository" >> /etc/yum.repos.d/local-iso.repo; \
+		echo "baseurl=file://$(ISO_MOUNT_POINT)/BaseOS" >> /etc/yum.repos.d/local-iso.repo; \
+		echo "enabled=1" >> /etc/yum.repos.d/local-iso.repo; \
+		echo "gpgcheck=0" >> /etc/yum.repos.d/local-iso.repo; \
+		echo "priority=1" >> /etc/yum.repos.d/local-iso.repo; \
+		echo "" >> /etc/yum.repos.d/local-iso.repo; \
+		echo "[local-iso-appstream]" >> /etc/yum.repos.d/local-iso.repo; \
+		echo "name=Local ISO AppStream Repository" >> /etc/yum.repos.d/local-iso.repo; \
+		echo "baseurl=file://$(ISO_MOUNT_POINT)/AppStream" >> /etc/yum.repos.d/local-iso.repo; \
+		echo "enabled=1" >> /etc/yum.repos.d/local-iso.repo; \
+		echo "gpgcheck=0" >> /etc/yum.repos.d/local-iso.repo; \
+		echo "priority=1" >> /etc/yum.repos.d/local-iso.repo; \
+	fi
+	@if [ "$(USE_ISO_REPO)" = "true" ]; then \
+		echo -e "\033[0;32m[INFO]\033[0m ISO repository configured"; \
 	fi
 	@if [ "$(USE_LOCAL_REPO)" = "true" ] && [ -d "$(YUM_REPO_DIR)" ]; then \
-		cat > /etc/yum.repos.d/local-yum.repo <<-'REPO'; \
-		[local-yum-repo]; \
-		name=Local YUM Repository; \
-		baseurl=file://$(YUM_REPO_DIR); \
-		enabled=1; \
-		gpgcheck=0; \
-		priority=1; \
-		REPO; \
-		$(call log_info,Local YUM repository configured); \
+		echo "[local-yum-repo]" > /etc/yum.repos.d/local-yum.repo; \
+		echo "name=Local YUM Repository" >> /etc/yum.repos.d/local-yum.repo; \
+		echo "baseurl=file://$(YUM_REPO_DIR)" >> /etc/yum.repos.d/local-yum.repo; \
+		echo "enabled=1" >> /etc/yum.repos.d/local-yum.repo; \
+		echo "gpgcheck=0" >> /etc/yum.repos.d/local-yum.repo; \
+		echo "priority=1" >> /etc/yum.repos.d/local-yum.repo; \
+	fi
+	@if [ "$(USE_LOCAL_REPO)" = "true" ] && [ -d "$(YUM_REPO_DIR)" ]; then \
+		echo -e "\033[0;32m[INFO]\033[0m Local YUM repository configured"; \
 	fi
 	@yum clean all > /dev/null 2>&1
 	$(call log_info,Repository configuration complete)
@@ -186,28 +188,30 @@ repo-ubuntu:
 	@# Backup original sources.list
 	@if [ -f /etc/apt/sources.list ] && [ ! -f /etc/apt/sources.list.backup ]; then \
 		cp /etc/apt/sources.list /etc/apt/sources.list.backup; \
-		$(call log_info,Backed up original sources.list); \
+		echo -e "\033[0;32m[INFO]\033[0m Backed up original sources.list"; \
 	fi
 	@if [ "$(USE_LOCAL_APT_REPO)" = "true" ]; then \
-		$(call log_info,Configuring local APT repository...); \
-		cat > /etc/apt/sources.list <<-'REPO'; \
-		# Local APT Repository; \
-		deb [trusted=yes] $(APT_REPO_URL) $(APT_REPO_DISTRIBUTION) $(APT_COMPONENTS); \
-		deb [trusted=yes] $(APT_REPO_URL) $(APT_REPO_DISTRIBUTION)-updates $(APT_COMPONENTS); \
-		deb [trusted=yes] $(APT_REPO_URL) $(APT_REPO_DISTRIBUTION)-backports $(APT_COMPONENTS); \
-		deb [trusted=yes] $(APT_REPO_URL) $(APT_REPO_DISTRIBUTION)-security $(APT_COMPONENTS); \
-		REPO; \
-		$(call log_info,Local APT repository configured); \
+		echo -e "\033[0;32m[INFO]\033[0m Configuring local APT repository..."; \
 	else \
-		$(call log_info,Configuring mirror APT repository...); \
-		cat > /etc/apt/sources.list <<-'REPO'; \
-		# Ubuntu Mirror Repository; \
-		deb $(APT_REPO_MIRROR) $(APT_REPO_DISTRIBUTION) $(APT_COMPONENTS); \
-		deb $(APT_REPO_MIRROR) $(APT_REPO_DISTRIBUTION)-updates $(APT_COMPONENTS); \
-		deb $(APT_REPO_MIRROR) $(APT_REPO_DISTRIBUTION)-backports $(APT_COMPONENTS); \
-		deb $(APT_REPO_MIRROR) $(APT_REPO_DISTRIBUTION)-security $(APT_COMPONENTS); \
-		REPO; \
-		$(call log_info,Mirror APT repository configured); \
+		echo -e "\033[0;32m[INFO]\033[0m Configuring mirror APT repository..."; \
+	fi
+	@if [ "$(USE_LOCAL_APT_REPO)" = "true" ]; then \
+		echo "# Local APT Repository" > /etc/apt/sources.list; \
+		echo "deb [trusted=yes] $(APT_REPO_URL) $(APT_REPO_DISTRIBUTION) $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
+		echo "deb [trusted=yes] $(APT_REPO_URL) $(APT_REPO_DISTRIBUTION)-updates $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
+		echo "deb [trusted=yes] $(APT_REPO_URL) $(APT_REPO_DISTRIBUTION)-backports $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
+		echo "deb [trusted=yes] $(APT_REPO_URL) $(APT_REPO_DISTRIBUTION)-security $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
+	else \
+		echo "# Ubuntu Mirror Repository" > /etc/apt/sources.list; \
+		echo "deb $(APT_REPO_MIRROR) $(APT_REPO_DISTRIBUTION) $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
+		echo "deb $(APT_REPO_MIRROR) $(APT_REPO_DISTRIBUTION)-updates $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
+		echo "deb $(APT_REPO_MIRROR) $(APT_REPO_DISTRIBUTION)-backports $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
+		echo "deb $(APT_REPO_MIRROR) $(APT_REPO_DISTRIBUTION)-security $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
+	fi
+	@if [ "$(USE_LOCAL_APT_REPO)" = "true" ]; then \
+		echo -e "\033[0;32m[INFO]\033[0m Local APT repository configured"; \
+	else \
+		echo -e "\033[0;32m[INFO]\033[0m Mirror APT repository configured"; \
 	fi
 	@apt-get update > /dev/null 2>&1
 	$(call log_info,Repository configuration complete)
@@ -228,7 +232,7 @@ packages-rhel:
 		curl wget vim net-tools bash-completion yum-utils \
 		device-mapper-persistent-data lvm2 chrony \
 		socat conntrack ipvsadm ipset tar bzip2 \
-		> /dev/null 2>&1 || $(call log_warn,Some packages failed to install)
+		> /dev/null 2>&1 || echo -e "\033[1;33m[WARN]\033[0m Some packages failed to install"
 	$(call log_info,Package installation complete)
 
 packages-ubuntu:
@@ -237,7 +241,7 @@ packages-ubuntu:
 		apt-transport-https ca-certificates curl \
 		software-properties-common gnupg lsb-release chrony \
 		socat conntrack ipvsadm ipset \
-		> /dev/null 2>&1 || $(call log_warn,Some packages failed to install)
+		> /dev/null 2>&1 || echo -e "\033[1;33m[WARN]\033[0m Some packages failed to install"
 	$(call log_info,Package installation complete)
 
 # Configure system settings
@@ -245,7 +249,7 @@ system: check-root detect-os
 	$(call log_step,Step 3: Configuring System Settings)
 	@OS=$$(cat /tmp/.k8s-os); \
 	if [ "$$OS" = "rhel" ] || [ "$$OS" = "centos" ] || [ "$$OS" = "rocky" ]; then \
-		$(call log_info,Disabling SELinux...); \
+		echo -e "\033[0;32m[INFO]\033[0m Disabling SELinux..."; \
 		setenforce 0 2>/dev/null || true; \
 		sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config; \
 	fi
@@ -308,10 +312,10 @@ containerd: check-root detect-os
 	$(call log_step,Step 5: Installing Containerd)
 	@OS=$$(cat /tmp/.k8s-os); \
 	if [ "$$OS" = "rhel" ] || [ "$$OS" = "centos" ] || [ "$$OS" = "rocky" ]; then \
-		$(call log_info,Installing containerd via yum...); \
+		echo -e "\033[0;32m[INFO]\033[0m Installing containerd via yum..."; \
 		yum install -y containerd.io 2>/dev/null || yum install -y containerd 2>/dev/null; \
 	elif [ "$$OS" = "ubuntu" ]; then \
-		$(call log_info,Installing containerd via apt...); \
+		echo -e "\033[0;32m[INFO]\033[0m Installing containerd via apt..."; \
 		apt-get install -y containerd.io 2>/dev/null || apt-get install -y containerd 2>/dev/null; \
 	fi
 	$(call log_info,Configuring containerd...)
@@ -364,7 +368,7 @@ kubernetes-rhel:
 		kubelet-$$K8S_VERSION \
 		kubeadm-$$K8S_VERSION \
 		kubectl-$$K8S_VERSION \
-		--disableexcludes=kubernetes 2>/dev/null || $(call log_warn,Failed to install specific K8s version)
+		--disableexcludes=kubernetes 2>/dev/null || echo -e "\033[1;33m[WARN]\033[0m Failed to install specific K8s version"
 	@systemctl enable kubelet
 	$(call log_info,Kubernetes packages installed)
 
@@ -387,7 +391,7 @@ kubernetes-ubuntu:
 kubectl-setup: check-root
 	$(call log_step,Step 8: Setting up kubectl completion and environment)
 	@if ! grep -q "# Kubernetes environment PATH" ~/.bashrc; then \
-		$(call log_info,Configuring comprehensive PATH...); \
+		echo -e "\033[0;32m[INFO]\033[0m Configuring comprehensive PATH..."; \
 		cat >> ~/.bashrc <<-'EOF'; \
 		; \
 		# Kubernetes environment PATH; \
@@ -396,7 +400,7 @@ kubectl-setup: check-root
 	fi
 	@kubectl completion bash > /etc/bash_completion.d/kubectl 2>/dev/null || true
 	@if ! grep -q "alias k=kubectl" ~/.bashrc; then \
-		$(call log_info,Adding kubectl aliases...); \
+		echo -e "\033[0;32m[INFO]\033[0m Adding kubectl aliases..."; \
 		cat >> ~/.bashrc <<-'EOF'; \
 		; \
 		# Kubernetes aliases; \
