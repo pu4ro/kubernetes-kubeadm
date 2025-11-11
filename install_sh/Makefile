@@ -271,35 +271,35 @@ system: check-root detect-os
 sysctl: check-root
 	$(call log_step,Step 4: Configuring Kernel Parameters)
 	$(call log_info,Setting sysctl parameters for Kubernetes...)
-	@cat > /etc/sysctl.d/99-kubernetes.conf <<-'EOF'
-	# Enable IP forwarding
-	net.ipv4.ip_forward = 1
-	net.ipv6.conf.all.forwarding = 1
-	
-	# Bridge network
-	net.bridge.bridge-nf-call-iptables = 1
-	net.bridge.bridge-nf-call-ip6tables = 1
-	
-	# Maximum number of connections
-	net.netfilter.nf_conntrack_max = 1000000
-	net.nf_conntrack_max = 1000000
-	
-	# File descriptors
-	fs.file-max = 2097152
-	fs.inotify.max_user_instances = 8192
-	fs.inotify.max_user_watches = 524288
-	
-	# ARP cache
-	net.ipv4.neigh.default.gc_thresh1 = 1024
-	net.ipv4.neigh.default.gc_thresh2 = 4096
-	net.ipv4.neigh.default.gc_thresh3 = 8192
-	EOF
+	@{ \
+		echo "# Enable IP forwarding"; \
+		echo "net.ipv4.ip_forward = 1"; \
+		echo "net.ipv6.conf.all.forwarding = 1"; \
+		echo ""; \
+		echo "# Bridge network"; \
+		echo "net.bridge.bridge-nf-call-iptables = 1"; \
+		echo "net.bridge.bridge-nf-call-ip6tables = 1"; \
+		echo ""; \
+		echo "# Maximum number of connections"; \
+		echo "net.netfilter.nf_conntrack_max = 1000000"; \
+		echo "net.nf_conntrack_max = 1000000"; \
+		echo ""; \
+		echo "# File descriptors"; \
+		echo "fs.file-max = 2097152"; \
+		echo "fs.inotify.max_user_instances = 8192"; \
+		echo "fs.inotify.max_user_watches = 524288"; \
+		echo ""; \
+		echo "# ARP cache"; \
+		echo "net.ipv4.neigh.default.gc_thresh1 = 1024"; \
+		echo "net.ipv4.neigh.default.gc_thresh2 = 4096"; \
+		echo "net.ipv4.neigh.default.gc_thresh3 = 8192"; \
+	} > /etc/sysctl.d/99-kubernetes.conf
 	@modprobe br_netfilter 2>/dev/null || true
 	@modprobe overlay 2>/dev/null || true
-	@cat > /etc/modules-load.d/k8s.conf <<-'EOF'
-	br_netfilter
-	overlay
-	EOF
+	@{ \
+		echo "br_netfilter"; \
+		echo "overlay"; \
+	} > /etc/modules-load.d/k8s.conf
 	@sysctl -p /etc/sysctl.d/99-kubernetes.conf > /dev/null 2>&1
 	$(call log_info,Kernel parameters configured)
 
