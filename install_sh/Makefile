@@ -345,38 +345,16 @@ kubernetes: check-root detect-os
 	fi
 
 kubernetes-rhel:
-	$(call log_info,Installing Kubernetes packages for RHEL/CentOS...)
-	@cat > /etc/yum.repos.d/kubernetes.repo <<-'EOF'
-	[kubernetes]
-	name=Kubernetes
-	baseurl=https://pkgs.k8s.io/core:/stable:/v1.27/rpm/
-	enabled=1
-	gpgcheck=1
-	gpgkey=https://pkgs.k8s.io/core:/stable:/v1.27/rpm/repodata/repomd.xml.key
-	exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
-	EOF
-	@K8S_VERSION="$(KUBERNETES_VERSION)-0"; \
-	yum install -y \
-		kubelet-$$K8S_VERSION \
-		kubeadm-$$K8S_VERSION \
-		kubectl-$$K8S_VERSION \
-		--disableexcludes=kubernetes 2>/dev/null || echo -e "\033[1;33m[WARN]\033[0m Failed to install specific K8s version"
-	@systemctl enable kubelet
+	$(call log_info,Installing Kubernetes packages for RHEL/CentOS from local repo...)
+	@yum install -y kubelet kubeadm kubectl 2>/dev/null || echo -e "\033[1;33m[WARN]\033[0m Failed to install Kubernetes packages"
+	@systemctl enable kubelet 2>/dev/null || true
 	$(call log_info,Kubernetes packages installed)
 
 kubernetes-ubuntu:
-	$(call log_info,Installing Kubernetes packages for Ubuntu...)
-	@mkdir -p /etc/apt/keyrings
-	@curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.27/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-	@echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.27/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
-	@apt-get update > /dev/null 2>&1
-	@K8S_VERSION="$(KUBERNETES_VERSION)-*"; \
-	apt-get install -y \
-		kubelet=$$K8S_VERSION \
-		kubeadm=$$K8S_VERSION \
-		kubectl=$$K8S_VERSION \
-		2>/dev/null
-	@apt-mark hold kubelet kubeadm kubectl
+	$(call log_info,Installing Kubernetes packages for Ubuntu from local repo...)
+	@apt-get update > /dev/null 2>&1 || true
+	@apt-get install -y kubelet kubeadm kubectl 2>/dev/null || echo -e "\033[1;33m[WARN]\033[0m Failed to install Kubernetes packages"
+	@apt-mark hold kubelet kubeadm kubectl 2>/dev/null || true
 	$(call log_info,Kubernetes packages installed)
 
 # Setup kubectl bash completion and environment
