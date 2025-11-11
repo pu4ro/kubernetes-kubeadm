@@ -227,7 +227,7 @@ packages-rhel:
 	@yum install -y \
 		curl wget vim net-tools bash-completion yum-utils \
 		device-mapper-persistent-data lvm2 chrony \
-		socat conntrack ipvsadm ipset tar bzip2 \
+		socat conntrack tar bzip2 \
 		> /dev/null 2>&1 || echo -e "\033[1;33m[WARN]\033[0m Some packages failed to install"
 	$(call log_info,Package installation complete)
 
@@ -236,7 +236,7 @@ packages-ubuntu:
 	@apt-get install -y \
 		apt-transport-https ca-certificates curl \
 		software-properties-common gnupg lsb-release chrony \
-		socat conntrack ipvsadm ipset \
+		socat conntrack \
 		> /dev/null 2>&1 || echo -e "\033[1;33m[WARN]\033[0m Some packages failed to install"
 	$(call log_info,Package installation complete)
 
