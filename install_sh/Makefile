@@ -196,11 +196,7 @@ repo-ubuntu:
 		echo -e "\033[0;32m[INFO]\033[0m Configuring mirror APT repository..."; \
 	fi
 	@if [ "$(USE_LOCAL_APT_REPO)" = "true" ]; then \
-		echo "# Local APT Repository" > /etc/apt/sources.list; \
-		echo "deb [trusted=yes] $(APT_REPO_URL) $(APT_REPO_DISTRIBUTION) $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
-		echo "deb [trusted=yes] $(APT_REPO_URL) $(APT_REPO_DISTRIBUTION)-updates $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
-		echo "deb [trusted=yes] $(APT_REPO_URL) $(APT_REPO_DISTRIBUTION)-backports $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
-		echo "deb [trusted=yes] $(APT_REPO_URL) $(APT_REPO_DISTRIBUTION)-security $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
+		echo "deb [trusted=yes] $(APT_REPO_URL) ./" | tee /etc/apt/sources.list.d/local-repo.list > /dev/null; \
 	else \
 		echo "# Ubuntu Mirror Repository" > /etc/apt/sources.list; \
 		echo "deb $(APT_REPO_MIRROR) $(APT_REPO_DISTRIBUTION) $(APT_COMPONENTS)" >> /etc/apt/sources.list; \
