@@ -317,6 +317,13 @@ containerd: check-root detect-os
 	@systemctl daemon-reload
 	@systemctl enable containerd
 	@systemctl restart containerd
+	$(call log_info,Installing buildkit and nerdctl...)
+	@OS=$$(cat /tmp/.k8s-os); \
+	if [ "$$OS" = "rhel" ] || [ "$$OS" = "centos" ] || [ "$$OS" = "rocky" ]; then \
+		yum install -y buildkit nerdctl 2>/dev/null || echo -e "\033[1;33m[WARN]\033[0m buildkit/nerdctl not available in repo"; \
+	elif [ "$$OS" = "ubuntu" ]; then \
+		apt-get install -y buildkit nerdctl 2>/dev/null || echo -e "\033[1;33m[WARN]\033[0m buildkit/nerdctl not available in repo"; \
+	fi
 	$(call log_info,Containerd installation complete)
 
 # Configure Chrony (NTP)
