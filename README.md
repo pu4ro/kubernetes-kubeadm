@@ -52,9 +52,15 @@ Ansible을 사용한 Kubernetes 클러스터 자동 배포 도구입니다.
 ## 🐧 지원 플랫폼
 
 ### 운영체제
-- **Ubuntu**: 20.04 LTS, 22.04 LTS
+- **Ubuntu**: 20.04 LTS, 22.04 LTS, 24.04 LTS (Noble)
 - **RHEL/CentOS**: 8.x, 9.x
 - **Rocky Linux**: 8.x, 9.x
+
+#### Ubuntu 24.04 LTS 지원 사항
+- `.sources` 방식으로 바뀐 기본 APT 구성을 `roles/configure_repo/tasks/setup_ubuntu_repo.yml`에서 자동으로 백업/대체하여 로컬 또는 미러 레포지토리를 동일하게 사용할 수 있습니다.
+- `linux-modules-extra-<커널버전>` 패키지를 자동으로 설치해 OverlayFS, Ceph 등을 위한 커널 모듈을 확보합니다.
+- `rbd`, `ceph` 모듈을 `/etc/modules-load.d/storage.conf`에 등록하고 즉시 로드하여 CSI/NFS 스토리지 드라이버가 문제없이 동작합니다.
+- Ubuntu 24.04 환경에서 APT 배포판 값은 `noble`이어야 하며, 로컬/미러 저장소 설정 시 동일하게 적용해야 합니다.
 
 ### Kubernetes 버전
 - **기본**: 1.27.14 (기본값)
@@ -592,131 +598,6 @@ ansible-playbook -i inventory.ini reset_cluster.yml
 
 # 특정 노드만 리셋
 ansible-playbook -i inventory.ini reset_cluster.yml --limit worker1
-```
-
-### 독립 실행 스크립트 (Ansible 없이)
-
-스크립트와 Makefile은 `install_sh/` 디렉토리에 있습니다.
-
-#### 1단계: 환경 설정
-
-```bash
-cd install_sh
-
-# .env.example을 복사하여 .env 파일 생성
-cp .env.example .env
-
-# .env 파일을 편집하여 환경에 맞게 설정
-vim .env
-```
-
-**.env 주요 설정 항목:**
-
-```bash
-# Kubernetes 버전
-KUBERNETES_VERSION=1.27.14
-
-# 네트워크 설정
-POD_SUBNET=10.244.0.0/16
-SERVICE_SUBNET=10.96.0.0/12
-
-# RHEL/CentOS 저장소
-USE_LOCAL_REPO=true
-USE_ISO_REPO=true
-ISO_FILE_PATH=/root/rhel-9.4-x86_64-dvd.iso
-
-# Ubuntu 저장소
-USE_LOCAL_APT_REPO=true
-APT_REPO_URL=http://192.168.135.1:8080/ubuntu
-APT_REPO_DISTRIBUTION=jammy
-
-# 레지스트리
-INSECURE_REGISTRIES="cr.makina.rocks harbor.runway.test"
-```
-
-#### 옵션 1: Shell 스크립트 사용
-
-```bash
-cd install_sh
-
-# Ansible 없이 단일 노드에 설치
-chmod +x k8s-setup.sh
-./k8s-setup.sh
-
-# .env 파일이 있으면 자동으로 로드됩니다
-```
-
-#### 옵션 2: Makefile 사용 (권장)
-
-Makefile을 사용하면 단계별 설치 및 모듈식 실행이 가능합니다.
-
-```bash
-cd install_sh
-
-# 도움말 확인
-make help
-
-# Kubernetes 노드 초기화 전 전체 설치 (kubeadm init/join 준비 완료)
-sudo make repo packages system sysctl containerd kubernetes kubectl-setup
-
-# 또는 전체 설치 (chrony 포함, .env 파일이 있으면 자동으로 로드됨)
-sudo make all
-
-# 단계별 설치
-sudo make repo          # 1단계: 저장소 설정
-sudo make packages      # 2단계: 패키지 설치
-sudo make system        # 3단계: 시스템 설정 (방화벽, swap, 타임존, hosts)
-sudo make sysctl        # 4단계: 커널 파라미터 설정
-sudo make containerd    # 5단계: 컨테이너 런타임 설치
-sudo make chrony        # 6단계: 시간 동기화 (선택사항)
-sudo make kubernetes    # 7단계: Kubernetes 패키지 설치
-sudo make kubectl-setup # 8단계: kubectl 환경 설정
-sudo make summary       # 설치 요약 확인
-
-# 조합 타겟
-sudo make minimal       # 최소 설치 (repo + packages + kubernetes)
-sudo make system-only   # 시스템 설정만 (system + sysctl)
-sudo make runtime       # containerd만
-
-# Kubernetes 클러스터 초기화 후 실행
-# Master 노드에서:
-sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --service-cidr=10.96.0.0/12
-
-# Worker 노드에서 (Master 초기화 후 생성된 join 명령어 실행):
-sudo kubeadm join <master-ip>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>
-```
-
-**주요 기능:**
-- ✅ `.env` 파일로 중앙 집중식 설정 관리
-- ✅ 단계별 실행 및 재실행 가능
-- ✅ RHEL/CentOS 및 Ubuntu 모두 지원
-- ✅ 로컬 저장소 및 미러 서버 지원
-
-**Ubuntu APT 저장소 예시**
-
-로컬 APT 저장소를 사용하는 경우:
-```bash
-# 로컬 저장소 생성 예시
-# 1. ISO 마운트 또는 패키지 디렉토리 준비
-sudo mkdir -p /var/www/html/ubuntu
-sudo mount -o loop ubuntu-22.04-server-amd64.iso /mnt
-sudo rsync -av /mnt/ /var/www/html/ubuntu/
-
-# 2. Python HTTP 서버로 제공
-cd /var/www/html
-python3 -m http.server 8080
-
-# 3. Makefile 설정
-# USE_LOCAL_APT_REPO := true
-# APT_REPO_URL := http://192.168.135.1:8080/ubuntu
-```
-
-미러 서버를 사용하는 경우:
-```bash
-# Makefile에서 설정 변경
-# USE_LOCAL_APT_REPO := false
-# APT_REPO_MIRROR := http://kr.archive.ubuntu.com/ubuntu  # 한국 미러
-# APT_REPO_MIRROR := http://archive.ubuntu.com/ubuntu     # 공식 저장소
 ```
 
 ### 인증서 10년 연장
