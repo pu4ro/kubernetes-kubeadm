@@ -23,7 +23,7 @@ ubuntu_packages:
 # Master-only packages (for installs group)
 master_only_packages:
   - make
-  - helmfile-bundle.x86_64
+  - helmfile-bundle
   
 # RHEL/CentOS packages (required for k8s)
 rhel_packages:
@@ -52,7 +52,7 @@ rhel_optional_packages:
 # Master-only packages (for installs group)  
 master_only_rhel_packages:
   - make
-  - helmfile
+  - helmfile-bundle
 
 # Package names that differ between distributions
 package_map:
