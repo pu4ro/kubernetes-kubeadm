@@ -127,7 +127,7 @@
 
     - name: Download NVIDIA driver from local repo
       get_url:
-        url: "http://{{ local_repo_server_ip }}:{{ yum_repo_web_port }}/yum-repo/NVIDIA-Linux-x86_64-{{ driver_version }}.run"
+        url: "http://{{ hostvars[groups['installs'][0]]['ansible_default_ipv4']['address'] }}:{{ yum_repo_web_port }}/yum-repo/NVIDIA-Linux-x86_64-{{ driver_version }}.run"
         dest: /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run
         mode: '0755'
         timeout: 300
