@@ -23,7 +23,7 @@ ubuntu_packages:
 # Master-only packages (for installs group)
 master_only_packages:
   - make
-  - helmfile
+  - helmfile-bundle.x86_64
   
 # RHEL/CentOS packages (required for k8s)
 rhel_packages:
@@ -69,4 +69,9 @@ package_map:
     Debian: chrony
     RedHat: chrony
 
-  
+# GPU Driver Installation
+# Set install_gpu_driver to true to install NVIDIA GPU drivers
+# Requires NVIDIA devices to be present in the system
+# Driver version can be configured with driver_version variable
+install_gpu_driver: true
+driver_version: "570.124.06"

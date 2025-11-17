@@ -91,7 +91,7 @@
       shell: lspci | grep -i NVIDIA
       register: nvidia_devices
       ignore_errors: true
-      tags: installer
+      tags: nvidia-driver
 
     - name: Install kernel development packages
       yum:
@@ -102,6 +102,7 @@
           - make
         state: present
       when: nvidia_devices.stdout != ""
+      tags: nvidia-driver
 
     - name: Create disable-nouveau.conf file
       copy:
@@ -110,32 +111,30 @@
           blacklist nouveau
           options nouveau modeset=0
       when: nvidia_devices.stdout != ""
+      tags: nvidia-driver
 
     - name: Regenerate initramfs
       command: dracut --force
       when: nvidia_devices.stdout != ""
+      tags: nvidia-driver
 
     - name: Reboot NVIDIA devices only
       reboot:
         reboot_timeout: 1200
       when: nvidia_devices.stdout != ""
       become: yes
+      tags: nvidia-driver
 
-    - name: Check if NVIDIA driver file exists in yum-repo
-      stat:
-        path: "{{ yum_repo_directory }}/NVIDIA-Linux-x86_64-{{ driver_version }}.run"
-      register: nvidia_driver_file
-      when: nvidia_devices.stdout != ""
-
-    - name: Copy NVIDIA installer to /tmp
-      copy:
-        src: "{{ yum_repo_directory }}/NVIDIA-Linux-x86_64-{{ driver_version }}.run"
+    - name: Download NVIDIA driver from local repo
+      get_url:
+        url: "http://{{ local_repo_server_ip }}:{{ yum_repo_web_port }}/yum-repo/NVIDIA-Linux-x86_64-{{ driver_version }}.run"
         dest: /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run
         mode: '0755'
-        remote_src: yes
-      when:
-        - nvidia_devices.stdout != ""
-        - nvidia_driver_file.stat.exists
+        timeout: 300
+      when: nvidia_devices.stdout != ""
+      register: nvidia_driver_download
+      ignore_errors: yes
+      tags: nvidia-driver
 
     - name: Run NVIDIA installer
       ansible.builtin.shell: |
@@ -147,8 +146,8 @@
         creates: /usr/bin/nvidia-smi
       when:
         - nvidia_devices.stdout != ""
-        - nvidia_driver_file.stat.exists
-      tags: installer
+        - nvidia_driver_download is succeeded
+      tags: nvidia-driver
 
     - name: Load nvidia module
       community.general.modprobe:
@@ -156,8 +155,9 @@
         state: present
       when:
         - nvidia_devices.stdout != ""
-        - nvidia_driver_file.stat.exists
+        - nvidia_driver_download is succeeded
       ignore_errors: yes
+      tags: nvidia-driver
   when: 
     - ansible_os_family == "RedHat"
     - install_gpu_driver | default(false)
