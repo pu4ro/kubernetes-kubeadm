@@ -159,6 +159,17 @@
       ignore_errors: yes
       tags: nvidia-driver
 
+    - name: Create ldconfig symlink for NVIDIA
+      file:
+        src: /sbin/ldconfig
+        dest: /sbin/ldconfig.real
+        state: link
+      when:
+        - nvidia_devices.stdout != ""
+        - nvidia_driver_download is succeeded
+      ignore_errors: yes
+      tags: nvidia-driver
+
     - name: Apply NVIDIA containerd configuration
       template:
         src: /root/kubernetes-kubeadm/roles/install_containerd/templates/containerd_nvidia.j2
@@ -183,3 +194,18 @@
   when: 
     - ansible_os_family == "RedHat"
     - install_gpu_driver | default(false)
+
+# Configure environment variables
+- name: Add HELMFILE_CONFIG to bashrc
+  lineinfile:
+    path: /root/.bashrc
+    line: 'export HELMFILE_CONFIG=config_default.yaml'
+    state: present
+    create: yes
+
+- name: Add /usr/local/bin to PATH in bashrc
+  lineinfile:
+    path: /root/.bashrc
+    line: 'export PATH="/usr/local/bin:$PATH"'
+    state: present
+    create: yes
