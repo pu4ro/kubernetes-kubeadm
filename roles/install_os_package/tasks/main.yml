@@ -159,17 +159,6 @@
       ignore_errors: yes
       tags: nvidia-driver
 
-    - name: Install nvidia-container-toolkit
-      yum:
-        name:
-          - nvidia-container-toolkit
-        state: present
-      when:
-        - nvidia_devices.stdout != ""
-        - nvidia_driver_download is succeeded
-      ignore_errors: yes
-      tags: nvidia-driver
-
     - name: Apply NVIDIA containerd configuration
       template:
         src: /root/kubernetes-kubeadm/roles/install_containerd/templates/containerd_nvidia.j2
