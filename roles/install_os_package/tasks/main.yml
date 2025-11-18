@@ -116,6 +116,7 @@
           - kernel-headers
           - gcc
           - make
+          - elfutils-libelf-devel
         state: present
       when:
         - nvidia_devices.stdout != ""
