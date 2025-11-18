@@ -94,8 +94,8 @@
 
 # set timezone
 - name: Set timezone to Asia/Seoul
-  timezone:
-    name: "{{ set_timezone }}"
+  command: timedatectl set-timezone {{ set_timezone }}
+  changed_when: false
   tags: timezone
 
 - name: Check the current timezone
