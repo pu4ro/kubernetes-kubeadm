@@ -103,7 +103,9 @@
     - name: Wait for CoreDNS pods to be ready
       command: kubectl wait --for=condition=ready pod -l k8s-app=kube-dns -n {{ coredns_namespace }} --timeout={{ kubectl_timeout }}
       when: configmap_update is succeeded
-      retries: 3
+      register: wait_result
+      until: wait_result.rc == 0
+      retries: 6
       delay: 10
 
     - name: Verify CoreDNS ConfigMap update
