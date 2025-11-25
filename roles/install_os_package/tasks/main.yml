@@ -181,7 +181,7 @@
       command: modprobe nvidia
       when:
         - nvidia_devices.stdout != ""
-        - nvidia_driver_download is succeeded
+        - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
       ignore_errors: yes
       changed_when: false
       tags: nvidia-driver
@@ -193,8 +193,17 @@
         state: link
       when:
         - nvidia_devices.stdout != ""
-        - nvidia_driver_download is succeeded
+        - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
       ignore_errors: yes
+      tags: nvidia-driver
+
+    - name: Install nvidia-container-toolkit
+      yum:
+        name: nvidia-container-toolkit
+        state: present
+      when:
+        - nvidia_devices.stdout != ""
+        - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
       tags: nvidia-driver
 
     - name: Apply NVIDIA containerd configuration
@@ -206,7 +215,7 @@
         mode: '0644'
       when:
         - nvidia_devices.stdout != ""
-        - nvidia_driver_download is succeeded
+        - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
       tags: nvidia-driver
 
     - name: Restart containerd service
@@ -216,7 +225,7 @@
         daemon_reload: yes
       when:
         - nvidia_devices.stdout != ""
-        - nvidia_driver_download is succeeded
+        - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
       tags: nvidia-driver
   when: 
     - ansible_os_family == "RedHat"
