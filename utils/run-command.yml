@@ -1,0 +1,71 @@
+---
+# Ansible Playbook for Running Ad-hoc Commands
+# Usage: ansible-playbook -i inventory.ini utils/run-command.yml -e "cmd='your command here'"
+
+- name: Execute Ad-hoc Command
+  hosts: "{{ target_hosts | default('all') }}"
+  become: "{{ become_root | default(true) }}"
+  gather_facts: "{{ gather_facts | default(false) }}"
+
+  vars:
+    # Required variable - must be provided via -e flag
+    cmd: ""
+
+    # Optional variables with defaults
+    target_hosts: "all"
+    become_root: true
+    gather_facts: false
+    command_timeout: 300
+    ignore_errors_flag: false
+    changed_when_condition: false
+
+  pre_tasks:
+    - name: Validate required variables
+      fail:
+        msg: "ERROR: 'cmd' variable is required. Use -e 'cmd=your command here'"
+      when: cmd == ""
+      delegate_to: localhost
+      run_once: true
+
+  tasks:
+    - name: Display execution information
+      debug:
+        msg:
+          - "========================================="
+          - "Command: {{ cmd }}"
+          - "Target Hosts: {{ target_hosts }}"
+          - "Become Root: {{ become_root }}"
+          - "Timeout: {{ command_timeout }}s"
+          - "========================================="
+      run_once: true
+
+    - name: Execute command
+      shell: "{{ cmd }}"
+      register: command_result
+      changed_when: changed_when_condition
+      ignore_errors: "{{ ignore_errors_flag }}"
+      async: "{{ command_timeout }}"
+      poll: 5
+      args:
+        executable: /bin/bash
+
+    - name: Display command output
+      debug:
+        msg:
+          - "Host: {{ inventory_hostname }}"
+          - "Return Code: {{ command_result.rc }}"
+          - "Standard Output:"
+          - "{{ command_result.stdout }}"
+          - "{% if command_result.stderr %}Standard Error:{% endif %}"
+          - "{{ command_result.stderr | default('') }}"
+      when: command_result is defined
+
+  post_tasks:
+    - name: Summary
+      debug:
+        msg:
+          - "========================================="
+          - "Command execution completed"
+          - "Total hosts: {{ ansible_play_hosts | length }}"
+          - "========================================="
+      run_once: true
