@@ -91,6 +91,18 @@
       shell: lspci | grep -i NVIDIA
       register: nvidia_devices
       ignore_errors: true
+      changed_when: false
+      tags: nvidia-driver
+
+    - name: Set GPU detection fact
+      set_fact:
+        has_nvidia_gpu: "{{ nvidia_devices.stdout != '' }}"
+        cacheable: yes
+      tags: nvidia-driver
+
+    - name: Display GPU detection result
+      debug:
+        msg: "NVIDIA GPU detected: {{ has_nvidia_gpu }}"
       tags: nvidia-driver
 
     - name: Check if NVIDIA driver is already installed
@@ -98,14 +110,14 @@
       register: nvidia_smi_check
       ignore_errors: true
       changed_when: false
-      when: nvidia_devices.stdout != ""
+      when: has_nvidia_gpu | bool
       tags: nvidia-driver
 
     - name: Display NVIDIA driver status
       debug:
         msg: "NVIDIA driver is already installed, skipping installation"
       when:
-        - nvidia_devices.stdout != ""
+        - has_nvidia_gpu | bool
         - nvidia_smi_check.rc == 0
       tags: nvidia-driver
 
@@ -119,7 +131,7 @@
           - elfutils-libelf-devel
         state: present
       when:
-        - nvidia_devices.stdout != ""
+        - has_nvidia_gpu | bool
         - nvidia_smi_check.rc != 0
       tags: nvidia-driver
 
@@ -130,14 +142,14 @@
           blacklist nouveau
           options nouveau modeset=0
       when:
-        - nvidia_devices.stdout != ""
+        - has_nvidia_gpu | bool
         - nvidia_smi_check.rc != 0
       tags: nvidia-driver
 
     - name: Regenerate initramfs
       command: dracut --force
       when:
-        - nvidia_devices.stdout != ""
+        - has_nvidia_gpu | bool
         - nvidia_smi_check.rc != 0
       tags: nvidia-driver
 
@@ -145,7 +157,7 @@
       reboot:
         reboot_timeout: 1200
       when:
-        - nvidia_devices.stdout != ""
+        - has_nvidia_gpu | bool
         - nvidia_smi_check.rc != 0
       become: yes
       tags: nvidia-driver
@@ -157,7 +169,7 @@
         mode: '0755'
         timeout: 300
       when:
-        - nvidia_devices.stdout != ""
+        - has_nvidia_gpu | bool
         - nvidia_smi_check.rc != 0
       register: nvidia_driver_download
       ignore_errors: yes
@@ -172,7 +184,7 @@
       args:
         creates: /usr/bin/nvidia-smi
       when:
-        - nvidia_devices.stdout != ""
+        - has_nvidia_gpu | bool
         - nvidia_smi_check.rc != 0
         - nvidia_driver_download is succeeded
       tags: nvidia-driver
@@ -180,7 +192,7 @@
     - name: Load nvidia module
       command: modprobe nvidia
       when:
-        - nvidia_devices.stdout != ""
+        - has_nvidia_gpu | bool
         - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
       ignore_errors: yes
       changed_when: false
@@ -192,7 +204,7 @@
         dest: /sbin/ldconfig.real
         state: link
       when:
-        - nvidia_devices.stdout != ""
+        - has_nvidia_gpu | bool
         - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
       ignore_errors: yes
       tags: nvidia-driver
@@ -202,29 +214,16 @@
         name: nvidia-container-toolkit
         state: present
       when:
-        - nvidia_devices.stdout != ""
+        - has_nvidia_gpu | bool
         - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
       tags: nvidia-driver
 
-    - name: Apply NVIDIA containerd configuration
-      template:
-        src: /root/kubernetes-kubeadm/roles/install_containerd/templates/containerd_nvidia.j2
-        dest: /etc/containerd/config.toml
-        owner: root
-        group: root
-        mode: '0644'
+    - name: Set NVIDIA runtime enabled fact
+      set_fact:
+        nvidia_runtime_enabled: true
+        cacheable: yes
       when:
-        - nvidia_devices.stdout != ""
-        - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
-      tags: nvidia-driver
-
-    - name: Restart containerd service
-      systemd:
-        name: containerd
-        state: restarted
-        daemon_reload: yes
-      when:
-        - nvidia_devices.stdout != ""
+        - has_nvidia_gpu | bool
         - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
       tags: nvidia-driver
   when: 
