@@ -67,6 +67,19 @@
     state: directory
     mode: '0755'
 
+- name: Create custom containerd data directory
+  file:
+    path: "{{ containerd_data_base_dir }}/{{ inventory_hostname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: containerd_data_base_dir is defined and containerd_data_base_dir != ''
+
+- name: Display containerd data directory
+  debug:
+    msg: "Containerd data directory: {{ containerd_data_base_dir | default('/var/lib/containerd') }}{% if containerd_data_base_dir | default('') != '' %}/{{ inventory_hostname }}{% endif %}"
+
 - name: Check for NVIDIA GPU (auto-detection)
   shell: lspci | grep -i NVIDIA
   register: nvidia_gpu_check

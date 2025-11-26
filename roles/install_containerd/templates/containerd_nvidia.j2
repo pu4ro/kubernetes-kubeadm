@@ -3,7 +3,7 @@ imports = []
 oom_score = 0
 plugin_dir = ""
 required_plugins = []
-root = "/var/lib/containerd"
+root = "{{ containerd_data_base_dir | default('/var/lib/containerd') }}{% if containerd_data_base_dir | default('') != '' %}/{{ inventory_hostname }}{% endif %}"
 state = "/run/containerd"
 temp = ""
 version = 2

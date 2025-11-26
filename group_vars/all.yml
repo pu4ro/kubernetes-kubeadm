@@ -16,6 +16,14 @@ kube_vip_address: 192.168.135.30  # Uncomment for HA setup
 # Container Runtime
 containerd_version: "1.7.6"
 
+# Containerd Data Directory Configuration
+# Set custom data directory for containerd (default: /var/lib/containerd)
+# The actual path will be: {containerd_data_base_dir}/{hostname}
+# Example: /data/containerd/worker1, /data/containerd/worker2
+# Leave empty or comment out to use default /var/lib/containerd
+containerd_data_base_dir: "/data/containerd"  # Base directory for containerd data
+# containerd_data_base_dir: ""  # Use this to disable custom path and use default
+
 # System Configuration
 set_timezone: Asia/Seoul
 
