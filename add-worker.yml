@@ -1,0 +1,234 @@
+---
+# Add Worker Node to Existing Kubernetes Cluster
+# Usage: ansible-playbook -i inventory.ini add-worker.yml -l new_worker_hostname
+
+# Phase 1: Prepare New Worker Node
+- name: Prepare New Worker Node
+  hosts: workers
+  become: yes
+  gather_facts: yes
+  serial: "{{ worker_add_serial | default('100%') }}"
+
+  tasks:
+    - name: Check if node is already joined
+      stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: node_already_joined
+
+    - name: Display node status
+      debug:
+        msg: "Node {{ inventory_hostname }} is already part of the cluster"
+      when: node_already_joined.stat.exists
+
+    - name: Stop if node already joined (unless force_rejoin is set)
+      fail:
+        msg: "Node is already joined. Use -e 'force_rejoin=true' to reset and rejoin"
+      when:
+        - node_already_joined.stat.exists
+        - not (force_rejoin | default(false))
+
+  roles:
+    - { role: install_os_package, tags: ['packages'], when: not node_already_joined.stat.exists or (force_rejoin | default(false)) }
+    - { role: install_containerd, tags: ['container'], when: not node_already_joined.stat.exists or (force_rejoin | default(false)) }
+    - { role: setup-docker-credentials, tags: ['docker-credentials'], when: not node_already_joined.stat.exists or (force_rejoin | default(false)) }
+
+# Phase 2: Generate Join Token from Master
+- name: Generate Join Token
+  hosts: master1
+  become: yes
+  gather_facts: no
+
+  tasks:
+    - name: Check if Kubernetes cluster is running
+      command: kubectl get nodes
+      register: cluster_status
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if cluster is not running
+      fail:
+        msg: "Kubernetes cluster is not running on master node"
+      when: cluster_status.rc != 0
+
+    - name: Generate new kubeadm join token
+      command: kubeadm token create --print-join-command
+      register: join_command_output
+      changed_when: false
+
+    - name: Display generated join command
+      debug:
+        msg: "Join command: {{ join_command_output.stdout }}"
+
+    - name: Set join command as fact
+      set_fact:
+        worker_join_command: "{{ join_command_output.stdout }}"
+
+    - name: Store join command for workers
+      add_host:
+        name: "join_command_holder"
+        worker_join_cmd: "{{ join_command_output.stdout }}"
+
+# Phase 3: Install Kubernetes Packages on Workers
+- name: Install Kubernetes Packages
+  hosts: workers
+  become: yes
+  gather_facts: yes
+  serial: "{{ worker_add_serial | default('100%') }}"
+
+  tasks:
+    - name: Check if node is already joined
+      stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: node_status
+
+    - name: Skip if already joined
+      debug:
+        msg: "Node {{ inventory_hostname }} is already joined, skipping package installation"
+      when: node_status.stat.exists and not (force_rejoin | default(false))
+
+    - name: Reset node if force_rejoin is enabled
+      block:
+        - name: Stop kubelet service
+          systemd:
+            name: kubelet
+            state: stopped
+          ignore_errors: yes
+
+        - name: Reset kubeadm
+          command: kubeadm reset -f
+          ignore_errors: yes
+
+        - name: Clean up CNI
+          file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /etc/cni/net.d
+            - /var/lib/cni
+            - /var/lib/kubelet
+            - /var/lib/etcd
+            - /etc/kubernetes
+          ignore_errors: yes
+
+        - name: Restart containerd
+          systemd:
+            name: containerd
+            state: restarted
+      when:
+        - node_status.stat.exists
+        - force_rejoin | default(false)
+
+    - name: Install Kubernetes packages (RedHat/CentOS)
+      block:
+        - name: Install kubeadm, kubelet, and kubectl
+          yum:
+            name:
+              - "kubelet-{{ kubernetes_version }}"
+              - "kubeadm-{{ kubernetes_version }}"
+              - "kubectl-{{ kubernetes_version }}"
+            state: present
+            disable_excludes: kubernetes
+
+        - name: Start and enable kubelet
+          systemd:
+            name: kubelet
+            state: started
+            enabled: yes
+            daemon_reload: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - not node_status.stat.exists or (force_rejoin | default(false))
+
+    - name: Install Kubernetes packages (Ubuntu/Debian)
+      block:
+        - name: Install kubeadm, kubelet, and kubectl
+          apt:
+            name:
+              - "kubelet={{ kubernetes_version }}-*"
+              - "kubeadm={{ kubernetes_version }}-*"
+              - "kubectl={{ kubernetes_version }}-*"
+            state: present
+            allow_downgrade: yes
+
+        - name: Start and enable kubelet
+          systemd:
+            name: kubelet
+            state: started
+            enabled: yes
+            daemon_reload: yes
+      when:
+        - ansible_os_family == "Debian"
+        - not node_status.stat.exists or (force_rejoin | default(false))
+
+# Phase 4: Join Workers to Cluster
+- name: Join Worker Nodes to Cluster
+  hosts: workers
+  become: yes
+  gather_facts: no
+  serial: "{{ worker_add_serial | default('100%') }}"
+
+  tasks:
+    - name: Check if node is already joined
+      stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: final_node_status
+
+    - name: Join worker node to cluster
+      command: "{{ hostvars['join_command_holder']['worker_join_cmd'] }}"
+      register: join_result
+      when: not final_node_status.stat.exists or (force_rejoin | default(false))
+      until: join_result.rc == 0 or 'already exists' in join_result.stderr
+      retries: 3
+      delay: 30
+      failed_when: join_result.rc != 0 and 'already exists' not in join_result.stderr
+
+    - name: Display join result
+      debug:
+        msg: "{{ join_result.stdout_lines }}"
+      when: join_result is defined and join_result.changed
+
+# Phase 5: Verify Worker Nodes
+- name: Verify Worker Nodes Joined
+  hosts: master1
+  become: yes
+  gather_facts: no
+
+  tasks:
+    - name: Wait for nodes to be ready
+      command: kubectl get nodes {{ item }}
+      register: node_status
+      delegate_to: master1
+      with_items: "{{ groups['workers'] }}"
+      retries: 10
+      delay: 10
+      until: node_status.rc == 0
+      changed_when: false
+
+    - name: Display all nodes status
+      command: kubectl get nodes -o wide
+      register: all_nodes
+      changed_when: false
+
+    - name: Show cluster nodes
+      debug:
+        msg: "{{ all_nodes.stdout_lines }}"
+
+    - name: Check node readiness
+      shell: kubectl get nodes {{ item }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: node_ready_status
+      with_items: "{{ groups['workers'] }}"
+      changed_when: false
+      retries: 20
+      delay: 15
+      until: "'True' in node_ready_status.stdout"
+
+    - name: Display success message
+      debug:
+        msg:
+          - "========================================="
+          - "Worker nodes successfully added!"
+          - "Total workers: {{ groups['workers'] | length }}"
+          - "Newly added workers can be verified with:"
+          - "  kubectl get nodes"
+          - "  kubectl get nodes -o wide"
+          - "========================================="
