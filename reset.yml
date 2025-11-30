@@ -1,0 +1,87 @@
+---
+# Kubernetes Cluster Reset Playbook
+# Usage: ansible-playbook -i inventory.ini reset.yml
+# This will completely reset all nodes and remove Kubernetes installation
+
+- name: Reset Kubernetes Cluster
+  hosts: all
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Stop kubelet service
+      systemd:
+        name: kubelet
+        state: stopped
+      ignore_errors: yes
+
+    - name: Reset kubeadm
+      command: kubeadm reset -f
+      ignore_errors: yes
+
+    - name: Remove Kubernetes directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/etcd
+        - /var/lib/kubelet
+        - /var/lib/dockershim
+        - /var/run/kubernetes
+        - /var/lib/cni
+        - /etc/cni/net.d
+        - ~/.kube
+
+    - name: Remove VIP from interface (if exists)
+      command: ip addr del {{ kube_vip_address }}/32 dev {{ kube_vip_interface }}
+      when:
+        - master_ha is defined
+        - master_ha | bool
+        - kube_vip_address is defined
+        - kube_vip_interface is defined
+      ignore_errors: yes
+
+    - name: Clean up iptables rules
+      shell: |
+        iptables -F
+        iptables -t nat -F
+        iptables -t mangle -F
+        iptables -X
+      ignore_errors: yes
+
+    - name: Clean up ipvs rules
+      command: ipvsadm --clear
+      ignore_errors: yes
+
+    - name: Remove flannel interface
+      shell: |
+        ip link delete cni0 2>/dev/null || true
+        ip link delete flannel.1 2>/dev/null || true
+      ignore_errors: yes
+
+    - name: Restart containerd
+      systemd:
+        name: containerd
+        state: restarted
+        daemon_reload: yes
+      ignore_errors: yes
+
+    - name: Remove kubeconfig files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /root/.kube/config
+        - "{{ ansible_env.HOME }}/.kube/config"
+      ignore_errors: yes
+
+    - name: Display reset completion message
+      debug:
+        msg: |
+          ================================
+          Kubernetes cluster has been reset successfully!
+
+          You can now run: ansible-playbook -i inventory.ini site.yml
+          ================================
+      run_once: true
+      delegate_to: localhost

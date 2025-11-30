@@ -28,10 +28,20 @@
 - name: Abort if not confirmed
   fail:
     msg: "Cluster reset aborted by user"
-  when: 
+  when:
     - kubeadm_installed.rc == 0
     - require_reset_confirmation | default(true)
     - reset_confirmation.user_input != "yes"
+
+- name: Remove VIP from interface (if exists)
+  command: ip addr del {{ kube_vip_address }}/32 dev {{ kube_vip_interface }}
+  when:
+    - master_ha is defined
+    - master_ha | bool
+    - kube_vip_address is defined
+    - kube_vip_interface is defined
+  failed_when: false
+  ignore_errors: yes
 
 - name: Stop kubelet service
   systemd:

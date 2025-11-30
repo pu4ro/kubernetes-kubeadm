@@ -85,6 +85,20 @@
     - docker-credentials
     - nerdctl-login
 
+- name: Check if kubelet service exists
+  stat:
+    path: /usr/lib/systemd/system/kubelet.service
+  register: kubelet_service_file
+  tags:
+    - docker-credentials
+
+- name: Check if kubelet directory exists
+  stat:
+    path: /var/lib/kubelet
+  register: kubelet_directory
+  tags:
+    - docker-credentials
+
 - name: Copy nerdctl config.json to kubelet directory
   copy:
     src: ~/.docker/config.json
@@ -93,6 +107,7 @@
     group: root
     mode: '0600'
     remote_src: yes
+  when: kubelet_directory.stat.exists
   tags:
     - docker-credentials
 
@@ -101,6 +116,7 @@
     name: kubelet
     state: restarted
     daemon_reload: yes
+  when: kubelet_service_file.stat.exists
   tags:
     - docker-credentials
     - restart-kubelet
