@@ -50,20 +50,6 @@
     enabled: no
   failed_when: false
 
-- name: Stop containerd service
-  systemd:
-    name: containerd
-    state: stopped
-  failed_when: false
-  when: container_runtime == "containerd"
-
-- name: Stop docker service
-  systemd:
-    name: docker
-    state: stopped
-  failed_when: false
-  when: container_runtime == "docker"
-
 - name: Run kubeadm reset
   command: kubeadm reset --force
   register: kubeadm_reset_result
