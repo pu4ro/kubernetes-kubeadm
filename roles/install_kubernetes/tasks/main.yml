@@ -104,10 +104,21 @@
       when: master_ha and inventory_hostname in groups['masters'][1:3]
 
     - name: Wait for previous master to be ready (master2 waits for master1, master3 waits for master2)
-      command: kubectl get nodes {{ groups['masters'][groups['masters'].index(inventory_hostname) - 1] }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      shell: |
+        previous_ready="$(kubectl get node {{ groups['masters'][groups['masters'].index(inventory_hostname) - 1] }} \
+          -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+        if [ "$previous_ready" = "True" ]; then
+          echo "Ready"
+        elif kubectl get --raw /readyz 2>/dev/null | grep -q "ok"; then
+          echo "ApiReady"
+        else
+          echo "Waiting"
+        fi
+      args:
+        executable: /bin/bash
       register: previous_master_ready
       delegate_to: "{{ groups['masters'][0] }}"
-      until: previous_master_ready.stdout == "True"
+      until: previous_master_ready.stdout in ["Ready", "ApiReady"]
       retries: 20
       delay: 15
       when:
@@ -278,4 +289,3 @@
       complete -F __start_kubectl k
     create: yes
   become: yes
-
