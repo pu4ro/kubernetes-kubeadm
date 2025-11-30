@@ -93,13 +93,9 @@
     cacheable: yes
   when: has_nvidia_gpu is not defined
 
-- name: Set final GPU runtime decision
-  set_fact:
-    use_nvidia_runtime: "{{ (nvidia_runtime | default(false) | bool) or (has_nvidia_gpu | default(false) | bool) }}"
-
 - name: Display containerd configuration mode
   debug:
-    msg: "Configuring containerd with {{ 'NVIDIA GPU' if (use_nvidia_runtime | bool) else 'standard' }} runtime"
+    msg: "Configuring containerd with {{ 'NVIDIA GPU' if (has_nvidia_gpu | default(false) | bool) else 'standard' }} runtime (auto-detected)"
 
 - name: Write containerd configuration (NVIDIA support)
   template:
@@ -107,7 +103,7 @@
     dest: /etc/containerd/config.toml
     backup: yes
     mode: '0644'
-  when: use_nvidia_runtime | bool
+  when: has_nvidia_gpu | default(false) | bool
   notify: restart containerd
 
 - name: Write containerd configuration (Standard)
@@ -116,7 +112,7 @@
     dest: /etc/containerd/config.toml
     backup: yes
     mode: '0644'
-  when: not (use_nvidia_runtime | bool)
+  when: not (has_nvidia_gpu | default(false) | bool)
   notify: restart containerd
 
 # SystemdCgroup is already set to true in templates

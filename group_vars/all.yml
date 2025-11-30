@@ -91,8 +91,8 @@ docker_log_max_size: "100m"
 pause_image: "cr.makina.rocks/external-hub/kubernetes/pause:3.9"
 
 # NVIDIA runtime support for containerd
-# GPU will be auto-detected, no driver installation by Ansible
-nvidia_runtime: true
+# GPU will be auto-detected via lspci, no manual configuration needed
+# No driver installation by Ansible - install NVIDIA Container Toolkit separately
 
 # Docker Registry Credentials Configuration
 # Set docker_login_required to true to enable registry authentication
