@@ -30,11 +30,11 @@
         state: absent
       when: not master_ha and inventory_hostname in groups['masters']
 
-    - name: Template kube-vip manifest file
+    - name: Template kube-vip manifest file for first master only (before init)
       template:
         src: kube-vip.yaml.j2
         dest: /etc/kubernetes/manifests/kube-vip.yaml
-      when: master_ha and kube_vip_address is defined and inventory_hostname in groups['masters']
+      when: master_ha and kube_vip_address is defined and inventory_hostname == groups['masters'][0]
 
     - name: Initialize Kubernetes cluster with kubeadm (single master)
       command: kubeadm init --config=/root/kubeadm-init.yml
@@ -117,20 +117,53 @@
       ignore_errors: yes
 
     - name: Join the node to the Kubernetes cluster
-      shell: |
-        kubeadm join {{ kube_vip_address }}:{{ kube_vip_port }} --token {{ hostvars[groups['masters'][0]].kubeadm_token.stdout }} \
-          --discovery-token-ca-cert-hash sha256:{{ hostvars[groups['masters'][0]].discovery_token_ca_cert_hash_value }} \
-          --control-plane --certificate-key {{ hostvars[groups['masters'][0]].certificate_key }}
-      register: join_output
-      when: master_ha and inventory_hostname in groups['masters'][1:3]
-      until: join_output.rc == 0 or 'already exists' in join_output.stderr or 'already a member' in join_output.stderr
-      retries: 5
-      delay: 30
-      failed_when: join_output.rc != 0 and 'already exists' not in join_output.stderr and 'already a member' not in join_output.stderr
+      block:
+        - name: Execute kubeadm join for additional masters
+          shell: |
+            kubeadm join {{ kube_vip_address }}:{{ kube_vip_port }} --token {{ hostvars[groups['masters'][0]].kubeadm_token.stdout }} \
+              --discovery-token-ca-cert-hash sha256:{{ hostvars[groups['masters'][0]].discovery_token_ca_cert_hash_value }} \
+              --control-plane --certificate-key {{ hostvars[groups['masters'][0]].certificate_key }}
+          register: join_output
+          until: join_output.rc == 0 or 'already exists' in join_output.stderr or 'already a member' in join_output.stderr
+          retries: 5
+          delay: 30
+          failed_when: join_output.rc != 0 and 'already exists' not in join_output.stderr and 'already a member' not in join_output.stderr
 
-    - name: Display join command output
-      debug:
-        var: join_output.stdout
+        - name: Display join command output
+          debug:
+            var: join_output.stdout
+
+        - name: Wait for node to be fully ready after join
+          command: kubectl get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+          register: node_ready
+          delegate_to: "{{ groups['masters'][0] }}"
+          until: node_ready.stdout == "True"
+          retries: 20
+          delay: 10
+
+        - name: Deploy kube-vip manifest after successful join
+          template:
+            src: kube-vip.yaml.j2
+            dest: /etc/kubernetes/manifests/kube-vip.yaml
+          when: join_output.rc == 0
+
+      rescue:
+        - name: Clean up kube-vip manifest on join failure
+          file:
+            path: /etc/kubernetes/manifests/kube-vip.yaml
+            state: absent
+
+        - name: Remove VIP from interface if incorrectly bound
+          command: ip addr del {{ kube_vip_address }}/32 dev {{ kube_vip_interface }}
+          ignore_errors: yes
+
+        - name: Reset node after join failure
+          command: kubeadm reset -f
+
+        - name: Fail with clear message
+          fail:
+            msg: "Failed to join master node {{ inventory_hostname }} to the cluster after multiple retries"
+
       when: master_ha and inventory_hostname in groups['masters'][1:3]
 
     - name: Copy admin kubeconfig to user's home directory
