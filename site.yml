@@ -15,8 +15,15 @@
     - { role: setup-docker-credentials, tags: ['docker-credentials'] }
 
 # Phase 2: Kubernetes Installation
-- name: Kubernetes Cluster Installation
-  hosts: all
+- name: Kubernetes Cluster Installation (Masters - Sequential)
+  hosts: masters
+  become: yes
+  serial: 1  # Execute one master at a time to avoid etcd race conditions
+  roles:
+    - { role: install_kubernetes, tags: ['kubernetes', 'cluster'] }
+
+- name: Kubernetes Cluster Installation (Workers - Parallel)
+  hosts: workers
   become: yes
   serial: "100%"
   strategy: "{{ 'free' if (parallel_execution | default({})).kubernetes_installation | default(1) == 0 else 'linear' }}"

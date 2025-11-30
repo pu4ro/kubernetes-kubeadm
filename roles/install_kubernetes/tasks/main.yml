@@ -89,6 +89,33 @@
         discovery_token_ca_cert_hash_value: "{{ discovery_token_ca_cert_hash.stdout.split('=')[-1].strip() }}"
       when: master_ha and inventory_hostname == groups['masters'][0]
 
+    - name: Wait for API server to be ready on first master
+      wait_for:
+        host: "{{ kube_vip_address }}"
+        port: "{{ kube_vip_port }}"
+        state: started
+        delay: 5
+        timeout: 300
+      when: master_ha and inventory_hostname in groups['masters'][1:3]
+
+    - name: Wait for etcd to stabilize before joining additional masters
+      pause:
+        seconds: 30
+      when: master_ha and inventory_hostname in groups['masters'][1:3]
+
+    - name: Wait for previous master to be ready (master2 waits for master1, master3 waits for master2)
+      command: kubectl get nodes {{ groups['masters'][groups['masters'].index(inventory_hostname) - 1] }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: previous_master_ready
+      delegate_to: "{{ groups['masters'][0] }}"
+      until: previous_master_ready.stdout == "True"
+      retries: 20
+      delay: 15
+      when:
+        - master_ha
+        - inventory_hostname in groups['masters'][1:3]
+        - groups['masters'].index(inventory_hostname) > 0
+      ignore_errors: yes
+
     - name: Join the node to the Kubernetes cluster
       shell: |
         kubeadm join {{ kube_vip_address }}:{{ kube_vip_port }} --token {{ hostvars[groups['masters'][0]].kubeadm_token.stdout }} \
@@ -96,6 +123,10 @@
           --control-plane --certificate-key {{ hostvars[groups['masters'][0]].certificate_key }}
       register: join_output
       when: master_ha and inventory_hostname in groups['masters'][1:3]
+      until: join_output.rc == 0 or 'already exists' in join_output.stderr or 'already a member' in join_output.stderr
+      retries: 5
+      delay: 30
+      failed_when: join_output.rc != 0 and 'already exists' not in join_output.stderr and 'already a member' not in join_output.stderr
 
     - name: Display join command output
       debug:
