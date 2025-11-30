@@ -95,7 +95,7 @@
         port: "{{ kube_vip_port }}"
         state: started
         delay: 5
-        timeout: 300
+        timeout: 30
       when: master_ha and inventory_hostname in groups['masters'][1:3]
 
     - name: Wait for etcd to stabilize before joining additional masters
