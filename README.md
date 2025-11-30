@@ -25,7 +25,7 @@ Ansible을 사용한 Kubernetes 클러스터 자동 배포 도구입니다.
 - **컨테이너 런타임**: containerd 구성
 - **네트워크 플러그인**: Flannel CNI
 - **시스템 준비**: OS 패키지, 커널 모듈, 방화벽 설정
-- **로컬 레포지토리**: ISO 및 YUM 레포지토리 지원 (RHEL/CentOS)
+- **레지스트리 인증**: Private registry 인증 지원
 - **고가용성**: Multi-master 구성 지원 (kube-vip)
 - **크로스 플랫폼**: Ubuntu 및 RHEL/CentOS 지원
 
@@ -113,23 +113,18 @@ kubernetes-kubeadm/
 │   └── all.yml                       # 전역 변수
 ├── inventory.ini                     # 인벤토리 파일
 ├── roles/                            # Ansible 역할
-│   ├── common/                       # 기본 시스템 설정
-│   ├── configure_sysctl/             # 커널 파라미터
-│   ├── configure_chrony/             # NTP 시간 동기화
-│   ├── configure_repo/               # 레포지토리 설정
 │   ├── install_os_package/           # OS 패키지
 │   ├── install_containerd/           # 컨테이너 런타임
 │   ├── setup-docker-credentials/     # 레지스트리 인증
 │   ├── install_kubernetes/           # K8s 설치
 │   ├── install_flannel/              # CNI 플러그인
+│   ├── remove_master_taint/          # 마스터 스케줄링 설정
 │   ├── extend_k8s_certs/             # 인증서 연장
 │   ├── configure_coredns_hosts/      # CoreDNS 설정
-│   ├── nfs-server/                   # NFS 서버
-│   ├── setup-local-repo/             # 로컬 레포지토리
-│   └── harbor-project-setup/         # Harbor 설정
+│   ├── harbor-project-setup/         # Harbor 설정
+│   └── reset_k8s_cluster/            # 클러스터 리셋
 ├── site.yml                          # 메인 플레이북
 ├── reset_cluster.yml                 # 클러스터 초기화
-├── k8s-setup.sh                      # 독립 실행 스크립트
 └── README.md                         # 이 파일
 ```
 
@@ -206,20 +201,8 @@ parallel_execution:
   package_installation: 0
   kubernetes_installation: 0
 
-# 로컬 레포지토리 설정 (RHEL/CentOS)
-setup_local_repo: true
-use_yum_repo_directory: true
-yum_repo_directory: "/root/yum-repo"
-yum_repo_web_port: 8080
-
-use_iso_repo: true
-iso_file_path: "/root/rhel-9.4-x86_64-dvd.iso"
-iso_mount_point: "/mnt/cdrom"
-iso_device: "/dev/sr0"
-use_iso_device: true
-
-local_repo_web_server: "httpd"       # httpd 또는 nginx
-local_repo_server_ip: "{{ ansible_default_ipv4.address }}"
+# Containerd 데이터 디렉토리 설정
+containerd_data_base_dir: "/data/containerd"  # 호스트별 containerd 데이터 경로
 
 # 컨테이너 레지스트리 설정
 insecure_registries:
@@ -244,13 +227,6 @@ registry_hosts:
 
 # CoreDNS 호스트 설정
 configure_coredns_hosts: true
-
-# NFS 서버 설정
-nfs_server_enabled: true
-nfs_exports:
-  - path: "/nfs"
-    options: "rw,sync,no_root_squash"
-    clients: "*"
 
 # GPU 드라이버 설치
 install_gpu_driver: false
@@ -280,11 +256,8 @@ ansible-playbook -i inventory.ini site.yml
 ### 단계별 설치
 
 ```bash
-# Phase 0: 로컬 레포지토리 설정 (RHEL/CentOS, 선택사항)
-ansible-playbook -i inventory.ini site.yml --tags local-repo
-
 # Phase 1: 시스템 준비
-ansible-playbook -i inventory.ini site.yml --tags base,system,packages
+ansible-playbook -i inventory.ini site.yml --tags base,packages,container
 
 # Phase 2: Kubernetes 설치
 ansible-playbook -i inventory.ini site.yml --tags kubernetes
@@ -292,8 +265,8 @@ ansible-playbook -i inventory.ini site.yml --tags kubernetes
 # Phase 3: 네트워크 플러그인
 ansible-playbook -i inventory.ini site.yml --tags networking
 
-# Phase 4-8: 추가 기능
-ansible-playbook -i inventory.ini site.yml --tags k8s-certs,coredns-hosts,nfs
+# Phase 4-7: 추가 기능
+ansible-playbook -i inventory.ini site.yml --tags k8s-certs,coredns-hosts,harbor-setup
 ```
 
 ### 특정 호스트만 설치
@@ -312,10 +285,7 @@ ansible-playbook -i inventory.ini site.yml --limit workers
 
 | Phase | Tag | 설명 | 적용 대상 |
 |-------|-----|------|-----------|
-| **Phase 0** | `local-repo` | 로컬 레포지토리 설정 | master1 (RHEL/CentOS) |
-| **Phase 1** | `base`, `system` | 시스템 기본 설정 | 모든 노드 |
-| **Phase 1** | `time` | 시간 동기화 (Chrony) | 모든 노드 |
-| **Phase 1** | `packages` | OS 패키지 설치 | 모든 노드 |
+| **Phase 1** | `base`, `packages` | OS 패키지 설치 | 모든 노드 |
 | **Phase 1** | `container` | 컨테이너 런타임 (containerd) | 모든 노드 |
 | **Phase 1** | `docker-credentials` | 레지스트리 인증 | 모든 노드 |
 | **Phase 2** | `kubernetes`, `cluster` | Kubernetes 설치 | 모든 노드 |
@@ -323,67 +293,73 @@ ansible-playbook -i inventory.ini site.yml --limit workers
 | **Phase 4** | `scheduling` | Master 스케줄링 허용 | Master 노드 |
 | **Phase 5** | `certificates`, `k8s-certs` | 인증서 10년 연장 | Master 노드 |
 | **Phase 6** | `coredns-hosts` | CoreDNS 호스트 설정 | Master 노드 |
-| **Phase 7** | `nfs` | NFS 서버 설정 | master1 |
-| **Phase 8** | `harbor-setup` | Harbor 프로젝트 설정 | 모든 노드 |
+| **Phase 7** | `harbor-setup` | Harbor 프로젝트 설정 | 모든 노드 |
 
-### 로컬 레포지토리 세부 Tags (Phase 0)
+### 세부 Tags
 
+#### Phase 1: 시스템 준비
 | Tag | 설명 | 작업 내용 |
 |-----|------|-----------|
-| `local-repo` | 전체 로컬 레포 설정 | 모든 작업 포함 |
-| `pre-setup` | 사전 설정 | ISO 마운트, 임시 레포 구성 |
-| `web-server` | 웹 서버 설치 | httpd/nginx 설치 및 구성 |
-| `firewall` | 방화벽 설정 | HTTP 포트 허용 |
-| `yum-repo-dir` | YUM 레포 디렉토리 | /root/yum-repo 설정 |
-| `iso-repo` | ISO 레포지토리 | ISO 마운트 및 서비스 |
-| `web-config` | 웹 서버 설정 | httpd/nginx 상세 설정 |
-| `repo-config` | 레포 설정 파일 | .repo 파일 생성 |
-| `fstab` | fstab 설정 | ISO 영구 마운트 |
-| `selinux` | SELinux 설정 | httpd context 설정 |
-
-### 시스템 준비 세부 Tags (Phase 1)
-
-| Tag | 설명 | 작업 내용 |
-|-----|------|-----------|
-| `base` | 기본 시스템 설정 | 호스트명, 방화벽, SELinux |
-| `system` | 시스템 구성 | Swap, 커널 모듈, sysctl |
-| `time` | 시간 동기화 | Chrony/NTP 설정 |
+| `base` | 기본 시스템 설정 | 호스트명, 방화벽 설정 |
 | `packages` | 패키지 설치 | 필수 OS 패키지 |
 | `container` | 컨테이너 런타임 | containerd 설치 및 구성 |
-| `docker-credentials` | 레지스트리 인증 | nerdctl login 설정 |
+| `docker-credentials` | 레지스트리 인증 | nerdctl login, containerd 설정 |
+
+#### Phase 2: Kubernetes 설치
+| Tag | 설명 | 작업 내용 |
+|-----|------|-----------|
+| `kubernetes` | Kubernetes 설치 | kubeadm, kubelet, kubectl |
+| `cluster` | 클러스터 구성 | 클러스터 초기화 및 join |
+
+#### Phase 3-7: 추가 기능
+| Tag | 설명 | 작업 내용 |
+|-----|------|-----------|
+| `networking` | 네트워크 플러그인 | Flannel CNI 배포 |
+| `scheduling` | 마스터 스케줄링 | Master 노드 taint 제거 |
+| `k8s-certs` | 인증서 연장 | 10년 인증서 생성 |
+| `coredns-hosts` | CoreDNS 설정 | 레지스트리 호스트 추가 |
+| `harbor-setup` | Harbor 프로젝트 | Harbor 프로젝트 생성 |
+
+#### Docker Credentials 세부 Tags
+| Tag | 설명 | 작업 내용 |
+|-----|------|-----------|
+| `docker-credentials` | 전체 설정 | 모든 작업 포함 |
+| `nerdctl-login` | 레지스트리 로그인 | nerdctl login 실행 |
+| `containerd-config` | containerd 설정 | config.toml 업데이트 |
+| `restart-kubelet` | kubelet 재시작 | kubelet 서비스 재시작 |
 
 ### 사용 예시
 
 ```bash
-# 1. 로컬 레포지토리만 설정
-ansible-playbook -i inventory.ini site.yml --tags local-repo
+# 1. 시스템 준비만 (Kubernetes 제외)
+ansible-playbook -i inventory.ini site.yml --tags base,packages,container
 
-# 2. 로컬 레포 pre-setup만 (ISO 마운트)
-ansible-playbook -i inventory.ini site.yml --tags pre-setup
-
-# 3. 시스템 준비만 (Kubernetes 제외)
-ansible-playbook -i inventory.ini site.yml --tags base,system,time,packages,container
-
-# 4. Kubernetes만 설치 (시스템 준비 완료 가정)
+# 2. Kubernetes만 설치 (시스템 준비 완료 가정)
 ansible-playbook -i inventory.ini site.yml --tags kubernetes,networking
 
-# 5. 인증서만 10년으로 연장
+# 3. 인증서만 10년으로 연장
 ansible-playbook -i inventory.ini site.yml --tags k8s-certs
 
-# 6. CoreDNS 호스트 업데이트만
+# 4. CoreDNS 호스트 업데이트만
 ansible-playbook -i inventory.ini site.yml --tags coredns-hosts
 
-# 7. 여러 tag 조합
+# 5. 레지스트리 인증 설정만
+ansible-playbook -i inventory.ini site.yml --tags docker-credentials
+
+# 6. 레지스트리 로그인만 (설정 제외)
+ansible-playbook -i inventory.ini site.yml --tags nerdctl-login
+
+# 7. Harbor 프로젝트 생성만
+ansible-playbook -i inventory.ini site.yml --tags harbor-setup
+
+# 8. 여러 tag 조합
 ansible-playbook -i inventory.ini site.yml --tags "packages,container,kubernetes"
 
-# 8. 특정 호스트 + 특정 tag
-ansible-playbook -i inventory.ini site.yml --tags local-repo --limit master1
+# 9. 특정 호스트만
+ansible-playbook -i inventory.ini site.yml --tags kubernetes --limit master1
 
-# 9. 로컬 레포 웹서버 재설정
-ansible-playbook -i inventory.ini site.yml --tags web-config
-
-# 10. NFS 서버만 설정
-ansible-playbook -i inventory.ini site.yml --tags nfs
+# 10. 마스터 노드 스케줄링 허용
+ansible-playbook -i inventory.ini site.yml --tags scheduling
 ```
 
 ### Tag 조합 권장 패턴
@@ -392,17 +368,17 @@ ansible-playbook -i inventory.ini site.yml --tags nfs
 # 빠른 재설치 (시스템 준비 완료 후)
 ansible-playbook -i inventory.ini site.yml --tags "kubernetes,networking"
 
-# 레포지토리 + 패키지만
-ansible-playbook -i inventory.ini site.yml --tags "local-repo,packages"
-
 # 컨테이너 런타임 + Kubernetes
 ansible-playbook -i inventory.ini site.yml --tags "container,kubernetes"
 
-# 전체 재설치 (로컬 레포 제외)
-ansible-playbook -i inventory.ini site.yml --skip-tags local-repo
+# 레지스트리 인증 + Kubernetes
+ansible-playbook -i inventory.ini site.yml --tags "docker-credentials,kubernetes"
 
 # 테스트 환경 빠른 설치 (최소 구성)
 ansible-playbook -i inventory.ini site.yml --tags "base,container,kubernetes,networking"
+
+# 프로덕션 전체 설치 (모든 기능)
+ansible-playbook -i inventory.ini site.yml --tags "base,packages,container,docker-credentials,kubernetes,networking,k8s-certs,coredns-hosts"
 ```
 
 ## 🔧 설치 후 작업
@@ -530,25 +506,20 @@ kubectl run test-pod --image=busybox --rm -it -- /bin/sh
 kubectl run test-dns --image=busybox --rm -it -- nslookup kubernetes.default
 ```
 
-#### 5. 로컬 레포지토리 문제
+#### 5. 레지스트리 인증 문제
 
 ```bash
-# httpd 상태 확인
-systemctl status httpd
+# containerd 설정 확인
+sudo cat /etc/containerd/config.toml | grep -A 10 registry
 
-# 레포지토리 파일 확인
-cat /etc/yum.repos.d/*.repo
+# nerdctl 로그인 테스트
+sudo nerdctl login cr.makina.rocks
 
-# 레포지토리 테스트
-yum repolist
+# 이미지 pull 테스트
+sudo nerdctl pull cr.makina.rocks/test:latest
 
-# ISO 마운트 확인
-mountpoint /mnt/cdrom
-ls -la /mnt/cdrom
-
-# 웹서버 접근 테스트
-curl http://localhost:8080/iso-repo/
-curl http://localhost:8080/yum-repo/
+# kubelet 로그 확인
+sudo journalctl -u kubelet -f | grep -i "pull"
 ```
 
 ### 상태 확인 스크립트
@@ -586,7 +557,6 @@ kubectl get events --sort-by='.lastTimestamp' | tail -10
 | 10251 | TCP | Master | kube-scheduler |
 | 10252 | TCP | Master | kube-controller |
 | 8472 | UDP | 전체 | Flannel VXLAN |
-| 8080 | TCP | 전체 | 로컬 레포지토리 (선택) |
 
 ## 🎯 추가 기능
 
@@ -640,14 +610,16 @@ master2 ansible_host=192.168.135.32
 master3 ansible_host=192.168.135.33
 ```
 
-### NFS Provisioner
+### Containerd 데이터 디렉토리 커스터마이징
+
+```yaml
+# group_vars/all.yml에서 설정
+containerd_data_base_dir: "/data/containerd"  # 호스트별 경로: /data/containerd/{hostname}
+```
 
 ```bash
-# NFS 서버 확인 (master1)
-showmount -e master1
-
-# NFS provisioner 배포 (별도 설치 필요)
-# https://github.com/kubernetes-sigs/nfs-subdir-external-provisioner
+# 데이터 디렉토리 확인
+ls -la /data/containerd/
 ```
 
 ## 📚 추가 리소스
@@ -670,13 +642,13 @@ MIT License
 
 - ✅ **완전 자동화**: 한 번의 명령으로 전체 클러스터 배포
 - ✅ **크로스 플랫폼**: Ubuntu/RHEL/CentOS 지원
-- ✅ **오프라인 설치**: 로컬 레포지토리 지원 (ISO/YUM)
 - ✅ **고가용성**: Multi-master 구성 지원 (kube-vip)
 - ✅ **병렬 실행**: 빠른 설치를 위한 병렬 작업
 - ✅ **유연한 Tag**: 원하는 구성 요소만 선택 설치
 - ✅ **인증서 관리**: 10년 인증서 자동 연장
 - ✅ **GPU 지원**: NVIDIA GPU 드라이버 자동 설치
-- ✅ **레지스트리 통합**: Private registry 인증 지원
+- ✅ **레지스트리 통합**: 다중 Private registry 인증 지원
+- ✅ **커스터마이징**: Containerd 데이터 디렉토리 호스트별 설정
 - ✅ **모듈화**: 재사용 가능한 Ansible 역할
 
 ---

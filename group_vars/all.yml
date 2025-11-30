@@ -75,29 +75,6 @@ parallel_execution:
 #   package_installation: 1
 #   kubernetes_installation: 1
 
-# Local Repository Configuration (for RedHat/CentOS systems)
-# Enable local repository setup with web server
-# Supports both directory-based repo and ISO-based repo
-setup_local_repo: true
-
-# Directory-based repository
-# If yum_repo_directory exists, it will be served via HTTP
-use_yum_repo_directory: true
-yum_repo_directory: "/root/yum-repo"
-yum_repo_web_port: 8080
-
-# ISO-based repository  
-# Mount ISO file and serve via HTTP
-use_iso_repo: true
-iso_file_path: "/root/rhel-9.4-x86_64-dvd.iso"  # Path to ISO file
-iso_mount_point: "/mnt/cdrom"
-iso_device: "/dev/sr0"  # Use this if mounting from CD/DVD drive instead of ISO file
-use_iso_device: true   # Set to true to use device instead of ISO file
-
-# Web server configuration for local repo
-local_repo_web_server: "httpd"  # httpd or nginx
-local_repo_server_ip: "{{ ansible_default_ipv4.address }}"
-
 # Package Repository URLs (for offline installation)
 repo_url:
   centos: "http://192.168.1.10:8080/repo/"
@@ -165,22 +142,3 @@ registry_hosts:
 configure_coredns_hosts: true
 
 # ansible-playbook -i inventory.ini site.yml --tags coredns-hosts -e
-
-# NFS Server Configuration
-# Configure NFS server on the first server with /nfs export
-# Set nfs_server_enabled to true to enable NFS server setup
-# The /nfs directory will be exported with rw,sync,no_root_squash options
-# 
-# Usage with tags:
-#   ansible-playbook site.yml --tags nfs-server        # Full NFS server setup
-#   ansible-playbook site.yml --tags nfs-install       # Install NFS packages only
-#   ansible-playbook site.yml --tags nfs-config        # Configure exports only
-#   ansible-playbook site.yml --tags nfs-service       # Restart NFS services only
-#
-nfs_server_enabled: true
-nfs_exports:
-  - path: "/nfs"
-    options: "rw,sync,no_root_squash"
-    clients: "*"  # Allow all clients, can be restricted to specific networks
-nfs_export_directories:
-  - "/nfs" 
