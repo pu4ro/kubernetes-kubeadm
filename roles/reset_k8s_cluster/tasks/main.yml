@@ -175,6 +175,7 @@
     - /etc/systemd/system/kubelet.service.d
     - /usr/lib/systemd/system/kubelet.service
     - /lib/systemd/system/kubelet.service
+  when: remove_k8s_packages | default(false)
 
 - name: Reload systemd daemon
   systemd:
@@ -222,7 +223,6 @@
     - /var/log/containers
     - /var/cache/kubernetes
     - /tmp/kubeadm-*
-    - /etc/systemd/system/multi-user.target.wants/kubelet.service
     - /etc/kubernetes/manifests
 
 - name: Remove swap configuration (if it was disabled)
