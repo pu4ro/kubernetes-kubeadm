@@ -113,6 +113,7 @@ kubernetes-kubeadm/
 │   └── all.yml                       # 전역 변수
 ├── inventory.ini                     # 인벤토리 파일
 ├── roles/                            # Ansible 역할
+│   ├── configure_sysctl/             # Sysctl 및 커널 모듈 설정
 │   ├── install_os_package/           # OS 패키지
 │   ├── install_containerd/           # 컨테이너 런타임
 │   ├── setup-docker-credentials/     # 레지스트리 인증
@@ -257,7 +258,7 @@ ansible-playbook -i inventory.ini site.yml
 
 ```bash
 # Phase 1: 시스템 준비
-ansible-playbook -i inventory.ini site.yml --tags base,packages,container
+ansible-playbook -i inventory.ini site.yml --tags sysctl,packages,container
 
 # Phase 2: Kubernetes 설치
 ansible-playbook -i inventory.ini site.yml --tags kubernetes
@@ -285,6 +286,7 @@ ansible-playbook -i inventory.ini site.yml --limit workers
 
 | Phase | Tag | 설명 | 적용 대상 |
 |-------|-----|------|-----------|
+| **Phase 1** | `base`, `sysctl` | Sysctl 및 커널 모듈 설정 | 모든 노드 |
 | **Phase 1** | `base`, `packages` | OS 패키지 설치 | 모든 노드 |
 | **Phase 1** | `container` | 컨테이너 런타임 (containerd) | 모든 노드 |
 | **Phase 1** | `docker-credentials` | 레지스트리 인증 | 모든 노드 |
@@ -300,8 +302,10 @@ ansible-playbook -i inventory.ini site.yml --limit workers
 #### Phase 1: 시스템 준비
 | Tag | 설명 | 작업 내용 |
 |-----|------|-----------|
-| `base` | 기본 시스템 설정 | 호스트명, 방화벽 설정 |
-| `packages` | 패키지 설치 | 필수 OS 패키지 |
+| `base`, `sysctl` | Sysctl 파라미터 설정 | 커널 파라미터, swap 비활성화 |
+| `kernel-modules` | 커널 모듈 로드 | br_netfilter, overlay, ip_vs 등 |
+| `swap` | Swap 비활성화 | swapoff, fstab 수정 |
+| `base`, `packages` | 패키지 설치 | 필수 OS 패키지 |
 | `container` | 컨테이너 런타임 | containerd 설치 및 구성 |
 | `docker-credentials` | 레지스트리 인증 | nerdctl login, containerd 설정 |
 
@@ -331,34 +335,43 @@ ansible-playbook -i inventory.ini site.yml --limit workers
 ### 사용 예시
 
 ```bash
-# 1. 시스템 준비만 (Kubernetes 제외)
-ansible-playbook -i inventory.ini site.yml --tags base,packages,container
+# 1. Sysctl 설정만 (커널 파라미터, swap 비활성화)
+ansible-playbook -i inventory.ini site.yml --tags sysctl
 
-# 2. Kubernetes만 설치 (시스템 준비 완료 가정)
+# 2. 시스템 준비만 (Kubernetes 제외)
+ansible-playbook -i inventory.ini site.yml --tags sysctl,packages,container
+
+# 3. Kubernetes만 설치 (시스템 준비 완료 가정)
 ansible-playbook -i inventory.ini site.yml --tags kubernetes,networking
 
-# 3. 인증서만 10년으로 연장
+# 4. 인증서만 10년으로 연장
 ansible-playbook -i inventory.ini site.yml --tags k8s-certs
 
-# 4. CoreDNS 호스트 업데이트만
+# 5. CoreDNS 호스트 업데이트만
 ansible-playbook -i inventory.ini site.yml --tags coredns-hosts
 
-# 5. 레지스트리 인증 설정만
+# 6. 레지스트리 인증 설정만
 ansible-playbook -i inventory.ini site.yml --tags docker-credentials
 
-# 6. 레지스트리 로그인만 (설정 제외)
+# 7. 레지스트리 로그인만 (설정 제외)
 ansible-playbook -i inventory.ini site.yml --tags nerdctl-login
 
-# 7. Harbor 프로젝트 생성만
+# 8. Harbor 프로젝트 생성만
 ansible-playbook -i inventory.ini site.yml --tags harbor-setup
 
-# 8. 여러 tag 조합
-ansible-playbook -i inventory.ini site.yml --tags "packages,container,kubernetes"
+# 9. 커널 모듈만 로드
+ansible-playbook -i inventory.ini site.yml --tags kernel-modules
 
-# 9. 특정 호스트만
+# 10. Swap만 비활성화
+ansible-playbook -i inventory.ini site.yml --tags swap
+
+# 11. 여러 tag 조합
+ansible-playbook -i inventory.ini site.yml --tags "sysctl,packages,container,kubernetes"
+
+# 12. 특정 호스트만
 ansible-playbook -i inventory.ini site.yml --tags kubernetes --limit master1
 
-# 10. 마스터 노드 스케줄링 허용
+# 13. 마스터 노드 스케줄링 허용
 ansible-playbook -i inventory.ini site.yml --tags scheduling
 ```
 
@@ -368,6 +381,9 @@ ansible-playbook -i inventory.ini site.yml --tags scheduling
 # 빠른 재설치 (시스템 준비 완료 후)
 ansible-playbook -i inventory.ini site.yml --tags "kubernetes,networking"
 
+# 시스템 설정 + 컨테이너 런타임
+ansible-playbook -i inventory.ini site.yml --tags "sysctl,container"
+
 # 컨테이너 런타임 + Kubernetes
 ansible-playbook -i inventory.ini site.yml --tags "container,kubernetes"
 
@@ -375,10 +391,10 @@ ansible-playbook -i inventory.ini site.yml --tags "container,kubernetes"
 ansible-playbook -i inventory.ini site.yml --tags "docker-credentials,kubernetes"
 
 # 테스트 환경 빠른 설치 (최소 구성)
-ansible-playbook -i inventory.ini site.yml --tags "base,container,kubernetes,networking"
+ansible-playbook -i inventory.ini site.yml --tags "sysctl,container,kubernetes,networking"
 
 # 프로덕션 전체 설치 (모든 기능)
-ansible-playbook -i inventory.ini site.yml --tags "base,packages,container,docker-credentials,kubernetes,networking,k8s-certs,coredns-hosts"
+ansible-playbook -i inventory.ini site.yml --tags "sysctl,packages,container,docker-credentials,kubernetes,networking,k8s-certs,coredns-hosts"
 ```
 
 ## 🔧 설치 후 작업

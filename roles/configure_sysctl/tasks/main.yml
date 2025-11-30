@@ -1,0 +1,63 @@
+---
+# Configure sysctl parameters for Kubernetes
+
+- name: Load kernel modules
+  ansible.builtin.command: modprobe {{ item }}
+  loop: "{{ k8s_kernel_modules }}"
+  changed_when: false
+  tags:
+    - sysctl
+    - kernel-modules
+
+- name: Ensure kernel modules load on boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      # Kubernetes required kernel modules
+      br_netfilter
+      overlay
+      ip_vs
+      ip_vs_rr
+      ip_vs_wrr
+      ip_vs_sh
+      nf_conntrack
+    mode: '0644'
+  tags:
+    - sysctl
+    - kernel-modules
+
+- name: Configure sysctl parameters for Kubernetes
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-kubernetes.conf
+    reload: yes
+  loop: "{{ k8s_sysctl_params | dict2items }}"
+  tags:
+    - sysctl
+    - sysctl-params
+
+- name: Disable swap immediately
+  ansible.builtin.command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+  changed_when: false
+  tags:
+    - sysctl
+    - swap
+
+- name: Remove swap from /etc/fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^\s*[^#].*\s+swap\s+'
+    state: absent
+  tags:
+    - sysctl
+    - swap
+
+- name: Verify sysctl settings
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/99-kubernetes.conf
+  changed_when: false
+  tags:
+    - sysctl
+    - verify
