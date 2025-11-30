@@ -144,11 +144,19 @@
           debug:
             var: join_output.stdout
 
-        - name: Wait for node to be fully ready after join
-          command: kubectl get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+        - name: Wait for node registration after join
+          shell: |
+            readiness="$(kubectl get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+            case "$readiness" in
+              True) echo "Ready" ;;
+              False|Unknown) echo "Registered" ;;
+              *) echo "Waiting" ;;
+            esac
+          args:
+            executable: /bin/bash
           register: node_ready
           delegate_to: "{{ groups['masters'][0] }}"
-          until: node_ready.stdout == "True"
+          until: node_ready.stdout in ["Ready", "Registered"]
           retries: 20
           delay: 10
 
