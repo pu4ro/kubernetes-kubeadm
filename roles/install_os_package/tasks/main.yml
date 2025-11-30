@@ -86,149 +86,33 @@
   ignore_errors: true
   become_user: root
 
-- block:
-    - name: Check for NVIDIA devices
-      shell: lspci | grep -i NVIDIA
-      register: nvidia_devices
-      ignore_errors: true
-      changed_when: false
-      tags: nvidia-driver
+# GPU Detection (no driver installation)
+- name: Check for NVIDIA devices
+  shell: lspci | grep -i NVIDIA
+  register: nvidia_devices
+  ignore_errors: true
+  changed_when: false
+  tags: gpu
 
-    - name: Set GPU detection fact
-      set_fact:
-        has_nvidia_gpu: "{{ nvidia_devices.stdout != '' }}"
-        cacheable: yes
-      tags: nvidia-driver
+- name: Set GPU detection fact
+  set_fact:
+    has_nvidia_gpu: "{{ nvidia_devices.stdout != '' }}"
+    cacheable: yes
+  tags: gpu
 
-    - name: Display GPU detection result
-      debug:
-        msg: "NVIDIA GPU detected: {{ has_nvidia_gpu }}"
-      tags: nvidia-driver
+- name: Display GPU detection result
+  debug:
+    msg: "NVIDIA GPU detected: {{ has_nvidia_gpu }}"
+  tags: gpu
 
-    - name: Check if NVIDIA driver is already installed
-      command: nvidia-smi
-      register: nvidia_smi_check
-      ignore_errors: true
-      changed_when: false
-      when: has_nvidia_gpu | bool
-      tags: nvidia-driver
-
-    - name: Display NVIDIA driver status
-      debug:
-        msg: "NVIDIA driver is already installed, skipping installation"
-      when:
-        - has_nvidia_gpu | bool
-        - nvidia_smi_check.rc == 0
-      tags: nvidia-driver
-
-    - name: Install kernel development packages
-      yum:
-        name:
-          - kernel-devel
-          - kernel-headers
-          - gcc
-          - make
-          - elfutils-libelf-devel
-        state: present
-      when:
-        - has_nvidia_gpu | bool
-        - nvidia_smi_check.rc != 0
-      tags: nvidia-driver
-
-    - name: Create disable-nouveau.conf file
-      copy:
-        dest: /etc/modprobe.d/disable-nouveau.conf
-        content: |
-          blacklist nouveau
-          options nouveau modeset=0
-      when:
-        - has_nvidia_gpu | bool
-        - nvidia_smi_check.rc != 0
-      tags: nvidia-driver
-
-    - name: Regenerate initramfs
-      command: dracut --force
-      when:
-        - has_nvidia_gpu | bool
-        - nvidia_smi_check.rc != 0
-      tags: nvidia-driver
-
-    - name: Reboot NVIDIA devices only
-      reboot:
-        reboot_timeout: 1200
-      when:
-        - has_nvidia_gpu | bool
-        - nvidia_smi_check.rc != 0
-      become: yes
-      tags: nvidia-driver
-
-    - name: Download NVIDIA driver from local repo
-      get_url:
-        url: "http://{{ hostvars[groups['installs'][0]]['ansible_default_ipv4']['address'] }}:{{ yum_repo_web_port }}/yum-repo/NVIDIA-Linux-x86_64-{{ driver_version }}.run"
-        dest: /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run
-        mode: '0755'
-        timeout: 300
-      when:
-        - has_nvidia_gpu | bool
-        - nvidia_smi_check.rc != 0
-      register: nvidia_driver_download
-      ignore_errors: yes
-      tags: nvidia-driver
-
-    - name: Run NVIDIA installer
-      ansible.builtin.shell: |
-        /tmp/NVIDIA-Linux-x86_64-{{ driver_version }}.run --silent \
-                                                          --disable-nouveau \
-                                                          --no-opengl-files \
-                                                          --no-x-check
-      args:
-        creates: /usr/bin/nvidia-smi
-      when:
-        - has_nvidia_gpu | bool
-        - nvidia_smi_check.rc != 0
-        - nvidia_driver_download is succeeded
-      tags: nvidia-driver
-
-    - name: Load nvidia module
-      command: modprobe nvidia
-      when:
-        - has_nvidia_gpu | bool
-        - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
-      ignore_errors: yes
-      changed_when: false
-      tags: nvidia-driver
-
-    - name: Create ldconfig symlink for NVIDIA
-      file:
-        src: /sbin/ldconfig
-        dest: /sbin/ldconfig.real
-        state: link
-      when:
-        - has_nvidia_gpu | bool
-        - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
-      ignore_errors: yes
-      tags: nvidia-driver
-
-    - name: Install nvidia-container-toolkit
-      yum:
-        name: nvidia-container-toolkit
-        state: present
-      when:
-        - has_nvidia_gpu | bool
-        - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
-      tags: nvidia-driver
-
-    - name: Set NVIDIA runtime enabled fact
-      set_fact:
-        nvidia_runtime_enabled: true
-        cacheable: yes
-      when:
-        - has_nvidia_gpu | bool
-        - nvidia_smi_check.rc == 0 or nvidia_driver_download is succeeded
-      tags: nvidia-driver
-  when: 
-    - ansible_os_family == "RedHat"
-    - install_gpu_driver | default(false)
+- name: Create ldconfig symlink for NVIDIA
+  file:
+    src: /sbin/ldconfig
+    dest: /sbin/ldconfig.real
+    state: link
+  when: has_nvidia_gpu | default(false) | bool
+  ignore_errors: yes
+  tags: gpu
 
 # Configure environment variables
 - name: Add HELMFILE_CONFIG to bashrc

@@ -229,9 +229,8 @@ registry_hosts:
 # CoreDNS 호스트 설정
 configure_coredns_hosts: true
 
-# GPU 드라이버 설치
-install_gpu_driver: false
-driver_version: "570.124.06"
+# NVIDIA GPU 런타임 지원 (자동 감지)
+nvidia_runtime: true
 ```
 
 ## 🚀 설치
@@ -596,16 +595,21 @@ ansible-playbook -i inventory.ini site.yml --tags k8s-certs
 ./k8s_10y.sh all
 ```
 
-### GPU 지원
+### GPU 지원 (자동 감지)
+
+GPU는 자동으로 감지되며, containerd가 NVIDIA 런타임으로 자동 설정됩니다.
 
 ```yaml
-# group_vars/all.yml에서 활성화
-install_gpu_driver: true
-driver_version: "570.124.06"
-nvidia_runtime: true
+# group_vars/all.yml
+nvidia_runtime: true  # GPU 자동 감지 활성화
 ```
 
+**참고**: NVIDIA driver는 Ansible이 아닌 노드에 미리 설치되어 있어야 합니다.
+
 ```bash
+# GPU 감지 확인
+ansible -i inventory.ini all -m debug -a "var=has_nvidia_gpu"
+
 # GPU 노드 확인
 kubectl get nodes -o json | jq '.items[].status.capacity'
 ```
@@ -662,7 +666,7 @@ MIT License
 - ✅ **병렬 실행**: 빠른 설치를 위한 병렬 작업
 - ✅ **유연한 Tag**: 원하는 구성 요소만 선택 설치
 - ✅ **인증서 관리**: 10년 인증서 자동 연장
-- ✅ **GPU 지원**: NVIDIA GPU 드라이버 자동 설치
+- ✅ **GPU 지원**: NVIDIA GPU 자동 감지 및 containerd 설정
 - ✅ **레지스트리 통합**: 다중 Private registry 인증 지원
 - ✅ **커스터마이징**: Containerd 데이터 디렉토리 호스트별 설정
 - ✅ **모듈화**: 재사용 가능한 Ansible 역할

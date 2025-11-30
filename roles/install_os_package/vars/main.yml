@@ -68,10 +68,3 @@ package_map:
   time_sync:
     Debian: chrony
     RedHat: chrony
-
-# GPU Driver Installation
-# Set install_gpu_driver to true to install NVIDIA GPU drivers
-# Requires NVIDIA devices to be present in the system
-# Driver version can be configured with driver_version variable
-install_gpu_driver: true
-driver_version: "570.124.06"
