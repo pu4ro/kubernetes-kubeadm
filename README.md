@@ -614,6 +614,24 @@ ansible -i inventory.ini all -m debug -a "var=has_nvidia_gpu"
 kubectl get nodes -o json | jq '.items[].status.capacity'
 ```
 
+### 로컬 Docker 레지스트리 (옵션)
+
+`enable_local_registry: true`로 설정하면 `installs` 그룹 노드에 nerdctl 기반 레지스트리가 자동으로 배포됩니다. 주요 변수 예시는 다음과 같습니다:
+
+```yaml
+enable_local_registry: true
+local_registry_image: "registry:2"
+local_registry_image_tar: "/root/docker.tar.gz"      # 필요 시 사전 로드 tar
+local_registry_host_port: 80                         # 외부 노출 포트
+local_registry_container_port: 5000                  # 컨테이너 내부 포트
+local_registry_data_dir: "/opt/local-registry/data"  # 이미지 레이어 저장소
+local_registry_additional_args:
+  - "-e"
+  - "REGISTRY_STORAGE_DELETE_ENABLED=true"
+```
+
+`ansible-playbook -i inventory.ini site.yml --tags local-registry`로 단독 실행하거나 전체 설치 과정의 Phase 0에서 자동 실행됩니다.
+
 ### High Availability (HA) 구성
 
 ```yaml
@@ -642,6 +660,23 @@ containerd_data_base_dir: "/data/containerd"  # 호스트별 경로: /data/conta
 ls -la /data/containerd/
 ```
 
+### Ansible Ad-hoc 예시
+
+같은 인벤토리를 재사용해 빠르게 명령을 실행할 수 있습니다:
+
+```bash
+# 전체 노드 ping 테스트
+ansible all -i inventory.ini -m ping
+
+# 마스터 컨트롤 플레인 상태 확인
+ansible masters -i inventory.ini -m shell -a "kubectl get nodes"
+
+# 워커 패키지 업데이트
+ansible workers -i inventory.ini -m yum -a "name=vim-enhanced state=latest"
+```
+
+SSH 사용자/비밀번호 등 공통 설정은 `group_vars/all.yml`에 있으므로, 인벤토리에 호스트만 추가하면 동일한 ad-hoc 명령으로 클러스터 전체를 관리할 수 있습니다.
+
 ## 📚 추가 리소스
 
 - [Kubernetes 공식 문서](https://kubernetes.io/ko/docs/)
@@ -668,6 +703,7 @@ MIT License
 - ✅ **인증서 관리**: 10년 인증서 자동 연장
 - ✅ **GPU 지원**: NVIDIA GPU 자동 감지 및 containerd 설정
 - ✅ **레지스트리 통합**: 다중 Private registry 인증 지원
+- ✅ **로컬 레지스트리 옵션**: nerdctl 기반 오프라인 캐시 역할 제공
 - ✅ **커스터마이징**: Containerd 데이터 디렉토리 호스트별 설정
 - ✅ **모듈화**: 재사용 가능한 Ansible 역할
 

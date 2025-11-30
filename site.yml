@@ -2,6 +2,13 @@
 # Kubernetes Cluster Basic Installation Playbook
 # Usage: ansible-playbook -i inventory.ini site.yml
 
+# Phase 0: Local Docker Registry (optional)
+- name: Local Registry Setup
+  hosts: installs
+  become: yes
+  roles:
+    - { role: local_registry, tags: ['local-registry'], when: enable_local_registry | default(false) }
+
 # Phase 1: System Preparation
 - name: System Preparation
   hosts: all

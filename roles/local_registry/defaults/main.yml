@@ -1,0 +1,9 @@
+---
+enable_local_registry: false
+local_registry_image: "registry:2"
+local_registry_image_tar: "/root/docker.tar.gz"
+local_registry_container_name: "local-registry"
+local_registry_host_port: 80
+local_registry_container_port: 5000
+local_registry_data_dir: "/opt/local-registry/data"
+local_registry_additional_args: []
