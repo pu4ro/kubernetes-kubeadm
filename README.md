@@ -68,6 +68,36 @@ Ansible을 사용한 Kubernetes 클러스터 자동 배포 도구입니다.
 
 ## 🚀 빠른 시작
 
+### Makefile 사용법
+
+프로젝트에 Makefile이 포함되어 있어 간편하게 명령어를 실행할 수 있습니다:
+
+```bash
+# 사용 가능한 모든 명령어 확인
+make help
+
+# 자주 사용하는 명령어
+make ping                  # 호스트 연결 테스트
+make install               # 전체 클러스터 설치
+make install-minimal       # 최소 구성 설치
+make check-cluster         # 클러스터 상태 확인
+make reset                 # 클러스터 초기화
+
+# Tag 기반 설치
+make tag-sysctl           # Sysctl 설정만
+make tag-kubernetes       # Kubernetes만 설치
+make tag-networking       # 네트워크 플러그인만
+
+# 호스트별 설치
+make limit-master         # Master 노드만
+make limit-workers        # Worker 노드만
+
+# 유틸리티
+make show-inventory       # 인벤토리 확인
+make list-tags            # 사용 가능한 tags
+make dry-run              # 변경사항 미리보기
+```
+
 ### 사전 요구사항
 
 1. **제어 노드 설정** (Ansible 실행 노드):
