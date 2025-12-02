@@ -102,6 +102,11 @@ make cmd-all CMD="uptime"              # 모든 호스트
 make cmd-masters CMD="kubectl get nodes"  # Master만
 make cmd-workers CMD="free -h"         # Worker만
 make command CMD="df -h"               # cmd-all 별칭
+
+# Worker 노드 관리
+make check-workers                     # Worker 상태 확인
+make check-and-add-workers             # 자동으로 미등록 노드 추가
+make add-workers                       # Worker 추가 (수동)
 ```
 
 ### 사전 요구사항

@@ -170,6 +170,14 @@ make tag-networking
 | `make cmd-installs CMD="..."` | Installs 노드 | Installs에서만 명령 실행 |
 | `make command CMD="..."` | 모든 호스트 | cmd-all의 별칭 |
 
+### Worker 노드 관리
+
+| 명령어 | 설명 | 동작 |
+|--------|------|------|
+| `make check-workers` | Worker 상태 확인 | 인벤토리와 클러스터 비교 |
+| `make check-and-add-workers` | 자동 Worker 추가 | 미등록 노드 자동 감지 및 추가 |
+| `make add-workers` | 수동 Worker 추가 | add-worker.yml 실행 |
+
 ## 실전 예제
 
 ### 예제 1: 신규 클러스터 전체 설치
@@ -332,6 +340,48 @@ make cmd-workers CMD="systemctl status containerd --no-pager"
 
 # Installs 노드에서 로컬 레지스트리 확인
 make cmd-installs CMD="nerdctl ps"
+```
+
+### 예제 12: Worker 노드 자동 관리
+
+```bash
+# 1. 현재 Worker 상태 확인
+make check-workers
+
+# 출력 예시:
+# 인벤토리 Worker 목록:
+#   worker1
+#   worker2
+#   worker3
+#
+# 클러스터에 등록된 노드:
+#   master1
+#   master2
+#   worker1
+
+# 2. 자동으로 미등록 Worker 추가
+make check-and-add-workers
+
+# 이 명령은 자동으로:
+# - worker2, worker3가 클러스터에 없음을 감지
+# - 필요한 시스템 준비 (sysctl, packages, containerd)
+# - Kubernetes 패키지 설치
+# - 클러스터에 join
+# - 상태 검증
+
+# 3. 완료 후 확인
+make check-cluster
+
+# 4. inventory.ini에 새 worker 추가 후
+vim inventory.ini
+# [workers]
+# worker1 ansible_host=192.168.135.41
+# worker2 ansible_host=192.168.135.42
+# worker3 ansible_host=192.168.135.43
+# worker4 ansible_host=192.168.135.44  # 새로 추가
+
+# 5. 자동으로 worker4만 추가됨
+make check-and-add-workers
 ```
 
 ## 팁과 모범 사례

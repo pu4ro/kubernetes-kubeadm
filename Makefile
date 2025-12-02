@@ -4,6 +4,7 @@
 .PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials
 .PHONY: limit-master limit-workers
 .PHONY: command cmd-all cmd-masters cmd-workers cmd-installs
+.PHONY: check-workers add-workers check-and-add-workers
 
 .DEFAULT_GOAL := help
 
@@ -11,6 +12,8 @@
 INVENTORY := inventory.ini
 PLAYBOOK := site.yml
 RESET_PLAYBOOK := reset_cluster.yml
+ADD_WORKER_PLAYBOOK := add-worker.yml
+CHECK_ADD_WORKERS_PLAYBOOK := check-and-add-workers.yml
 
 ##@ 일반 명령어
 
@@ -116,6 +119,25 @@ limit-workers: ## Worker 노드만 설치
 limit-master1: ## master1만 설치
 	@echo "==> master1만 설치 중..."
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --limit master1
+
+##@ Worker 노드 관리
+
+check-workers: ## Worker 노드 상태 확인 (클러스터에 조인되었는지 체크)
+	@echo "==> Worker 노드 상태 확인 중..."
+	@echo ""
+	@echo "인벤토리 Worker 목록:"
+	@ansible workers -i $(INVENTORY) --list-hosts | grep -v "hosts ("
+	@echo ""
+	@echo "클러스터에 등록된 노드:"
+	@ansible masters -i $(INVENTORY) -m shell -a "kubectl get nodes -o custom-columns=NAME:.metadata.name --no-headers" 2>/dev/null | grep -v ">>>" || echo "클러스터 정보를 가져올 수 없습니다"
+
+add-workers: ## 새 Worker 노드 추가 (기존 add-worker.yml 사용)
+	@echo "==> Worker 노드 추가 중..."
+	ansible-playbook -i $(INVENTORY) $(ADD_WORKER_PLAYBOOK)
+
+check-and-add-workers: ## Worker 상태 확인 후 자동으로 미등록 노드 추가
+	@echo "==> Worker 상태 확인 및 자동 추가 중..."
+	ansible-playbook -i $(INVENTORY) $(CHECK_ADD_WORKERS_PLAYBOOK)
 
 ##@ 리셋 및 정리
 

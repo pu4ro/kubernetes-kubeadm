@@ -1,0 +1,293 @@
+---
+# Check and Add Worker Nodes to Kubernetes Cluster
+# This playbook checks which workers are not joined and automatically adds them
+# Usage: ansible-playbook -i inventory.ini check-and-add-workers.yml
+
+# Phase 1: Check Worker Status on Master
+- name: Check Worker Node Status
+  hosts: masters[0]
+  become: yes
+  gather_facts: no
+
+  tasks:
+    - name: Get all nodes in cluster
+      command: kubectl get nodes -o json
+      register: cluster_nodes_json
+      changed_when: false
+      failed_when: false
+
+    - name: Parse cluster nodes
+      set_fact:
+        cluster_node_names: "{{ (cluster_nodes_json.stdout | from_json).items | map(attribute='metadata.name') | list }}"
+      when: cluster_nodes_json.rc == 0
+
+    - name: Set empty list if cluster not ready
+      set_fact:
+        cluster_node_names: []
+      when: cluster_nodes_json.rc != 0
+
+    - name: Display current cluster nodes
+      debug:
+        msg: "Current nodes in cluster: {{ cluster_node_names }}"
+
+    - name: Identify workers not in cluster
+      set_fact:
+        workers_to_add: "{{ groups['workers'] | difference(cluster_node_names) }}"
+
+    - name: Display workers to add
+      debug:
+        msg:
+          - "Total workers in inventory: {{ groups['workers'] | length }}"
+          - "Workers already in cluster: {{ groups['workers'] | intersect(cluster_node_names) | length }}"
+          - "Workers to be added: {{ workers_to_add | length }}"
+          - "Workers that need joining: {{ workers_to_add }}"
+
+    - name: Store workers to add
+      add_host:
+        name: "worker_status_holder"
+        workers_to_add: "{{ workers_to_add }}"
+        workers_in_cluster: "{{ groups['workers'] | intersect(cluster_node_names) }}"
+
+    - name: Exit if no workers to add
+      meta: end_play
+      when: workers_to_add | length == 0
+
+# Phase 2: Check Worker Node Local Status
+- name: Check Worker Local Status
+  hosts: workers
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Check if kubelet.conf exists
+      stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: kubelet_conf_status
+
+    - name: Check if node needs setup
+      set_fact:
+        needs_system_setup: "{{ not kubelet_conf_status.stat.exists }}"
+
+    - name: Display node status
+      debug:
+        msg:
+          - "Node: {{ inventory_hostname }}"
+          - "Kubelet config exists: {{ kubelet_conf_status.stat.exists }}"
+          - "Needs system setup: {{ needs_system_setup }}"
+          - "Should be added to cluster: {{ inventory_hostname in hostvars['worker_status_holder']['workers_to_add'] }}"
+
+# Phase 3: Prepare New Worker Nodes (System Setup)
+- name: Prepare New Worker Nodes
+  hosts: workers
+  become: yes
+  gather_facts: yes
+  serial: "{{ parallel_execution.system_preparation | default(0) }}"
+
+  tasks:
+    - name: Check if preparation needed
+      stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: node_status
+
+    - name: Skip if already joined
+      debug:
+        msg: "Node {{ inventory_hostname }} is already configured, skipping system preparation"
+      when: node_status.stat.exists
+
+  roles:
+    - role: configure_sysctl
+      tags: ['sysctl', 'base']
+      when: not node_status.stat.exists
+    - role: install_os_package
+      tags: ['packages', 'base']
+      when: not node_status.stat.exists
+    - role: install_containerd
+      tags: ['container']
+      when: not node_status.stat.exists
+    - role: setup-docker-credentials
+      tags: ['docker-credentials']
+      when: not node_status.stat.exists
+
+# Phase 4: Generate Join Token from Master
+- name: Generate Join Token
+  hosts: masters[0]
+  become: yes
+  gather_facts: no
+
+  tasks:
+    - name: Check if there are workers to add
+      debug:
+        msg: "Workers to add: {{ hostvars['worker_status_holder']['workers_to_add'] }}"
+
+    - name: Generate new kubeadm join token
+      command: kubeadm token create --print-join-command
+      register: join_command_output
+      changed_when: false
+      when: hostvars['worker_status_holder']['workers_to_add'] | length > 0
+
+    - name: Display generated join command
+      debug:
+        msg: "Join command: {{ join_command_output.stdout }}"
+      when: join_command_output is defined and join_command_output.stdout is defined
+
+    - name: Store join command for workers
+      add_host:
+        name: "join_command_holder"
+        worker_join_cmd: "{{ join_command_output.stdout }}"
+      when: join_command_output is defined and join_command_output.stdout is defined
+
+# Phase 5: Install Kubernetes Packages on Workers
+- name: Install Kubernetes Packages
+  hosts: workers
+  become: yes
+  gather_facts: yes
+  serial: "{{ parallel_execution.kubernetes_installation | default(0) }}"
+
+  tasks:
+    - name: Check if node is already joined
+      stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: node_joined_status
+
+    - name: Check if this worker should be added
+      set_fact:
+        should_join: "{{ inventory_hostname in hostvars['worker_status_holder']['workers_to_add'] }}"
+
+    - name: Skip if already joined
+      debug:
+        msg: "Node {{ inventory_hostname }} is already joined, skipping Kubernetes installation"
+      when: node_joined_status.stat.exists or not should_join
+
+    - name: Install Kubernetes packages (RedHat/CentOS)
+      block:
+        - name: Install kubeadm, kubelet, and kubectl
+          yum:
+            name:
+              - "kubelet-{{ kubernetes_version }}"
+              - "kubeadm-{{ kubernetes_version }}"
+              - "kubectl-{{ kubernetes_version }}"
+            state: present
+            disable_excludes: kubernetes
+
+        - name: Start and enable kubelet
+          systemd:
+            name: kubelet
+            state: started
+            enabled: yes
+            daemon_reload: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - not node_joined_status.stat.exists
+        - should_join
+
+    - name: Install Kubernetes packages (Ubuntu/Debian)
+      block:
+        - name: Install kubeadm, kubelet, and kubectl
+          apt:
+            name:
+              - "kubelet={{ kubernetes_version }}-*"
+              - "kubeadm={{ kubernetes_version }}-*"
+              - "kubectl={{ kubernetes_version }}-*"
+            state: present
+            allow_downgrade: yes
+
+        - name: Start and enable kubelet
+          systemd:
+            name: kubelet
+            state: started
+            enabled: yes
+            daemon_reload: yes
+      when:
+        - ansible_os_family == "Debian"
+        - not node_joined_status.stat.exists
+        - should_join
+
+# Phase 6: Join Workers to Cluster
+- name: Join Worker Nodes to Cluster
+  hosts: workers
+  become: yes
+  gather_facts: no
+  serial: "{{ parallel_execution.kubernetes_installation | default(0) }}"
+
+  tasks:
+    - name: Check if node is already joined
+      stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: final_node_status
+
+    - name: Check if this worker should be added
+      set_fact:
+        should_join: "{{ inventory_hostname in hostvars['worker_status_holder']['workers_to_add'] }}"
+
+    - name: Join worker node to cluster
+      command: "{{ hostvars['join_command_holder']['worker_join_cmd'] }}"
+      register: join_result
+      when:
+        - not final_node_status.stat.exists
+        - should_join
+      until: join_result.rc == 0 or 'already exists' in join_result.stderr
+      retries: 3
+      delay: 30
+      failed_when: join_result.rc != 0 and 'already exists' not in join_result.stderr
+
+    - name: Display join result
+      debug:
+        msg: "{{ join_result.stdout_lines }}"
+      when:
+        - join_result is defined
+        - join_result.changed
+
+# Phase 7: Verify Worker Nodes
+- name: Verify Worker Nodes Joined
+  hosts: masters[0]
+  become: yes
+  gather_facts: no
+
+  tasks:
+    - name: Check if workers were added
+      debug:
+        msg: "Workers added: {{ hostvars['worker_status_holder']['workers_to_add'] }}"
+
+    - name: Wait for nodes to be registered
+      command: kubectl get nodes {{ item }}
+      register: node_status
+      with_items: "{{ hostvars['worker_status_holder']['workers_to_add'] }}"
+      retries: 10
+      delay: 10
+      until: node_status.rc == 0
+      changed_when: false
+      when: hostvars['worker_status_holder']['workers_to_add'] | length > 0
+
+    - name: Display all nodes status
+      command: kubectl get nodes -o wide
+      register: all_nodes
+      changed_when: false
+
+    - name: Show cluster nodes
+      debug:
+        msg: "{{ all_nodes.stdout_lines }}"
+
+    - name: Check node readiness
+      shell: kubectl get nodes {{ item }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: node_ready_status
+      with_items: "{{ hostvars['worker_status_holder']['workers_to_add'] }}"
+      changed_when: false
+      retries: 20
+      delay: 15
+      until: "'True' in node_ready_status.stdout"
+      when: hostvars['worker_status_holder']['workers_to_add'] | length > 0
+
+    - name: Display success message
+      debug:
+        msg:
+          - "========================================="
+          - "Worker node check and add completed!"
+          - "Total workers in inventory: {{ groups['workers'] | length }}"
+          - "Workers already in cluster: {{ hostvars['worker_status_holder']['workers_in_cluster'] | length }}"
+          - "Newly added workers: {{ hostvars['worker_status_holder']['workers_to_add'] | length }}"
+          - "Workers added: {{ hostvars['worker_status_holder']['workers_to_add'] }}"
+          - ""
+          - "Verify with:"
+          - "  kubectl get nodes"
+          - "  kubectl get nodes -o wide"
+          - "========================================="
