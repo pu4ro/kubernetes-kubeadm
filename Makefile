@@ -3,6 +3,7 @@
 .PHONY: tag-sysctl tag-packages tag-container tag-kubernetes tag-networking
 .PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials
 .PHONY: limit-master limit-workers
+.PHONY: command cmd-all cmd-masters cmd-workers cmd-installs
 
 .DEFAULT_GOAL := help
 
@@ -193,3 +194,47 @@ check-versions: ## 설치된 버전 확인
 	@echo ""
 	@echo "Containerd 버전:"
 	ansible all -i $(INVENTORY) -m shell -a "containerd --version 2>/dev/null || echo 'Not installed'" | grep -v ">>>"
+
+##@ 커스텀 명령어 실행
+
+cmd-all: ## 모든 호스트에 명령어 실행 (사용법: make cmd-all CMD="ls -la")
+	@if [ -z "$(CMD)" ]; then \
+		echo "에러: CMD 변수가 비어있습니다."; \
+		echo "사용법: make cmd-all CMD=\"your-command\""; \
+		echo "예시: make cmd-all CMD=\"uptime\""; \
+		exit 1; \
+	fi
+	@echo "==> 모든 호스트에서 명령어 실행: $(CMD)"
+	ansible all -i $(INVENTORY) -m shell -a "$(CMD)"
+
+cmd-masters: ## Master 노드에만 명령어 실행 (사용법: make cmd-masters CMD="kubectl get nodes")
+	@if [ -z "$(CMD)" ]; then \
+		echo "에러: CMD 변수가 비어있습니다."; \
+		echo "사용법: make cmd-masters CMD=\"your-command\""; \
+		echo "예시: make cmd-masters CMD=\"kubectl get nodes\""; \
+		exit 1; \
+	fi
+	@echo "==> Master 노드에서 명령어 실행: $(CMD)"
+	ansible masters -i $(INVENTORY) -m shell -a "$(CMD)"
+
+cmd-workers: ## Worker 노드에만 명령어 실행 (사용법: make cmd-workers CMD="docker ps")
+	@if [ -z "$(CMD)" ]; then \
+		echo "에러: CMD 변수가 비어있습니다."; \
+		echo "사용법: make cmd-workers CMD=\"your-command\""; \
+		echo "예시: make cmd-workers CMD=\"free -h\""; \
+		exit 1; \
+	fi
+	@echo "==> Worker 노드에서 명령어 실행: $(CMD)"
+	ansible workers -i $(INVENTORY) -m shell -a "$(CMD)"
+
+cmd-installs: ## Installs 노드에만 명령어 실행 (사용법: make cmd-installs CMD="df -h")
+	@if [ -z "$(CMD)" ]; then \
+		echo "에러: CMD 변수가 비어있습니다."; \
+		echo "사용법: make cmd-installs CMD=\"your-command\""; \
+		echo "예시: make cmd-installs CMD=\"nerdctl ps\""; \
+		exit 1; \
+	fi
+	@echo "==> Installs 노드에서 명령어 실행: $(CMD)"
+	ansible installs -i $(INVENTORY) -m shell -a "$(CMD)"
+
+command: cmd-all ## cmd-all의 별칭 (사용법: make command CMD="your-command")

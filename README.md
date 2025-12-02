@@ -96,6 +96,12 @@ make limit-workers        # Worker 노드만
 make show-inventory       # 인벤토리 확인
 make list-tags            # 사용 가능한 tags
 make dry-run              # 변경사항 미리보기
+
+# 커스텀 명령어 실행
+make cmd-all CMD="uptime"              # 모든 호스트
+make cmd-masters CMD="kubectl get nodes"  # Master만
+make cmd-workers CMD="free -h"         # Worker만
+make command CMD="df -h"               # cmd-all 별칭
 ```
 
 ### 사전 요구사항

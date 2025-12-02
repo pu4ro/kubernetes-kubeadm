@@ -160,6 +160,16 @@ make tag-networking
 | `make get-join-command` | Join 명령어 | Worker 추가 시 |
 | `make check-versions` | 설치된 버전 | 버전 확인 |
 
+### 커스텀 명령어 실행
+
+| 명령어 | 대상 | 설명 |
+|--------|------|------|
+| `make cmd-all CMD="..."` | 모든 호스트 | 모든 노드에서 명령 실행 |
+| `make cmd-masters CMD="..."` | Master 노드 | Master에서만 명령 실행 |
+| `make cmd-workers CMD="..."` | Worker 노드 | Worker에서만 명령 실행 |
+| `make cmd-installs CMD="..."` | Installs 노드 | Installs에서만 명령 실행 |
+| `make command CMD="..."` | 모든 호스트 | cmd-all의 별칭 |
+
 ## 실전 예제
 
 ### 예제 1: 신규 클러스터 전체 설치
@@ -297,6 +307,31 @@ make limit-workers
 # 3. GPU 확인
 make check-versions
 ssh worker1 "nvidia-smi"
+```
+
+### 예제 11: 커스텀 명령어 실행
+
+```bash
+# 모든 호스트에서 uptime 확인
+make cmd-all CMD="uptime"
+
+# Master 노드에서만 kubectl 명령 실행
+make cmd-masters CMD="kubectl get nodes -o wide"
+
+# Worker 노드에서만 메모리 확인
+make cmd-workers CMD="free -h"
+
+# 모든 호스트에서 디스크 사용량 확인
+make command CMD="df -h /data"
+
+# Master에서 Pod 목록 확인
+make cmd-masters CMD="kubectl get pods -A"
+
+# Worker에서 containerd 상태 확인
+make cmd-workers CMD="systemctl status containerd --no-pager"
+
+# Installs 노드에서 로컬 레지스트리 확인
+make cmd-installs CMD="nerdctl ps"
 ```
 
 ## 팁과 모범 사례
