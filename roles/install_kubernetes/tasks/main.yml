@@ -89,13 +89,11 @@
         discovery_token_ca_cert_hash_value: "{{ discovery_token_ca_cert_hash.stdout.split('=')[-1].strip() }}"
       when: master_ha and inventory_hostname == groups['masters'][0]
 
-    - name: Check if API server is already running
-      uri:
-        url: "https://{{ kube_vip_address }}:{{ kube_vip_port }}/readyz"
-        validate_certs: no
-        status_code: [200, 401, 403]
-      register: api_server_check
+    - name: Check if API server pod is already running
+      shell: kubectl get pod -n kube-system -l component=kube-apiserver -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "NotFound"
+      register: api_server_pod_status
       ignore_errors: yes
+      delegate_to: "{{ groups['masters'][0] }}"
       when: master_ha and inventory_hostname in groups['masters'][1:3]
 
     - name: Wait for API server to be ready on first master
@@ -108,7 +106,7 @@
       when:
         - master_ha
         - inventory_hostname in groups['masters'][1:3]
-        - api_server_check.status is not defined or api_server_check.status not in [200, 401, 403]
+        - api_server_pod_status.stdout is not defined or api_server_pod_status.stdout != "Running"
 
     - name: Wait for etcd to stabilize before joining additional masters
       pause:
