@@ -91,11 +91,45 @@ repo_url:
   ubuntu: "http://192.168.134.102/ubuntu_22.04.5"
 
 # Container Registry Settings (basic Docker configuration)
-insecure_registries: 
+insecure_registries:
   #- "192.168.1.10:5000"           # Local registry example
   # - "harbor.yourdomain.com"     # Harbor registry example
   # - "registry.local"            # Custom registry example
 docker_log_max_size: "100m"
+
+# Containerd Registry Authentication Configuration
+# Configure authentication for registries in containerd config.toml
+# This complements docker_registries (used for nerdctl login)
+#
+# Usage:
+#   ansible-playbook site.yml --tags containerd-config
+#
+containerd_registry_auth:
+  # Example configurations:
+  - registry: "registry.test"
+    insecure_skip_verify: true
+    username: ""          # Leave empty for no auth
+    password: ""
+    auth: ""
+    identitytoken: ""
+  - registry: "registry.local"
+    insecure_skip_verify: true
+    username: ""
+    password: ""
+    auth: ""
+    identitytoken: ""
+  # - registry: "cr.makina.rocks"
+  #   insecure_skip_verify: false
+  #   username: "your-username"
+  #   password: "your-password"
+  #   auth: ""              # Optional: base64 encoded username:password
+  #   identitytoken: ""     # Optional: for token-based auth
+  # - registry: "harbor.yourdomain.com"
+  #   insecure_skip_verify: true
+  #   username: "admin"
+  #   password: "Harbor12345"
+  #   auth: ""
+  #   identitytoken: ""
 
 # Kubernetes pause container image
 pause_image: "cr.makina.rocks/external-hub/kubernetes/pause:3.9"

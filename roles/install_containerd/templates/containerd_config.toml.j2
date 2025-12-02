@@ -161,7 +161,17 @@ version = 2
       [plugins."io.containerd.grpc.v1.cri".registry.auths]
 
       [plugins."io.containerd.grpc.v1.cri".registry.configs]
-{% if insecure_registries is defined and insecure_registries is not none and insecure_registries | length > 0 %}
+{% if containerd_registry_auth is defined and containerd_registry_auth is not none and containerd_registry_auth | length > 0 %}
+{% for registry_config in containerd_registry_auth %}
+      [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry_config.registry }}".tls]
+        insecure_skip_verify = {{ registry_config.insecure_skip_verify | default(true) | lower }}
+      [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry_config.registry }}".auth]
+        username = "{{ registry_config.username | default('') }}"
+        password = "{{ registry_config.password | default('') }}"
+        auth = "{{ registry_config.auth | default('') }}"
+        identitytoken = "{{ registry_config.identitytoken | default('') }}"
+{% endfor %}
+{% elif insecure_registries is defined and insecure_registries is not none and insecure_registries | length > 0 %}
 {% for registry in insecure_registries | unique %}
       [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry }}".tls]
         insecure_skip_verify = true
@@ -176,7 +186,17 @@ version = 2
       [plugins."io.containerd.grpc.v1.cri".registry.headers]
 
       [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
-{% if insecure_registries is defined and insecure_registries is not none and insecure_registries | length > 0 %}
+{% if containerd_registry_auth is defined and containerd_registry_auth is not none and containerd_registry_auth | length > 0 %}
+{% for registry_config in containerd_registry_auth %}
+{% if registry_config.insecure_skip_verify | default(true) %}
+      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry_config.registry }}"]
+        endpoint = ["http://{{ registry_config.registry }}"]
+{% else %}
+      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry_config.registry }}"]
+        endpoint = ["https://{{ registry_config.registry }}"]
+{% endif %}
+{% endfor %}
+{% elif insecure_registries is defined and insecure_registries is not none and insecure_registries | length > 0 %}
 {% for registry in insecure_registries | unique %}
       [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry }}"]
         endpoint = ["http://{{ registry }}"]
