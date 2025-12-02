@@ -166,10 +166,27 @@ version = 2
       [plugins."io.containerd.grpc.v1.cri".registry.auths]
 
       [plugins."io.containerd.grpc.v1.cri".registry.configs]
+{% if insecure_registries is defined and insecure_registries is not none and insecure_registries | length > 0 %}
+{% for registry in insecure_registries | unique %}
+      [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry }}".tls]
+        insecure_skip_verify = true
+      [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry }}".auth]
+        username = ""
+        password = ""
+        auth = ""
+        identitytoken = ""
+{% endfor %}
+{% endif %}
 
       [plugins."io.containerd.grpc.v1.cri".registry.headers]
 
       [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
+{% if insecure_registries is defined and insecure_registries is not none and insecure_registries | length > 0 %}
+{% for registry in insecure_registries | unique %}
+      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry }}"]
+        endpoint = ["http://{{ registry }}"]
+{% endfor %}
+{% endif %}
 
     [plugins."io.containerd.grpc.v1.cri".x509_key_pair_streaming]
       tls_cert_file = ""

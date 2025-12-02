@@ -97,11 +97,15 @@
   debug:
     msg: "Configuring containerd with {{ 'NVIDIA GPU' if (has_nvidia_gpu | default(false) | bool) else 'standard' }} runtime (auto-detected)"
 
+- name: Remove existing containerd config.toml (force clean state)
+  file:
+    path: /etc/containerd/config.toml
+    state: absent
+
 - name: Write containerd configuration (NVIDIA support)
   template:
     src: containerd_nvidia.j2
     dest: /etc/containerd/config.toml
-    backup: yes
     mode: '0644'
   when: has_nvidia_gpu | default(false) | bool
   notify: restart containerd
@@ -110,42 +114,8 @@
   template:
     src: containerd_config.toml.j2
     dest: /etc/containerd/config.toml
-    backup: yes
     mode: '0644'
   when: not (has_nvidia_gpu | default(false) | bool)
-  notify: restart containerd
-
-# SystemdCgroup is already set to true in templates
-
-- name: Configure insecure registries in containerd
-  blockinfile:
-    path: /etc/containerd/config.toml
-    marker: "# {mark} ANSIBLE MANAGED BLOCK - Insecure registries"
-    insertafter: '^\[plugins."io.containerd.grpc.v1.cri".registry.configs\]'
-    block: |
-      {% for registry in insecure_registries | default([]) %}
-      [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry }}".tls]
-        insecure_skip_verify = true
-      [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry }}".auth]
-        username = ""
-        password = ""
-      {% endfor %}
-    state: present
-  when: insecure_registries is defined and insecure_registries is not none and insecure_registries | length > 0
-  notify: restart containerd
-
-- name: Configure registry mirrors in containerd
-  blockinfile:
-    path: /etc/containerd/config.toml
-    marker: "# {mark} ANSIBLE MANAGED BLOCK - Registry mirrors"
-    insertafter: '^\[plugins."io.containerd.grpc.v1.cri".registry.mirrors\]'
-    block: |
-      {% for registry in insecure_registries | default([]) %}
-      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry }}"]
-        endpoint = ["http://{{ registry }}"]
-      {% endfor %}
-    state: present
-  when: insecure_registries is defined and insecure_registries is not none and insecure_registries | length > 0
   notify: restart containerd
 
 - name: Reload systemd daemon (RHEL/CentOS after service file changes)
