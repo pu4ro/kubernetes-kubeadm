@@ -547,6 +547,98 @@ make registry-status
 nerdctl push localhost:80/myimage:latest
 ```
 
+### NFS 서버 구성
+
+NFS 서버도 독립 실행형 스크립트로 관리되며, `.env.nfs` 파일로 설정합니다.
+
+```bash
+# 1. 설정 파일 생성
+make nfs-init
+
+# 2. 설정 편집 (.env.nfs)
+vim .env.nfs
+```
+
+**설정 예시 (.env.nfs)**:
+```bash
+# NFS export 경로 (쉼표로 구분)
+NFS_EXPORT_PATHS="/data/nfs/share1,/data/nfs/share2,/opt/kubernetes-storage"
+
+# 각 경로별 export 옵션 (쉼표로 구분, 경로 순서와 동일)
+NFS_EXPORT_OPTIONS="*(rw,sync,no_subtree_check,no_root_squash),192.168.0.0/16(rw,sync,no_subtree_check),10.0.0.0/8(rw,sync,no_subtree_check)"
+
+# 디렉토리 소유자 및 권한
+NFS_EXPORT_OWNER="root"
+NFS_EXPORT_GROUP="root"
+NFS_EXPORT_MODE="0777"
+
+# 부팅 시 자동 시작
+NFS_ENABLE_ON_BOOT="true"
+```
+
+**간단한 예제 (Kubernetes PV용)**:
+```bash
+# 단일 공유 디렉토리
+NFS_EXPORT_PATHS="/data/kubernetes-pvs"
+NFS_EXPORT_OPTIONS="*(rw,sync,no_subtree_check,no_root_squash)"
+NFS_EXPORT_MODE="0777"
+```
+
+**보안 강화 예제**:
+```bash
+# 특정 서브넷만 허용
+NFS_EXPORT_PATHS="/data/secure"
+NFS_EXPORT_OPTIONS="192.168.135.0/24(rw,sync,no_subtree_check,root_squash)"
+NFS_EXPORT_OWNER="nobody"
+NFS_EXPORT_GROUP="nogroup"
+NFS_EXPORT_MODE="0755"
+```
+
+```bash
+# 3. NFS 서버 설치 및 시작
+make nfs-install
+
+# 4. 상태 확인
+make nfs-status
+
+# 5. exports 확인
+make nfs-show-exports
+
+# 6. exports 재로드 (설정 변경 후)
+make nfs-reload
+```
+
+**Makefile 명령어**:
+```bash
+make nfs-init          # 설정 파일 초기화
+make nfs-install       # NFS 서버 설치 및 시작
+make nfs-start         # NFS 서버 시작
+make nfs-stop          # NFS 서버 중지
+make nfs-restart       # NFS 서버 재시작
+make nfs-status        # 상태 확인
+make nfs-reload        # exports 재로드
+make nfs-show-exports  # /etc/exports 내용 표시
+make nfs-add-export    # exports 추가 및 적용
+make nfs-remove        # NFS 설정 제거
+```
+
+**Kubernetes에서 NFS 사용**:
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 192.168.135.31  # NFS 서버 IP
+    path: /data/kubernetes-pvs
+  persistentVolumeReclaimPolicy: Retain
+```
+
 ### High Availability (HA) 구성
 
 ```yaml

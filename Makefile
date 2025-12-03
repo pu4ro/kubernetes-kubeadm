@@ -6,6 +6,7 @@
 .PHONY: command cmd-all cmd-masters cmd-workers cmd-installs cmd-host
 .PHONY: check-workers add-workers check-and-add-workers
 .PHONY: registry-start registry-stop registry-restart registry-status registry-remove registry-logs registry-init
+.PHONY: nfs-init nfs-install nfs-start nfs-stop nfs-restart nfs-status nfs-reload nfs-show-exports nfs-add-export nfs-remove
 
 .DEFAULT_GOAL := help
 
@@ -336,3 +337,43 @@ registry-remove: ## 로컬 레지스트리 컨테이너 제거 (nerdctl rm -f)
 
 registry-logs: ## 로컬 레지스트리 로그 확인 (nerdctl logs)
 	@./scripts/manage-registry.sh logs
+
+##@ NFS 서버 관리
+
+nfs-init: ## NFS 설정 초기화 (.env.nfs.example → .env.nfs)
+	@if [ -f .env.nfs ]; then \
+		echo "==> .env.nfs 파일이 이미 존재합니다."; \
+		echo "기존 설정을 유지합니다. 재설정하려면 .env.nfs를 삭제하세요."; \
+	else \
+		echo "==> .env.nfs 파일 생성 중..."; \
+		cp .env.nfs.example .env.nfs; \
+		echo "==> .env.nfs 파일이 생성되었습니다."; \
+		echo "필요에 따라 .env.nfs 파일을 수정하세요."; \
+	fi
+
+nfs-install: ## NFS 서버 설치 및 초기 설정 (패키지 + exports + start)
+	@./scripts/manage-nfs.sh install
+
+nfs-start: ## NFS 서버 시작 (systemctl start)
+	@./scripts/manage-nfs.sh start
+
+nfs-stop: ## NFS 서버 중지 (systemctl stop)
+	@./scripts/manage-nfs.sh stop
+
+nfs-restart: ## NFS 서버 재시작 (stop → start)
+	@./scripts/manage-nfs.sh restart
+
+nfs-status: ## NFS 서버 상태 확인 (systemctl status + exportfs -v)
+	@./scripts/manage-nfs.sh status
+
+nfs-reload: ## NFS exports 재로드 (exportfs -ra)
+	@./scripts/manage-nfs.sh reload
+
+nfs-show-exports: ## /etc/exports 설정 표시
+	@./scripts/manage-nfs.sh show-exports
+
+nfs-add-export: ## 설정된 exports 추가 및 적용
+	@./scripts/manage-nfs.sh add-export
+
+nfs-remove: ## NFS 서버 설정 제거 (exports 백업 후 삭제)
+	@./scripts/manage-nfs.sh remove
