@@ -157,6 +157,48 @@
     timeout: 30
   delegate_to: localhost
 
+# Insecure Registry Configuration (certs.d method)
+- name: Configure insecure registries using certs.d method
+  block:
+    - name: Create certs.d directory for each insecure registry
+      file:
+        path: "/etc/containerd/certs.d/{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop: "{{ insecure_registries | default([]) }}"
+      when: insecure_registries is defined and insecure_registries | length > 0
+
+    - name: Create hosts.toml for each insecure registry
+      copy:
+        dest: "/etc/containerd/certs.d/{{ item }}/hosts.toml"
+        content: |
+          server = "http://{{ item }}"
+
+          [host."http://{{ item }}"]
+            skip_verify = false
+            capabilities = ["pull", "resolve", "push"]
+        owner: root
+        group: root
+        mode: '0644'
+      loop: "{{ insecure_registries | default([]) }}"
+      when: insecure_registries is defined and insecure_registries | length > 0
+      notify: restart containerd
+
+    - name: Restart containerd and kubelet after registry configuration
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - containerd
+        - kubelet
+      when:
+        - insecure_registries is defined and insecure_registries | length > 0
+      ignore_errors: yes  # kubelet may not be installed yet
+  when: insecure_registries is defined and insecure_registries | length > 0
+  tags: ['container', 'insecure-registry']
+
 # Phase 2: Install nerdctl package (after containerd is ready)
 - name: Install nerdctl package (Ubuntu/Debian)
   apt:
