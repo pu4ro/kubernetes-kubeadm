@@ -22,34 +22,6 @@
     - docker-credentials
     - containerd-restore
 
-- name: Configure containerd registry authentication
-  blockinfile:
-    path: /etc/containerd/config.toml
-    marker: "# {mark} ANSIBLE MANAGED BLOCK - Registry Auth"
-    block: |
-      {% for registry in docker_registries %}
-            [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry.registry }}".auth]
-              username = "{{ registry.username }}"
-              password = "{{ registry.password }}"
-      {% if registry.protocol is defined and registry.protocol == 'http' %}
-            [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry.registry }}".tls]
-              insecure_skip_verify = true
-      {% endif %}
-      {% endfor %}
-
-      {% for registry in docker_registries %}
-      {% if registry.protocol is defined and registry.protocol == 'http' %}
-            [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry.registry }}"]
-              endpoint = ["http://{{ registry.registry }}"]
-      {% endif %}
-      {% endfor %}
-    insertafter: '\[plugins\."io\.containerd\.grpc\.v1\.cri"\.registry\.mirrors\]'
-  when: docker_registries is defined
-  notify: restart containerd
-  tags:
-    - docker-credentials
-    - containerd-config
-
 - name: Restart containerd service
   systemd:
     name: containerd
