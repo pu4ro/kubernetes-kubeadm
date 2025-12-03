@@ -1,5 +1,6 @@
 # Serena MCP cache and configuration
 .serena/
+.claude
 
 # Backup files
 *.backup
@@ -21,3 +22,4 @@ __pycache__/
 
 # Environment files
 install_sh/.env
+.env.registry

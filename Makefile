@@ -3,8 +3,9 @@
 .PHONY: tag-sysctl tag-packages tag-container tag-kubernetes tag-networking
 .PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials
 .PHONY: limit-master limit-workers
-.PHONY: command cmd-all cmd-masters cmd-workers cmd-installs
+.PHONY: command cmd-all cmd-masters cmd-workers cmd-installs cmd-host
 .PHONY: check-workers add-workers check-and-add-workers
+.PHONY: registry-start registry-stop registry-restart registry-status registry-remove registry-logs registry-init
 
 .DEFAULT_GOAL := help
 
@@ -102,9 +103,7 @@ tag-scheduling: ## Master 노드 스케줄링 허용
 	@echo "==> Master 노드 스케줄링 설정 중..."
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags scheduling
 
-tag-local-registry: ## 로컬 Docker 레지스트리 배포
-	@echo "==> 로컬 레지스트리 배포 중..."
-	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags local-registry
+tag-local-registry: registry-start ## 로컬 Docker 레지스트리 배포 (deprecated: use registry-start)
 
 ##@ 호스트별 설치
 
@@ -227,7 +226,8 @@ cmd-all: ## 모든 호스트에 명령어 실행 (사용법: make cmd-all CMD="l
 		exit 1; \
 	fi
 	@echo "==> 모든 호스트에서 명령어 실행: $(CMD)"
-	ansible all -i $(INVENTORY) -m shell -a "$(CMD)"
+	@echo ""
+	@ansible all -i $(INVENTORY) -m shell -a "$(CMD)" -v
 
 cmd-masters: ## Master 노드에만 명령어 실행 (사용법: make cmd-masters CMD="kubectl get nodes")
 	@if [ -z "$(CMD)" ]; then \
@@ -237,7 +237,8 @@ cmd-masters: ## Master 노드에만 명령어 실행 (사용법: make cmd-master
 		exit 1; \
 	fi
 	@echo "==> Master 노드에서 명령어 실행: $(CMD)"
-	ansible masters -i $(INVENTORY) -m shell -a "$(CMD)"
+	@echo ""
+	@ansible masters -i $(INVENTORY) -m shell -a "$(CMD)" -v
 
 cmd-workers: ## Worker 노드에만 명령어 실행 (사용법: make cmd-workers CMD="docker ps")
 	@if [ -z "$(CMD)" ]; then \
@@ -247,7 +248,8 @@ cmd-workers: ## Worker 노드에만 명령어 실행 (사용법: make cmd-worker
 		exit 1; \
 	fi
 	@echo "==> Worker 노드에서 명령어 실행: $(CMD)"
-	ansible workers -i $(INVENTORY) -m shell -a "$(CMD)"
+	@echo ""
+	@ansible workers -i $(INVENTORY) -m shell -a "$(CMD)" -v
 
 cmd-installs: ## Installs 노드에만 명령어 실행 (사용법: make cmd-installs CMD="df -h")
 	@if [ -z "$(CMD)" ]; then \
@@ -257,6 +259,58 @@ cmd-installs: ## Installs 노드에만 명령어 실행 (사용법: make cmd-ins
 		exit 1; \
 	fi
 	@echo "==> Installs 노드에서 명령어 실행: $(CMD)"
-	ansible installs -i $(INVENTORY) -m shell -a "$(CMD)"
+	@echo ""
+	@ansible installs -i $(INVENTORY) -m shell -a "$(CMD)" -v
+
+cmd-host: ## 특정 호스트에만 명령어 실행 (사용법: make cmd-host HOST="master1" CMD="uptime")
+	@if [ -z "$(HOST)" ]; then \
+		echo "에러: HOST 변수가 비어있습니다."; \
+		echo "사용법: make cmd-host HOST=\"hostname\" CMD=\"your-command\""; \
+		echo "예시: make cmd-host HOST=\"master1\" CMD=\"kubectl get nodes\""; \
+		echo ""; \
+		echo "사용 가능한 호스트 목록:"; \
+		ansible-inventory -i $(INVENTORY) --list | grep -oP '(?<=")\w+(?=":)' | sort -u | grep -v "hostvars\|all\|ungrouped\|masters\|workers\|installs" | sed 's/^/  - /'; \
+		exit 1; \
+	fi
+	@if [ -z "$(CMD)" ]; then \
+		echo "에러: CMD 변수가 비어있습니다."; \
+		echo "사용법: make cmd-host HOST=\"hostname\" CMD=\"your-command\""; \
+		echo "예시: make cmd-host HOST=\"master1\" CMD=\"kubectl get nodes\""; \
+		exit 1; \
+	fi
+	@echo "==> $(HOST) 호스트에서 명령어 실행: $(CMD)"
+	@echo ""
+	@ansible $(HOST) -i $(INVENTORY) -m shell -a "$(CMD)" -v
 
 command: cmd-all ## cmd-all의 별칭 (사용법: make command CMD="your-command")
+
+##@ 로컬 레지스트리 관리
+
+registry-init: ## .env.registry 파일 생성 (.env.registry.example에서 복사)
+	@if [ -f .env.registry ]; then \
+		echo "==> .env.registry 파일이 이미 존재합니다."; \
+		echo "기존 설정을 유지합니다. 재설정하려면 .env.registry를 삭제하세요."; \
+	else \
+		echo "==> .env.registry 파일 생성 중..."; \
+		cp .env.registry.example .env.registry; \
+		echo "==> .env.registry 파일이 생성되었습니다."; \
+		echo "필요에 따라 .env.registry 파일을 수정하세요."; \
+	fi
+
+registry-start: ## 로컬 레지스트리 시작
+	@./scripts/manage-registry.sh start
+
+registry-stop: ## 로컬 레지스트리 중지
+	@./scripts/manage-registry.sh stop
+
+registry-restart: ## 로컬 레지스트리 재시작
+	@./scripts/manage-registry.sh restart
+
+registry-status: ## 로컬 레지스트리 상태 확인
+	@./scripts/manage-registry.sh status
+
+registry-remove: ## 로컬 레지스트리 컨테이너 제거
+	@./scripts/manage-registry.sh remove
+
+registry-logs: ## 로컬 레지스트리 로그 확인
+	@./scripts/manage-registry.sh logs
