@@ -80,22 +80,6 @@
   debug:
     msg: "Containerd data directory: {{ containerd_data_base_dir | default('/var/lib/containerd') }}{% if containerd_data_base_dir | default('') != '' %}/{{ inventory_hostname }}{% endif %}"
 
-- name: Check for NVIDIA GPU (auto-detection)
-  shell: lspci | grep -i NVIDIA
-  register: nvidia_gpu_check
-  ignore_errors: true
-  changed_when: false
-  when: has_nvidia_gpu is not defined
-
-- name: Set has_nvidia_gpu fact from detection
-  set_fact:
-    has_nvidia_gpu: "{{ nvidia_gpu_check.stdout != '' }}"
-    cacheable: yes
-  when: 
-    - has_nvidia_gpu is not defined
-    - nvidia_gpu_check is defined
-    - nvidia_gpu_check.stdout is defined
-
 - name: Display containerd configuration mode
   debug:
     msg: "Configuring containerd with {{ 'NVIDIA GPU' if (has_nvidia_gpu | default(false) | bool) else 'standard' }} runtime (auto-detected)"
@@ -155,10 +139,10 @@
     line: 'export CONTAINERD_NAMESPACE=k8s.io'
     state: present
 
-- name: Wait for containerd to be ready
+- name: Wait for containerd socket to be ready
   wait_for:
+    path: /run/containerd/containerd.sock
     timeout: 30
-  delegate_to: localhost
 
 # Insecure Registry Configuration (certs.d method)
 - name: Configure insecure registries using certs.d method

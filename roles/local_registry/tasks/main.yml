@@ -17,17 +17,9 @@
     - local_registry_image_tar | default('') | length > 0
     - registry_image_tar_info.stat.exists
 
-- name: Stop existing local registry container
-  command: nerdctl stop {{ local_registry_container_name }}
-  failed_when: false
-  changed_when: "'No such container' not in stop_registry.stderr"
-  register: stop_registry
-
-- name: Remove existing local registry container
+- name: Stop and remove existing local registry container
   command: nerdctl rm -f {{ local_registry_container_name }}
   failed_when: false
-  changed_when: "'No such container' not in remove_registry.stderr"
-  register: remove_registry
 
 - name: Run local docker registry with nerdctl
   command: >
