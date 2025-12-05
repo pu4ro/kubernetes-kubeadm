@@ -91,7 +91,10 @@
   set_fact:
     has_nvidia_gpu: "{{ nvidia_gpu_check.stdout != '' }}"
     cacheable: yes
-  when: has_nvidia_gpu is not defined
+  when: 
+    - has_nvidia_gpu is not defined
+    - nvidia_gpu_check is defined
+    - nvidia_gpu_check.stdout is defined
 
 - name: Display containerd configuration mode
   debug:
