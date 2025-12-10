@@ -75,6 +75,29 @@
   delay: 10
   ignore_errors: true
 
+# Install helmfile (distribution-specific package name)
+- name: Install helmfile on Debian/Ubuntu
+  apt:
+    name: "{{ package_map.helmfile.Debian }}"
+    state: present
+  when: 
+    - ansible_os_family == "Debian"
+    - inventory_hostname in groups['installs']
+  retries: 3
+  delay: 10
+  ignore_errors: true
+
+- name: Install helmfile on RHEL/CentOS
+  package:
+    name: "{{ package_map.helmfile.RedHat }}"
+    state: present
+  when: 
+    - ansible_os_family == "RedHat"
+    - inventory_hostname in groups['installs']
+  retries: 3
+  delay: 10
+  ignore_errors: true
+
 # Remove helm secrets plugin after helm/helmfile installation
 - name: Remove helm secrets plugin
   shell: helm plugin remove secrets

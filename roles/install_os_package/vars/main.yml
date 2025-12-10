@@ -23,7 +23,6 @@ ubuntu_packages:
 # Master-only packages (for installs group)
 master_only_packages:
   - make
-  - helmfile-bundle
   
 # RHEL/CentOS packages (required for k8s)
 rhel_packages:
@@ -52,7 +51,6 @@ rhel_optional_packages:
 # Master-only packages (for installs group)  
 master_only_rhel_packages:
   - make
-  - helmfile-bundle
 
 # Package names that differ between distributions
 package_map:
@@ -68,3 +66,6 @@ package_map:
   time_sync:
     Debian: chrony
     RedHat: chrony
+  helmfile:
+    Debian: helmfile
+    RedHat: helmfile-bundle
