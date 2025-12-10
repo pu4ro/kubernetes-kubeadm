@@ -1,0 +1,21 @@
+---
+# Default variables for Ubuntu APT repository setup
+
+# Enable/disable Ubuntu repository setup
+enable_ubuntu_repo: false
+
+# Repository server URL (Apache HTTP server)
+# Example: http://192.168.1.100:8080/ubuntu-repo
+ubuntu_repo_url: ""
+
+# APT repository entry components
+ubuntu_repo_components: "./"
+
+# APT sources list file path
+ubuntu_repo_sources_file: /etc/apt/sources.list.d/ubuntu-local-repo.list
+
+# Repository options
+ubuntu_repo_trusted: true
+
+# Whether to update APT cache after adding repository
+ubuntu_repo_update_cache: true

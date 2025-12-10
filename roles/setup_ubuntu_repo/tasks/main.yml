@@ -1,0 +1,72 @@
+---
+# Ubuntu APT Repository Setup Tasks
+
+- name: Check if Ubuntu repository setup is enabled
+  debug:
+    msg: "Ubuntu repository setup is {{ 'enabled' if enable_ubuntu_repo else 'disabled' }}"
+
+- block:
+    - name: Validate ubuntu_repo_url is provided
+      fail:
+        msg: "ubuntu_repo_url must be set when enable_ubuntu_repo is true"
+      when: ubuntu_repo_url is not defined or ubuntu_repo_url == ""
+
+    - name: Check if running on Ubuntu
+      fail:
+        msg: "This role only supports Ubuntu systems"
+      when: ansible_distribution != "Ubuntu"
+
+    - name: Display repository configuration
+      debug:
+        msg: |
+          Repository URL: {{ ubuntu_repo_url }}
+          Sources file: {{ ubuntu_repo_sources_file }}
+          Trusted: {{ ubuntu_repo_trusted }}
+
+    - name: Create APT sources list entry
+      copy:
+        content: |
+          # Ubuntu Local Repository
+          # Managed by Ansible - Do not edit manually
+          deb [{{ 'trusted=yes ' if ubuntu_repo_trusted else '' }}]{{ ubuntu_repo_url }} {{ ubuntu_repo_components }}
+        dest: "{{ ubuntu_repo_sources_file }}"
+        owner: root
+        group: root
+        mode: '0644'
+      register: sources_list_created
+
+    - name: Backup original sources.list (first time only)
+      copy:
+        src: /etc/apt/sources.list
+        dest: /etc/apt/sources.list.backup
+        remote_src: true
+        force: false
+      ignore_errors: true
+
+    - name: Update APT cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 0
+      when:
+        - ubuntu_repo_update_cache | bool
+        - sources_list_created is changed
+      register: apt_update
+      retries: 3
+      delay: 5
+      until: apt_update is succeeded
+
+    - name: Verify repository is accessible
+      shell: |
+        apt-cache policy | grep -A 1 "{{ ubuntu_repo_url }}" || echo "Repository not found in cache"
+      register: repo_verify
+      changed_when: false
+
+    - name: Display repository status
+      debug:
+        msg: |
+          Ubuntu repository configuration completed successfully.
+          Repository: {{ ubuntu_repo_url }}
+          Sources file: {{ ubuntu_repo_sources_file }}
+          Status: {{ 'Active' if ubuntu_repo_url in repo_verify.stdout else 'Not detected in APT cache' }}
+
+  when: enable_ubuntu_repo | bool

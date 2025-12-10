@@ -90,6 +90,15 @@ repo_url:
   centos: "http://192.168.1.10:8080/repo/"
   ubuntu: "http://192.168.134.102/ubuntu_22.04.5"
 
+# Ubuntu APT Repository Configuration
+# Enable this to use custom Ubuntu repository (local or HTTP)
+# Example: Apache HTTP server serving local packages
+enable_ubuntu_repo: false
+ubuntu_repo_url: ""  # Example: "http://192.168.1.100:8080/ubuntu-repo"
+ubuntu_repo_components: "./"
+ubuntu_repo_trusted: true
+ubuntu_repo_update_cache: true
+
 # Container Registry Settings (basic Docker configuration)
 insecure_registries:
   #- "192.168.1.10:5000"           # Local registry example
