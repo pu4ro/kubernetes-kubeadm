@@ -100,7 +100,7 @@ ubuntu_repo_trusted: true
 ubuntu_repo_update_cache: true
 
 # Container Registry Settings (basic Docker configuration)
-insecure_registries:
+insecure_registries: []
   #- "192.168.1.10:5000"           # Local registry example
   # - "harbor.yourdomain.com"     # Harbor registry example
   # - "registry.local"            # Custom registry example
