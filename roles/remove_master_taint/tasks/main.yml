@@ -1,12 +1,35 @@
 ---
 # tasks file for conditional_remove_master_taint
-- name: Get master node name
-  shell: kubectl get nodes --no-headers -o custom-columns="NAME:.metadata.name" | grep -E 'master|control-plane'
-  register: master_node_name
+- name: Get all master/control-plane nodes by label
+  shell: kubectl get nodes -l node-role.kubernetes.io/control-plane --no-headers -o custom-columns="NAME:.metadata.name"
+  register: control_plane_nodes
   changed_when: false
-  
-- name: Remove taint from master node
-  command: kubectl taint nodes {{ master_node_name.stdout }} node-role.kubernetes.io/control-plane:NoSchedule- --overwrite
-  when: master_node_name.stdout != ""
+  failed_when: false
+
+- name: Get all master nodes by legacy label (fallback)
+  shell: kubectl get nodes -l node-role.kubernetes.io/master --no-headers -o custom-columns="NAME:.metadata.name"
+  register: master_nodes
+  changed_when: false
+  failed_when: false
+  when: control_plane_nodes.stdout == ""
+
+- name: Set master node list
+  set_fact:
+    master_node_list: "{{ (control_plane_nodes.stdout_lines | default([])) + (master_nodes.stdout_lines | default([])) }}"
+
+- name: Display master nodes found
+  debug:
+    msg: "Found {{ master_node_list | length }} master/control-plane node(s): {{ master_node_list | join(', ') }}"
+
+- name: Remove taint from master/control-plane nodes
+  command: kubectl taint nodes {{ item }} node-role.kubernetes.io/control-plane:NoSchedule- --overwrite
+  loop: "{{ master_node_list }}"
+  when: master_node_list | length > 0
   ignore_errors: true
+  register: taint_removal_result
+
+- name: Display taint removal results
+  debug:
+    msg: "Taint removal completed for {{ master_node_list | length }} node(s)"
+  when: master_node_list | length > 0
 
