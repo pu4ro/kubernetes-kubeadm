@@ -7,6 +7,8 @@
 .PHONY: check-workers add-workers check-and-add-workers
 .PHONY: registry-start registry-stop registry-restart registry-status registry-remove registry-logs registry-init
 .PHONY: nfs-init nfs-install nfs-start nfs-stop nfs-restart nfs-status nfs-reload nfs-show-exports nfs-add-export nfs-remove
+.PHONY: ubuntu-repo-init ubuntu-repo-setup ubuntu-repo-remove ubuntu-repo-status ubuntu-repo-update-sources
+.PHONY: apache-repo-install apache-repo-start apache-repo-stop apache-repo-restart apache-repo-status apache-repo-remove
 
 .DEFAULT_GOAL := help
 
@@ -377,3 +379,48 @@ nfs-add-export: ## 설정된 exports 추가 및 적용
 
 nfs-remove: ## NFS 서버 설정 제거 (exports 백업 후 삭제)
 	@./scripts/manage-nfs.sh remove
+
+##@ Ubuntu 로컬 저장소 관리
+
+ubuntu-repo-init: ## Ubuntu repo 설정 초기화 (.env.ubuntu-repo.example → .env.ubuntu-repo)
+	@if [ -f .env.ubuntu-repo ]; then \
+		echo "==> .env.ubuntu-repo 파일이 이미 존재합니다."; \
+		echo "기존 설정을 유지합니다. 재설정하려면 .env.ubuntu-repo를 삭제하세요."; \
+	else \
+		echo "==> .env.ubuntu-repo 파일 생성 중..."; \
+		cp .env.ubuntu-repo.example .env.ubuntu-repo; \
+		echo "==> .env.ubuntu-repo 파일이 생성되었습니다."; \
+		echo "필요에 따라 .env.ubuntu-repo 파일을 수정하세요."; \
+	fi
+
+ubuntu-repo-setup: ## Ubuntu 로컬 APT 저장소 설정 (mv + chown + apt config) [root 필요]
+	@sudo ./scripts/manage-ubuntu-repo.sh setup
+
+ubuntu-repo-remove: ## Ubuntu 로컬 저장소 APT 설정 제거
+	@sudo ./scripts/manage-ubuntu-repo.sh remove
+
+ubuntu-repo-status: ## Ubuntu 로컬 저장소 상태 확인 (디렉토리 + APT 설정)
+	@./scripts/manage-ubuntu-repo.sh status
+
+ubuntu-repo-update-sources: ## APT sources.list만 업데이트 [root 필요]
+	@sudo ./scripts/manage-ubuntu-repo.sh update-sources
+
+##@ Apache HTTP 저장소 서버
+
+apache-repo-install: ## Apache 설치 및 HTTP 저장소 설정 [root 필요]
+	@sudo ./scripts/manage-ubuntu-repo.sh apache-install
+
+apache-repo-start: ## Apache 서비스 시작 [root 필요]
+	@sudo ./scripts/manage-ubuntu-repo.sh apache-start
+
+apache-repo-stop: ## Apache 서비스 중지 [root 필요]
+	@sudo ./scripts/manage-ubuntu-repo.sh apache-stop
+
+apache-repo-restart: ## Apache 서비스 재시작 [root 필요]
+	@sudo ./scripts/manage-ubuntu-repo.sh apache-restart
+
+apache-repo-status: ## Apache 서비스 상태 확인
+	@./scripts/manage-ubuntu-repo.sh apache-status
+
+apache-repo-remove: ## Apache 저장소 설정 제거 [root 필요]
+	@sudo ./scripts/manage-ubuntu-repo.sh apache-remove
