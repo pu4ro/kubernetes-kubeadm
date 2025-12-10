@@ -241,15 +241,16 @@
   retries: 5
   delay: 10
 
-- name: Configure comprehensive PATH in bashrc (all nodes)
+- name: Configure comprehensive PATH in bashrc
   blockinfile:
     path: "{{ ansible_env.HOME }}/.bashrc"
     marker: "# {mark} ANSIBLE MANAGED - Kubernetes environment PATH"
     block: |
       export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:/root/bin:$PATH"
     create: yes
+  when: inventory_hostname in groups['masters']
 
-- name: Configure kubectl completion and aliases in bashrc (all nodes)
+- name: Configure kubectl completion and aliases in bashrc
   blockinfile:
     path: "{{ ansible_env.HOME }}/.bashrc"
     marker: "# {mark} ANSIBLE MANAGED - Kubernetes aliases"
@@ -268,8 +269,9 @@
       alias kgpa='kubectl get pods -A'
       complete -F __start_kubectl k
     create: yes
+  when: inventory_hostname in groups['masters']
 
-- name: Install kubectl completion (masters only)
+- name: Install kubectl completion
   shell: kubectl completion bash > /etc/bash_completion.d/kubectl
   args:
     creates: /etc/bash_completion.d/kubectl
@@ -284,8 +286,9 @@
       export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:/root/bin:$PATH"
     create: yes
   become: yes
+  when: inventory_hostname in groups['masters']
 
-- name: Configure kubectl completion and aliases in root bashrc (all nodes)
+- name: Configure kubectl completion and aliases in root bashrc
   blockinfile:
     path: /root/.bashrc
     marker: "# {mark} ANSIBLE MANAGED - Kubernetes aliases"
@@ -305,10 +308,4 @@
       complete -F __start_kubectl k
     create: yes
   become: yes
-
-- name: Install kubectl completion for all nodes
-  shell: kubectl completion bash > /etc/bash_completion.d/kubectl
-  args:
-    creates: /etc/bash_completion.d/kubectl
-  ignore_errors: yes
-  become: yes
+  when: inventory_hostname in groups['masters']
