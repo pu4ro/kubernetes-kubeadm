@@ -153,7 +153,38 @@
   when: has_nvidia_gpu | default(false) | bool
   notify: restart containerd
 
-# Step 6 & 7: Configure registry settings using script
+# Step 6: Ensure registry sections exist in containerd config
+- name: Ensure registry parent section exists in containerd config
+  lineinfile:
+    path: /etc/containerd/config.toml
+    line: '    [plugins."io.containerd.grpc.v1.cri".registry]'
+    insertafter: '^\s*\[plugins\."io\.containerd\.grpc\.v1\.cri"\]'
+    state: present
+  when: 
+    - (containerd_registry_auth is defined and containerd_registry_auth | length > 0) or
+      (insecure_registries is defined and insecure_registries | length > 0)
+
+- name: Ensure registry.mirrors section exists in containerd config
+  lineinfile:
+    path: /etc/containerd/config.toml
+    line: '    [plugins."io.containerd.grpc.v1.cri".registry.mirrors]'
+    insertafter: '^\s*\[plugins\."io\.containerd\.grpc\.v1\.cri"\.registry\]'
+    state: present
+  when: 
+    - (containerd_registry_auth is defined and containerd_registry_auth | length > 0) or
+      (insecure_registries is defined and insecure_registries | length > 0)
+
+- name: Ensure registry.configs section exists in containerd config
+  lineinfile:
+    path: /etc/containerd/config.toml
+    line: '    [plugins."io.containerd.grpc.v1.cri".registry.configs]'
+    insertafter: '^\s*\[plugins\."io\.containerd\.grpc\.v1\.cri"\.registry\.mirrors\]'
+    state: present
+  when: 
+    - (containerd_registry_auth is defined and containerd_registry_auth | length > 0) or
+      (insecure_registries is defined and insecure_registries | length > 0)
+
+# Step 7: Configure registry settings using script
 - name: Create registry configuration script
   template:
     src: configure_registry.sh.j2
