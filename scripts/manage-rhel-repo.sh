@@ -509,11 +509,21 @@ httpd_install() {
     ln -s "$repo_path" "$symlink_path"
     echo -e "${GREEN}Symlink created successfully${NC}"
 
+    # Ensure Listen directive is only defined once globally
+    local listen_conf="/etc/httpd/conf.d/ports.conf"
+    if ! grep -q "^Listen ${HTTPD_PORT}" /etc/httpd/conf/httpd.conf /etc/httpd/conf.d/*.conf 2>/dev/null; then
+        echo -e "${BLUE}Adding Listen ${HTTPD_PORT} to ${listen_conf}${NC}"
+        echo "# Repository Server Port" > "$listen_conf"
+        echo "Listen ${HTTPD_PORT}" >> "$listen_conf"
+    else
+        echo -e "${YELLOW}Listen ${HTTPD_PORT} already configured${NC}"
+    fi
+
     # Create httpd virtual host configuration
     echo -e "${BLUE}Creating httpd virtual host configuration${NC}"
     cat > "$HTTPD_VHOST_FILE" <<EOF
 # RHEL Local Repository Virtual Host
-Listen ${HTTPD_PORT}
+# Repository: ${HTTPD_REPO_SYMLINK_NAME}
 
 <VirtualHost *:${HTTPD_PORT}>
     ServerAdmin webmaster@localhost
@@ -531,8 +541,8 @@ Listen ${HTTPD_PORT}
         Require all granted
     </Directory>
 
-    ErrorLog logs/rhel-repo-error.log
-    CustomLog logs/rhel-repo-access.log combined
+    ErrorLog logs/${HTTPD_REPO_SYMLINK_NAME}-error.log
+    CustomLog logs/${HTTPD_REPO_SYMLINK_NAME}-access.log combined
 </VirtualHost>
 EOF
     echo -e "${GREEN}Virtual host configuration created${NC}"
@@ -715,26 +725,51 @@ httpd_remove() {
         echo -e "${GREEN}Symlink removed${NC}"
     fi
 
-    # Remove firewall rule if firewalld is running
-    if systemctl is-active --quiet firewalld; then
-        echo -e "${BLUE}Removing firewall rule for port ${HTTPD_PORT}${NC}"
-        firewall-cmd --permanent --remove-port=${HTTPD_PORT}/tcp 2>/dev/null || true
-        firewall-cmd --reload
-        echo -e "${GREEN}Firewall rule removed${NC}"
+    # Check if there are other VirtualHost configurations using the same port
+    local other_vhosts=$(grep -l "VirtualHost.*:${HTTPD_PORT}" /etc/httpd/conf.d/*.conf 2>/dev/null | grep -v "$(basename $HTTPD_VHOST_FILE)" | wc -l)
+
+    if [ "$other_vhosts" -eq 0 ]; then
+        # No other VirtualHosts using this port, safe to remove Listen and firewall rule
+        echo -e "${YELLOW}No other repositories using port ${HTTPD_PORT}${NC}"
+
+        # Remove ports.conf if it exists
+        if [ -f "/etc/httpd/conf.d/ports.conf" ]; then
+            echo -e "${BLUE}Removing ports.conf${NC}"
+            rm -f "/etc/httpd/conf.d/ports.conf"
+            echo -e "${GREEN}ports.conf removed${NC}"
+        fi
+
+        # Remove firewall rule if firewalld is running
+        if systemctl is-active --quiet firewalld; then
+            echo -e "${BLUE}Removing firewall rule for port ${HTTPD_PORT}${NC}"
+            firewall-cmd --permanent --remove-port=${HTTPD_PORT}/tcp 2>/dev/null || true
+            firewall-cmd --reload
+            echo -e "${GREEN}Firewall rule removed${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Other repositories are still using port ${HTTPD_PORT}, keeping Listen and firewall settings${NC}"
     fi
 
-    # Ask about uninstalling httpd
-    echo ""
-    echo -e "${YELLOW}Do you want to uninstall httpd? [y/N]${NC}"
-    read -r response
-    if [[ "$response" =~ ^[Yy]$ ]]; then
-        echo -e "${BLUE}Uninstalling httpd${NC}"
-        yum remove -y "$HTTPD_PACKAGE"
-        echo -e "${GREEN}httpd uninstalled${NC}"
-    else
-        echo -e "${YELLOW}httpd package kept installed${NC}"
-        echo -e "${BLUE}Restarting httpd${NC}"
-        systemctl restart "$HTTPD_SERVICE" || true
+    # Restart httpd to apply changes
+    if systemctl is-active --quiet "$HTTPD_SERVICE"; then
+        echo -e "${BLUE}Restarting httpd service${NC}"
+        systemctl restart "$HTTPD_SERVICE"
+        echo -e "${GREEN}httpd service restarted${NC}"
+    fi
+
+    # Ask about uninstalling httpd (only if no other VirtualHosts exist)
+    if [ "$other_vhosts" -eq 0 ]; then
+        echo ""
+        echo -e "${YELLOW}Do you want to uninstall httpd? [y/N]${NC}"
+        read -r response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            echo -e "${BLUE}Stopping and uninstalling httpd${NC}"
+            systemctl stop "$HTTPD_SERVICE" 2>/dev/null || true
+            yum remove -y "$HTTPD_PACKAGE"
+            echo -e "${GREEN}httpd uninstalled${NC}"
+        else
+            echo -e "${YELLOW}httpd package kept installed${NC}"
+        fi
     fi
 
     echo -e "${GREEN}httpd configuration removed${NC}"
