@@ -509,21 +509,15 @@ httpd_install() {
     ln -s "$repo_path" "$symlink_path"
     echo -e "${GREEN}Symlink created successfully${NC}"
 
-    # Ensure Listen directive is only defined once globally
-    local listen_conf="/etc/httpd/conf.d/ports.conf"
-    if ! grep -q "^Listen ${HTTPD_PORT}" /etc/httpd/conf/httpd.conf /etc/httpd/conf.d/*.conf 2>/dev/null; then
-        echo -e "${BLUE}Adding Listen ${HTTPD_PORT} to ${listen_conf}${NC}"
-        echo "# Repository Server Port" > "$listen_conf"
-        echo "Listen ${HTTPD_PORT}" >> "$listen_conf"
-    else
-        echo -e "${YELLOW}Listen ${HTTPD_PORT} already configured${NC}"
-    fi
+    # Use a single shared VirtualHost configuration for all repositories
+    local shared_vhost_file="/etc/httpd/conf.d/rhel-repos.conf"
 
-    # Create httpd virtual host configuration
-    echo -e "${BLUE}Creating httpd virtual host configuration${NC}"
-    cat > "$HTTPD_VHOST_FILE" <<EOF
-# RHEL Local Repository Virtual Host
-# Repository: ${HTTPD_REPO_SYMLINK_NAME}
+    if [ ! -f "$shared_vhost_file" ]; then
+        echo -e "${BLUE}Creating shared httpd virtual host configuration${NC}"
+        cat > "$shared_vhost_file" <<EOF
+# RHEL Repositories Virtual Host (Shared)
+# Managed by Ansible - Do not edit manually
+Listen ${HTTPD_PORT}
 
 <VirtualHost *:${HTTPD_PORT}>
     ServerAdmin webmaster@localhost
@@ -535,17 +529,17 @@ httpd_install() {
         Require all granted
     </Directory>
 
-    <Directory ${repo_path}>
-        Options Indexes FollowSymLinks
-        AllowOverride None
-        Require all granted
-    </Directory>
+    # Repository directories are added as symlinks in ${HTTPD_DOCUMENT_ROOT}
+    # Each repository is accessible via http://server:${HTTPD_PORT}/repo-name/
 
-    ErrorLog logs/${HTTPD_REPO_SYMLINK_NAME}-error.log
-    CustomLog logs/${HTTPD_REPO_SYMLINK_NAME}-access.log combined
+    ErrorLog logs/rhel-repos-error.log
+    CustomLog logs/rhel-repos-access.log combined
 </VirtualHost>
 EOF
-    echo -e "${GREEN}Virtual host configuration created${NC}"
+        echo -e "${GREEN}Shared virtual host configuration created: $shared_vhost_file${NC}"
+    else
+        echo -e "${YELLOW}Shared virtual host configuration already exists${NC}"
+    fi
 
     # Configure SELinux if enabled
     if command -v getenforce &> /dev/null && [ "$(getenforce)" != "Disabled" ]; then
@@ -659,6 +653,7 @@ httpd_status() {
     # Show configuration
     echo -e "${BLUE}Configuration:${NC}"
     local symlink_path="${HTTPD_DOCUMENT_ROOT}/${HTTPD_REPO_SYMLINK_NAME}"
+    local shared_vhost_file="/etc/httpd/conf.d/rhel-repos.conf"
 
     if [ -L "$symlink_path" ]; then
         echo -e "  Symlink: ${GREEN}$symlink_path -> $(readlink $symlink_path)${NC}"
@@ -666,10 +661,19 @@ httpd_status() {
         echo -e "  Symlink: ${RED}$symlink_path (NOT FOUND)${NC}"
     fi
 
-    if [ -f "$HTTPD_VHOST_FILE" ]; then
-        echo -e "  VHost Config: ${GREEN}$HTTPD_VHOST_FILE (EXISTS)${NC}"
+    if [ -f "$shared_vhost_file" ]; then
+        echo -e "  Shared VHost Config: ${GREEN}$shared_vhost_file (EXISTS)${NC}"
+
+        # Show all repository symlinks
+        local repo_count=$(find "${HTTPD_DOCUMENT_ROOT}" -maxdepth 1 -type l -name "rhel-repo*" 2>/dev/null | wc -l)
+        if [ "$repo_count" -gt 0 ]; then
+            echo -e "  Active Repositories: ${GREEN}$repo_count${NC}"
+            find "${HTTPD_DOCUMENT_ROOT}" -maxdepth 1 -type l -name "rhel-repo*" 2>/dev/null | while read link; do
+                echo -e "    - $(basename $link) -> $(readlink $link)"
+            done
+        fi
     else
-        echo -e "  VHost Config: ${RED}$HTTPD_VHOST_FILE (NOT FOUND)${NC}"
+        echo -e "  Shared VHost Config: ${RED}$shared_vhost_file (NOT FOUND)${NC}"
     fi
 
     echo -e "  Port: ${BLUE}${HTTPD_PORT}${NC}"
@@ -708,14 +712,9 @@ httpd_status() {
 # Function to remove httpd configuration
 httpd_remove() {
     check_root
-    echo -e "${RED}==> Removing httpd configuration...${NC}"
+    echo -e "${RED}==> Removing httpd configuration for ${HTTPD_REPO_SYMLINK_NAME}...${NC}"
 
-    # Remove virtual host configuration
-    if [ -f "$HTTPD_VHOST_FILE" ]; then
-        echo -e "${BLUE}Removing virtual host configuration${NC}"
-        rm -f "$HTTPD_VHOST_FILE"
-        echo -e "${GREEN}Virtual host configuration removed${NC}"
-    fi
+    local shared_vhost_file="/etc/httpd/conf.d/rhel-repos.conf"
 
     # Remove symlink
     local symlink_path="${HTTPD_DOCUMENT_ROOT}/${HTTPD_REPO_SYMLINK_NAME}"
@@ -725,18 +724,18 @@ httpd_remove() {
         echo -e "${GREEN}Symlink removed${NC}"
     fi
 
-    # Check if there are other VirtualHost configurations using the same port
-    local other_vhosts=$(grep -l "VirtualHost.*:${HTTPD_PORT}" /etc/httpd/conf.d/*.conf 2>/dev/null | grep -v "$(basename $HTTPD_VHOST_FILE)" | wc -l)
+    # Check if there are other repository symlinks in DocumentRoot
+    local other_repos=$(find "${HTTPD_DOCUMENT_ROOT}" -maxdepth 1 -type l -name "rhel-repo*" 2>/dev/null | wc -l)
 
-    if [ "$other_vhosts" -eq 0 ]; then
-        # No other VirtualHosts using this port, safe to remove Listen and firewall rule
-        echo -e "${YELLOW}No other repositories using port ${HTTPD_PORT}${NC}"
+    if [ "$other_repos" -eq 0 ]; then
+        # No other repositories, safe to remove shared VirtualHost and firewall rule
+        echo -e "${YELLOW}No other RHEL repositories found${NC}"
 
-        # Remove ports.conf if it exists
-        if [ -f "/etc/httpd/conf.d/ports.conf" ]; then
-            echo -e "${BLUE}Removing ports.conf${NC}"
-            rm -f "/etc/httpd/conf.d/ports.conf"
-            echo -e "${GREEN}ports.conf removed${NC}"
+        # Remove shared VirtualHost configuration
+        if [ -f "$shared_vhost_file" ]; then
+            echo -e "${BLUE}Removing shared virtual host configuration${NC}"
+            rm -f "$shared_vhost_file"
+            echo -e "${GREEN}Shared virtual host configuration removed${NC}"
         fi
 
         # Remove firewall rule if firewalld is running
@@ -746,19 +745,15 @@ httpd_remove() {
             firewall-cmd --reload
             echo -e "${GREEN}Firewall rule removed${NC}"
         fi
-    else
-        echo -e "${YELLOW}Other repositories are still using port ${HTTPD_PORT}, keeping Listen and firewall settings${NC}"
-    fi
 
-    # Restart httpd to apply changes
-    if systemctl is-active --quiet "$HTTPD_SERVICE"; then
-        echo -e "${BLUE}Restarting httpd service${NC}"
-        systemctl restart "$HTTPD_SERVICE"
-        echo -e "${GREEN}httpd service restarted${NC}"
-    fi
+        # Restart httpd to apply changes
+        if systemctl is-active --quiet "$HTTPD_SERVICE"; then
+            echo -e "${BLUE}Restarting httpd service${NC}"
+            systemctl restart "$HTTPD_SERVICE"
+            echo -e "${GREEN}httpd service restarted${NC}"
+        fi
 
-    # Ask about uninstalling httpd (only if no other VirtualHosts exist)
-    if [ "$other_vhosts" -eq 0 ]; then
+        # Ask about uninstalling httpd
         echo ""
         echo -e "${YELLOW}Do you want to uninstall httpd? [y/N]${NC}"
         read -r response
@@ -770,9 +765,18 @@ httpd_remove() {
         else
             echo -e "${YELLOW}httpd package kept installed${NC}"
         fi
+    else
+        echo -e "${YELLOW}Other RHEL repositories still exist ($other_repos found), keeping shared configuration${NC}"
+
+        # Restart httpd to apply changes
+        if systemctl is-active --quiet "$HTTPD_SERVICE"; then
+            echo -e "${BLUE}Restarting httpd service${NC}"
+            systemctl restart "$HTTPD_SERVICE"
+            echo -e "${GREEN}httpd service restarted${NC}"
+        fi
     fi
 
-    echo -e "${GREEN}httpd configuration removed${NC}"
+    echo -e "${GREEN}Repository ${HTTPD_REPO_SYMLINK_NAME} removed from httpd${NC}"
 }
 
 # Main script
