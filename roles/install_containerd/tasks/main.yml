@@ -116,146 +116,31 @@
     remote_src: yes
   when: containerd_config_stat.stat.exists
 
-# Generate default containerd configuration
-- name: Generate default containerd configuration
-  shell: containerd config default > /etc/containerd/config.toml
-
-# Configure containerd - Simple approach that works for all versions
-- name: Enable SystemdCgroup in containerd config
-  shell: sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
+# Generate containerd configuration using templates
+- name: Deploy containerd configuration (version < 2.2)
+  template:
+    src: config_v2.toml.j2
+    dest: /etc/containerd/config.toml
+    owner: root
+    group: root
+    mode: '0644'
+  when: containerd_major_minor is version('2.2', '<')
   notify: restart containerd
 
-# Optional: Set custom pause image (if different from default)
-- name: Set custom pause image for containerd < 2.2
-  shell: sed -i 's|sandbox_image = "registry.k8s.io/pause:.*"|sandbox_image = "{{ pause_image }}"|g' /etc/containerd/config.toml
-  when: 
-    - containerd_major_minor is version('2.2', '<')
-    - pause_image != "registry.k8s.io/pause:3.10"
+- name: Deploy containerd configuration (version >= 2.2)
+  template:
+    src: config_v3.toml.j2
+    dest: /etc/containerd/config.toml
+    owner: root
+    group: root
+    mode: '0644'
+  when: containerd_major_minor is version('2.2', '>=')
   notify: restart containerd
 
-- name: Set custom pause image for containerd >= 2.2
-  shell: sed -i "s|sandbox = 'registry.k8s.io/pause:.*'|sandbox = '{{ pause_image }}'|g" /etc/containerd/config.toml
-  when: 
-    - containerd_major_minor is version('2.2', '>=')
-    - pause_image != "registry.k8s.io/pause:3.10"
-  notify: restart containerd
+# Note: All configuration (root path, NVIDIA runtime, pause image, registry settings for v2)
+# is now handled by the templates (config_v2.toml.j2 and config_v3.toml.j2)
 
-# Optional: Set default runtime to nvidia (only if GPU detected)
-- name: Set default runtime to nvidia for containerd < 2.2
-  shell: sed -i 's/default_runtime_name = "runc"/default_runtime_name = "nvidia"/g' /etc/containerd/config.toml
-  when: 
-    - has_nvidia_gpu | default(false) | bool
-    - containerd_major_minor is version('2.2', '<')
-  notify: restart containerd
-
-- name: Set default runtime to nvidia for containerd >= 2.2
-  shell: sed -i "s/default_runtime_name = 'runc'/default_runtime_name = 'nvidia'/g" /etc/containerd/config.toml
-  when: 
-    - has_nvidia_gpu | default(false) | bool
-    - containerd_major_minor is version('2.2', '>=')
-  notify: restart containerd
-
-# Common configuration for all versions
-- name: Set custom containerd root path
-  lineinfile:
-    path: /etc/containerd/config.toml
-    regexp: '^root = '
-    line: 'root = "{{ containerd_data_base_dir }}/{{ inventory_hostname }}"'
-    state: present
-  when: containerd_data_base_dir is defined and containerd_data_base_dir != ''
-  notify: restart containerd
-
-# Configure NVIDIA runtime (if GPU detected) - works for all versions
-- name: Add NVIDIA runtime to containerd config (containerd < 2.2)
-  blockinfile:
-    path: /etc/containerd/config.toml
-    marker: "        # {mark} ANSIBLE MANAGED - NVIDIA RUNTIME"
-    insertafter: '^\s+\[plugins\."io\.containerd\.grpc\.v1\.cri"\.containerd\.runtimes\.runc\.options\]'
-    block: |2
-              
-              [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia]
-                runtime_type = "io.containerd.runc.v2"
-                [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
-                  BinaryName = "/usr/bin/nvidia-container-runtime"
-                  SystemdCgroup = true
-    state: present
-  when: 
-    - has_nvidia_gpu | default(false) | bool
-    - containerd_major_minor is version('2.2', '<')
-  notify: restart containerd
-
-- name: Add NVIDIA runtime to containerd config (containerd >= 2.2)
-  blockinfile:
-    path: /etc/containerd/config.toml
-    marker: "        # {mark} ANSIBLE MANAGED - NVIDIA RUNTIME"
-    insertafter: '^\s+\[plugins\.''io\.containerd\.cri\.v1\.runtime''\.containerd\.runtimes\.runc\.options\]'
-    block: |2
-              
-              [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.nvidia]
-                runtime_type = 'io.containerd.runc.v2'
-                runtime_path = ''
-                pod_annotations = []
-                container_annotations = []
-                privileged_without_host_devices = false
-                privileged_without_host_devices_all_devices_allowed = false
-                cgroup_writable = false
-                base_runtime_spec = ''
-                cni_conf_dir = ''
-                cni_max_conf_num = 0
-                snapshotter = ''
-                sandboxer = 'podsandbox'
-                io_type = ''
-
-                [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.nvidia.options]
-                  BinaryName = '/usr/bin/nvidia-container-runtime'
-                  CriuImagePath = ''
-                  CriuWorkPath = ''
-                  IoGid = 0
-                  IoUid = 0
-                  NoNewKeyring = false
-                  Root = ''
-                  ShimCgroup = ''
-                  SystemdCgroup = true
-    state: present
-  when: 
-    - has_nvidia_gpu | default(false) | bool
-    - containerd_major_minor is version('2.2', '>=')
-  notify: restart containerd
-
-# Configure registry settings (only for containerd < 2.2)
-# For containerd >= 2.2, use config_path method with certs.d
-- name: Configure registry for containerd < 2.2
-  block:
-    - name: Ensure registry parent section exists in containerd config
-      lineinfile:
-        path: /etc/containerd/config.toml
-        line: '    [plugins."io.containerd.grpc.v1.cri".registry]'
-        insertafter: '^\s*\[plugins\."io\.containerd\.grpc\.v1\.cri"\]'
-        state: present
-
-    - name: Ensure registry.mirrors section exists in containerd config
-      lineinfile:
-        path: /etc/containerd/config.toml
-        line: '    [plugins."io.containerd.grpc.v1.cri".registry.mirrors]'
-        insertafter: '^\s*\[plugins\."io\.containerd\.grpc\.v1\.cri"\.registry\]'
-        state: present
-
-    - name: Ensure registry.configs section exists in containerd config
-      lineinfile:
-        path: /etc/containerd/config.toml
-        line: '    [plugins."io.containerd.grpc.v1.cri".registry.configs]'
-        insertafter: '^\s*\[plugins\."io\.containerd\.grpc\.v1\.cri"\.registry\.mirrors\]'
-        state: present
-
-    - name: Create registry configuration script
-      template:
-        src: configure_registry.sh.j2
-        dest: /tmp/configure_containerd_registry.sh
-        mode: '0755'
-
-    - name: Apply registry configuration
-      command: /tmp/configure_containerd_registry.sh
-      notify: restart containerd
+# For containerd >= 2.2, registry configuration uses certs.d method (see below)
 
     - name: Remove registry configuration script
       file:
