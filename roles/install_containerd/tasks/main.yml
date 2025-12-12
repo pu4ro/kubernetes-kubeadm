@@ -84,32 +84,39 @@
   debug:
     msg: "Configuring containerd with {{ 'NVIDIA GPU' if (has_nvidia_gpu | default(false) | bool) else 'standard' }} runtime (auto-detected)"
 
-- name: Remove existing containerd config.toml (force clean state)
-  file:
+# Containerd Configuration (containerd 2.2+ compatible)
+# Step 1: Backup existing config if present
+- name: Check if containerd config exists
+  stat:
     path: /etc/containerd/config.toml
-    state: absent
+  register: containerd_config_stat
 
-# Generate default containerd configuration
+- name: Backup existing containerd config
+  copy:
+    src: /etc/containerd/config.toml
+    dest: /etc/containerd/config.toml.bak
+    remote_src: yes
+  when: containerd_config_stat.stat.exists
+
+# Step 2: Generate default containerd configuration
 - name: Generate default containerd configuration
   shell: containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
 
-# Ensure CRI plugin is not disabled
-- name: Ensure CRI plugin is enabled (remove from disabled_plugins)
-  replace:
-    path: /etc/containerd/config.toml
-    regexp: '^disabled_plugins = \["cri"\]'
-    replace: 'disabled_plugins = []'
-  notify: restart containerd
-
-# Step 1: Enable SystemdCgroup
+# Step 3: Configure containerd using sed (containerd 2.2+)
 - name: Enable SystemdCgroup in containerd config
-  replace:
-    path: /etc/containerd/config.toml
-    regexp: 'SystemdCgroup = false'
-    replace: 'SystemdCgroup = true'
+  shell: sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
   notify: restart containerd
 
-# Step 2: Configure custom root path (if specified)
+- name: Ensure CRI plugin is enabled
+  shell: sed -i 's/^disabled_plugins = \[\"cri\"\]/disabled_plugins = []/g' /etc/containerd/config.toml
+  notify: restart containerd
+
+- name: Set custom pause image (sandbox_image)
+  shell: sed -i 's|sandbox_image = ".*"|sandbox_image = "{{ pause_image }}"|g' /etc/containerd/config.toml
+  notify: restart containerd
+
 - name: Set custom containerd root path
   lineinfile:
     path: /etc/containerd/config.toml
@@ -119,15 +126,7 @@
   when: containerd_data_base_dir is defined and containerd_data_base_dir != ''
   notify: restart containerd
 
-# Step 3: Configure pause image
-- name: Set custom pause image (sandbox_image)
-  replace:
-    path: /etc/containerd/config.toml
-    regexp: 'sandbox_image = ".*?"'
-    replace: 'sandbox_image = "{{ pause_image }}"'
-  notify: restart containerd
-
-# Step 4: Add NVIDIA runtime configuration (if GPU detected)
+# Step 4: Configure NVIDIA runtime (if GPU detected)
 - name: Add NVIDIA runtime to containerd config
   blockinfile:
     path: /etc/containerd/config.toml
@@ -144,16 +143,12 @@
   when: has_nvidia_gpu | default(false) | bool
   notify: restart containerd
 
-# Step 5: Set default runtime to nvidia (if GPU detected)
 - name: Set default runtime to nvidia
-  replace:
-    path: /etc/containerd/config.toml
-    regexp: 'default_runtime_name = "runc"'
-    replace: 'default_runtime_name = "nvidia"'
+  shell: sed -i 's/default_runtime_name = "runc"/default_runtime_name = "nvidia"/g' /etc/containerd/config.toml
   when: has_nvidia_gpu | default(false) | bool
   notify: restart containerd
 
-# Step 6: Ensure registry sections exist in containerd config
+# Step 5: Configure registry settings
 - name: Ensure registry parent section exists in containerd config
   lineinfile:
     path: /etc/containerd/config.toml
@@ -184,7 +179,6 @@
     - (containerd_registry_auth is defined and containerd_registry_auth | length > 0) or
       (insecure_registries is defined and insecure_registries | length > 0)
 
-# Step 7: Configure registry settings using script
 - name: Create registry configuration script
   template:
     src: configure_registry.sh.j2
