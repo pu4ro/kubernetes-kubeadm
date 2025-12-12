@@ -9,15 +9,47 @@
   tags:
     - docker-credentials
 
-- name: Restore containerd configuration if corrupted
+- name: Get installed containerd version for credential setup
+  shell: containerd --version | awk '{print $3}' | sed 's/v//'
+  register: containerd_version_for_creds
+  changed_when: false
+  when: docker_registries is defined
+  tags:
+    - docker-credentials
+
+- name: Set containerd major.minor version for credential setup
+  set_fact:
+    containerd_major_minor_creds: "{{ containerd_version_for_creds.stdout.split('.')[:2] | join('.') }}"
+  when: docker_registries is defined
+  tags:
+    - docker-credentials
+
+- name: Deploy containerd configuration (version < 2.2) for credential setup
   template:
-    src: "{{ playbook_dir }}/roles/install_containerd/templates/containerd_config.toml.j2"
+    src: "{{ playbook_dir }}/roles/install_containerd/templates/config_v2.toml.j2"
     dest: /etc/containerd/config.toml
     owner: root
     group: root
     mode: '0644'
     backup: yes
-  when: docker_registries is defined
+  when: 
+    - docker_registries is defined
+    - containerd_major_minor_creds is version('2.2', '<')
+  tags:
+    - docker-credentials
+    - containerd-restore
+
+- name: Deploy containerd configuration (version >= 2.2) for credential setup
+  template:
+    src: "{{ playbook_dir }}/roles/install_containerd/templates/config_v3.toml.j2"
+    dest: /etc/containerd/config.toml
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  when: 
+    - docker_registries is defined
+    - containerd_major_minor_creds is version('2.2', '>=')
   tags:
     - docker-credentials
     - containerd-restore
