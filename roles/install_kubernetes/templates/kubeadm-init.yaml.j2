@@ -1,24 +1,33 @@
-apiVersion: kubeadm.k8s.io/v1beta3
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: {{ ansible_host }}
+  bindPort: 6443
+nodeRegistration:
+  criSocket: unix:///var/run/containerd/containerd.sock
+---
+apiVersion: kubeadm.k8s.io/v1beta4
 kind: ClusterConfiguration
 clusterName: kubernetes
+kubernetesVersion: "{{ kubernetes_version }}"
+{% if kube_vip_address is defined %}
+controlPlaneEndpoint: {{ kube_vip_address }}:{{ kube_vip_port }}
+{% endif %}
+certificatesDir: /etc/kubernetes/pki
+imageRepository: cr.makina.rocks/external-hub/kubernetes
+dns:
+  imageRepository: cr.makina.rocks/external-hub/kubernetes/coredns
 etcd:
   local:
     dataDir: /var/lib/etcd
-dns:
-  imageRepository: cr.makina.rocks/external-hub/kubernetes/coredns
-imageRepository: cr.makina.rocks/external-hub/kubernetes
 networking:
   dnsDomain: {{ dns_domain }}
   serviceSubnet: {{ service_subnet }}
   podSubnet: {{ pod_subnet }}
-kubernetesVersion: "{{ kubernetes_version }}"
-certificatesDir: /etc/kubernetes/pki
-{% if kube_vip_address is defined %}
-controlPlaneEndpoint: {{ kube_vip_address }}:{{ kube_vip_port }}
-{% endif %}
 apiServer:
   extraArgs:
-    authorization-mode: Node,RBAC
+  - name: authorization-mode
+    value: Node,RBAC
   certSANs:
 {%- filter indent(width=4) %}
 
