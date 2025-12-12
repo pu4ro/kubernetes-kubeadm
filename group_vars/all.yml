@@ -2,7 +2,7 @@
 # Basic Kubernetes Cluster Configuration
 
 # Kubernetes Settings
-kubernetes_version: '1.27.14'
+kubernetes_version: '1.34.1'
 dns_domain: cluster.local
 service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
@@ -11,7 +11,7 @@ pod_subnet: 10.244.0.0/16
 master_ha: true
 kube_vip_port: 6443
 kube_vip_interface: ens18
-kube_vip_address: 192.168.135.89  # Uncomment for HA setup
+kube_vip_address: 192.168.135.69  # Uncomment for HA setup
 
 # Container Runtime
 containerd_version: "1.7.6"
@@ -108,7 +108,7 @@ ubuntu_repo_update_cache: true
 # Usage:
 #   ansible-playbook site.yml --tags rhel-repo
 #
-enable_rhel_repos: false
+enable_rhel_repos: true
 rhel_repos:
   - name: "rhel-iso-repo"
     id: "rhel-iso-repo"
