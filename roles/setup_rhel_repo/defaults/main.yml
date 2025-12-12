@@ -1,0 +1,31 @@
+---
+# Default variables for RHEL/CentOS YUM repository setup
+
+# Enable/disable RHEL repository setup
+enable_rhel_repo: false
+
+# Repository server URL (HTTP server)
+# Example: http://192.168.1.100:8080/rhel-repo
+rhel_repo_url: ""
+
+# Repository type: single, baseos_appstream
+# - single: Single repository (RHEL 7 or custom directory repo)
+# - baseos_appstream: Separate BaseOS and AppStream (RHEL 8+)
+rhel_repo_type: single
+
+# YUM repository configuration file path
+rhel_repo_file: /etc/yum.repos.d/rhel-local-repo.repo
+
+# Repository ID prefix (used in .repo file)
+rhel_repo_id: rhel-local-repo
+
+# Repository name
+rhel_repo_name: RHEL Local Repository
+
+# Repository options
+rhel_repo_enabled: 1
+rhel_repo_gpgcheck: 0
+rhel_repo_priority: 1
+
+# Whether to clean YUM cache after adding repository
+rhel_repo_clean_cache: true
