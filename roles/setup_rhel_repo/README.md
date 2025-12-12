@@ -1,11 +1,13 @@
 # RHEL/CentOS YUM Repository Setup Role
 
-This Ansible role configures RHEL/CentOS systems to use a local YUM repository served via HTTP.
+This Ansible role configures RHEL/CentOS systems to use local YUM repositories served via HTTP.
 
 ## Features
 
+- **Supports multiple repositories** - Configure multiple repo sources simultaneously
 - Supports RHEL 7 (single repository) and RHEL 8+ (BaseOS + AppStream)
 - Configures YUM repository from HTTP URL
+- Repository priority management
 - Automatic cache management
 - Repository validation
 - Backup of original repository configurations
@@ -18,13 +20,26 @@ This Ansible role configures RHEL/CentOS systems to use a local YUM repository s
 
 ## Role Variables
 
-### Required Variables
+### Multiple Repositories Configuration (Recommended)
+
+Configure in `group_vars/all.yml`:
+
+- `enable_rhel_repos`: Enable/disable multiple repositories setup (default: `false`)
+- `rhel_repos`: List of repository configurations
+
+Each repository in the list supports:
+- `name`: Repository display name (required)
+- `id`: Repository ID for config file (required)
+- `url`: Repository server URL (required)
+- `type`: Repository type - `single` or `baseos_appstream` (required)
+- `enabled`: Enable repository (default: `1`)
+- `gpgcheck`: Enable GPG signature checking (default: `0`)
+- `priority`: Repository priority - lower number = higher priority (default: `99`)
+
+### Legacy Single Repository Configuration (Deprecated)
 
 - `enable_rhel_repo`: Enable/disable repository setup (default: `false`)
 - `rhel_repo_url`: Repository server URL (required when enabled)
-
-### Optional Variables
-
 - `rhel_repo_type`: Repository type - `single` or `baseos_appstream` (default: `single`)
 - `rhel_repo_file`: YUM repository configuration file path (default: `/etc/yum.repos.d/rhel-local-repo.repo`)
 - `rhel_repo_id`: Repository ID prefix (default: `rhel-local-repo`)
@@ -80,7 +95,46 @@ gpgcheck=0
 
 ## Example Playbook
 
-### Basic Usage (RHEL 7 or Directory Repo)
+### Multiple Repositories (Recommended)
+
+Configure in `group_vars/all.yml`:
+
+```yaml
+enable_rhel_repos: true
+rhel_repos:
+  # ISO-based repository with BaseOS and AppStream
+  - name: "RHEL ISO Repository"
+    id: "rhel-iso-repo"
+    url: "http://192.168.135.71:8080/rhel-repo-iso/"
+    type: "baseos_appstream"
+    enabled: 1
+    gpgcheck: 0
+    priority: 1
+  # Directory-based repository
+  - name: "RHEL Custom Repository"
+    id: "rhel-directory-repo"
+    url: "http://192.168.135.71:8080/rhel-repo-directory/"
+    type: "single"
+    enabled: 1
+    gpgcheck: 0
+    priority: 2
+  # Additional repository
+  - name: "RHEL Extra Repository"
+    id: "rhel-extra-repo"
+    url: "http://192.168.135.72:8080/rhel-extra/"
+    type: "single"
+    enabled: 1
+    gpgcheck: 0
+    priority: 3
+```
+
+Then run with tag:
+
+```bash
+ansible-playbook site.yml --tags rhel-repo
+```
+
+### Single Repository (Legacy)
 
 ```yaml
 - hosts: rhel_servers
@@ -92,7 +146,7 @@ gpgcheck=0
         rhel_repo_type: single
 ```
 
-### RHEL 8+ with BaseOS and AppStream
+### RHEL 8+ with BaseOS and AppStream (Legacy)
 
 ```yaml
 - hosts: rhel8_servers
@@ -104,57 +158,75 @@ gpgcheck=0
         rhel_repo_type: baseos_appstream
 ```
 
-### Custom Configuration
-
-```yaml
-- hosts: all
-  roles:
-    - role: setup_rhel_repo
-      vars:
-        enable_rhel_repo: true
-        rhel_repo_url: http://repo.example.com:8080/rhel-repo
-        rhel_repo_type: single
-        rhel_repo_id: custom-repo
-        rhel_repo_name: Custom RHEL Repository
-        rhel_repo_priority: 10
-```
-
 ## Setting Up Repository Server
 
-Use the `scripts/manage-rhel-repo.sh` script to set up the repository server:
+Use the Makefile commands to easily manage repository servers:
 
 ### ISO-based Repository
 
 ```bash
-# Configure .env.rhel-repo
-cp .env.rhel-repo.example .env.rhel-repo
-nano .env.rhel-repo
+# Initialize ISO repository configuration
+make rhel-repo-init-iso
 
-# Set RHEL_REPO_TYPE=iso
+# Edit configuration
+nano .env.rhel-repo-iso
 # Set RHEL_REPO_ISO_PATH=/path/to/rhel.iso
 
 # Setup repository from ISO
-sudo ./scripts/manage-rhel-repo.sh setup-iso
+make rhel-repo-setup-iso
 
 # Install and start HTTP server
-sudo ./scripts/manage-rhel-repo.sh httpd-install
+make httpd-repo-install-iso
 ```
 
 ### Directory-based Repository
 
 ```bash
-# Configure .env.rhel-repo
-cp .env.rhel-repo.example .env.rhel-repo
-nano .env.rhel-repo
+# Initialize directory repository configuration
+make rhel-repo-init-directory
 
-# Set RHEL_REPO_TYPE=directory
+# Edit configuration
+nano .env.rhel-repo-directory
 # Set RHEL_REPO_SOURCE_DIR=/path/to/rpms
 
 # Setup repository from directory
-sudo ./scripts/manage-rhel-repo.sh setup-directory
+make rhel-repo-setup-directory
 
 # Install and start HTTP server
-sudo ./scripts/manage-rhel-repo.sh httpd-install
+make httpd-repo-install-directory
+```
+
+### Managing HTTP Server
+
+```bash
+# Start httpd service
+make httpd-repo-start
+
+# Stop httpd service
+make httpd-repo-stop
+
+# Restart httpd service
+make httpd-repo-restart
+
+# Check httpd status
+make httpd-repo-status
+
+# Remove httpd configuration
+make httpd-repo-remove
+```
+
+### Direct Script Usage (Alternative)
+
+You can also use the scripts directly:
+
+```bash
+# ISO-based
+ENV_FILE=.env.rhel-repo-iso sudo -E ./scripts/manage-rhel-repo.sh setup-iso
+ENV_FILE=.env.rhel-repo-iso sudo -E ./scripts/manage-rhel-repo.sh httpd-install
+
+# Directory-based
+ENV_FILE=.env.rhel-repo-directory sudo -E ./scripts/manage-rhel-repo.sh setup-directory
+ENV_FILE=.env.rhel-repo-directory sudo -E ./scripts/manage-rhel-repo.sh httpd-install
 ```
 
 ## Verification

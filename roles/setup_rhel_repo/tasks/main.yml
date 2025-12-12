@@ -1,104 +1,112 @@
 ---
-# RHEL/CentOS YUM Repository Setup Tasks
+# RHEL/CentOS YUM Repository Setup Tasks (supports multiple repositories)
 
 - name: Check if RHEL repository setup is enabled
   debug:
-    msg: "RHEL repository setup is {{ 'enabled' if enable_rhel_repo else 'disabled' }}"
+    msg: "RHEL repository setup is {{ 'enabled' if enable_rhel_repos | default(enable_rhel_repo | default(false)) else 'disabled' }}"
 
 - block:
-    - name: Validate rhel_repo_url is provided
-      fail:
-        msg: "rhel_repo_url must be set when enable_rhel_repo is true"
-      when: rhel_repo_url is not defined or rhel_repo_url == ""
-
     - name: Check if running on RHEL/CentOS/Rocky/AlmaLinux
       fail:
         msg: "This role only supports RHEL-based systems"
       when: ansible_os_family != "RedHat"
 
-    - name: Display repository configuration
+    # Support for new multi-repo configuration (rhel_repos list)
+    - name: Validate rhel_repos is provided
+      fail:
+        msg: "rhel_repos must be a non-empty list when enable_rhel_repos is true"
+      when:
+        - rhel_repos is not defined or rhel_repos | length == 0
+        - enable_rhel_repos | default(false) | bool
+
+    - name: Display repository configurations
       debug:
         msg: |
-          Repository URL: {{ rhel_repo_url }}
-          Repository Type: {{ rhel_repo_type }}
-          Repository file: {{ rhel_repo_file }}
-          Repository ID: {{ rhel_repo_id }}
-
-    - name: Create YUM repository configuration (single repository)
-      copy:
-        content: |
-          # RHEL Local Repository
-          # Managed by Ansible - Do not edit manually
-          [{{ rhel_repo_id }}]
-          name={{ rhel_repo_name }}
-          baseurl={{ rhel_repo_url }}
-          enabled={{ rhel_repo_enabled }}
-          gpgcheck={{ rhel_repo_gpgcheck }}
-          priority={{ rhel_repo_priority }}
-        dest: "{{ rhel_repo_file }}"
-        owner: root
-        group: root
-        mode: '0644'
-      register: repo_config_created
-      when: rhel_repo_type == "single"
-
-    - name: Create YUM repository configuration (BaseOS + AppStream)
-      copy:
-        content: |
-          # RHEL Local Repository - BaseOS
-          # Managed by Ansible - Do not edit manually
-          [{{ rhel_repo_id }}-baseos]
-          name={{ rhel_repo_name }} - BaseOS
-          baseurl={{ rhel_repo_url }}/BaseOS
-          enabled={{ rhel_repo_enabled }}
-          gpgcheck={{ rhel_repo_gpgcheck }}
-          priority={{ rhel_repo_priority }}
-
-          # RHEL Local Repository - AppStream
-          [{{ rhel_repo_id }}-appstream]
-          name={{ rhel_repo_name }} - AppStream
-          baseurl={{ rhel_repo_url }}/AppStream
-          enabled={{ rhel_repo_enabled }}
-          gpgcheck={{ rhel_repo_gpgcheck }}
-          priority={{ rhel_repo_priority }}
-        dest: "{{ rhel_repo_file }}"
-        owner: root
-        group: root
-        mode: '0644'
-      register: repo_config_created
-      when: rhel_repo_type == "baseos_appstream"
+          Configuring {{ rhel_repos | length }} RHEL repositories:
+          {% for repo in rhel_repos %}
+          - {{ repo.name }}: {{ repo.url }} ({{ repo.type }}, priority={{ repo.priority | default(99) }})
+          {% endfor %}
+      when: rhel_repos is defined and rhel_repos | length > 0
 
     - name: Backup original repos (first time only)
       shell: |
         if [ ! -d /etc/yum.repos.d/backup ]; then
           mkdir -p /etc/yum.repos.d/backup
-          find /etc/yum.repos.d -maxdepth 1 -name "*.repo" ! -name "{{ rhel_repo_file | basename }}" -exec cp {} /etc/yum.repos.d/backup/ \;
+          find /etc/yum.repos.d -maxdepth 1 -name "*.repo" -exec cp {} /etc/yum.repos.d/backup/ \;
         fi
       args:
         creates: /etc/yum.repos.d/backup
       ignore_errors: true
 
+    - name: Create YUM repository configuration for each repository (single type)
+      copy:
+        content: |
+          # {{ item.name }}
+          # Managed by Ansible - Do not edit manually
+          [{{ item.id }}]
+          name={{ item.name }}
+          baseurl={{ item.url }}
+          enabled={{ item.enabled | default(1) }}
+          gpgcheck={{ item.gpgcheck | default(0) }}
+          priority={{ item.priority | default(99) }}
+        dest: "/etc/yum.repos.d/{{ item.id }}.repo"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: "{{ rhel_repos }}"
+      when:
+        - rhel_repos is defined
+        - item.type == "single"
+      register: repo_config_single
+
+    - name: Create YUM repository configuration for each repository (BaseOS + AppStream)
+      copy:
+        content: |
+          # {{ item.name }} - BaseOS
+          # Managed by Ansible - Do not edit manually
+          [{{ item.id }}-baseos]
+          name={{ item.name }} - BaseOS
+          baseurl={{ item.url }}/BaseOS
+          enabled={{ item.enabled | default(1) }}
+          gpgcheck={{ item.gpgcheck | default(0) }}
+          priority={{ item.priority | default(99) }}
+
+          # {{ item.name }} - AppStream
+          [{{ item.id }}-appstream]
+          name={{ item.name }} - AppStream
+          baseurl={{ item.url }}/AppStream
+          enabled={{ item.enabled | default(1) }}
+          gpgcheck={{ item.gpgcheck | default(0) }}
+          priority={{ item.priority | default(99) }}
+        dest: "/etc/yum.repos.d/{{ item.id }}.repo"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: "{{ rhel_repos }}"
+      when:
+        - rhel_repos is defined
+        - item.type == "baseos_appstream"
+      register: repo_config_baseos_appstream
+
     - name: Clean YUM cache
       command: yum clean all
       when:
-        - rhel_repo_clean_cache | bool
-        - repo_config_created is changed
+        - repo_config_single is changed or repo_config_baseos_appstream is changed
       register: yum_clean
       changed_when: false
 
     - name: Build YUM cache
       command: yum makecache
       when:
-        - rhel_repo_clean_cache | bool
-        - repo_config_created is changed
+        - repo_config_single is changed or repo_config_baseos_appstream is changed
       register: yum_makecache
       retries: 3
       delay: 5
       until: yum_makecache is succeeded
 
-    - name: Verify repository is accessible
+    - name: Verify repositories are accessible
       shell: |
-        yum repolist | grep "{{ rhel_repo_id }}" || echo "Repository not found in repolist"
+        yum repolist
       register: repo_verify
       changed_when: false
 
@@ -106,9 +114,8 @@
       debug:
         msg: |
           RHEL repository configuration completed successfully.
-          Repository: {{ rhel_repo_url }}
-          Repository Type: {{ rhel_repo_type }}
-          Repository file: {{ rhel_repo_file }}
-          Status: {{ 'Active' if rhel_repo_id in repo_verify.stdout else 'Not detected in YUM repolist' }}
+          Configured {{ rhel_repos | length }} repositories.
+          Active repositories:
+          {{ repo_verify.stdout }}
 
-  when: enable_rhel_repo | bool
+  when: enable_rhel_repos | default(enable_rhel_repo | default(false)) | bool

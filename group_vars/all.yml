@@ -99,6 +99,40 @@ ubuntu_repo_components: "./"
 ubuntu_repo_trusted: true
 ubuntu_repo_update_cache: true
 
+# RHEL/CentOS YUM Repository Configuration (supports multiple repositories)
+# Enable this to use custom RHEL repositories (local or HTTP)
+# You can configure multiple repositories with different priorities
+#
+# Usage:
+#   ansible-playbook site.yml --tags rhel-repo
+#
+enable_rhel_repos: false
+rhel_repos:
+  # Example: ISO-based repository
+  - name: "rhel-iso-repo"
+    id: "rhel-iso-repo"
+    url: "http://192.168.135.71:8080/rhel-repo-iso/"
+    type: "baseos_appstream"  # Options: "single" or "baseos_appstream"
+    enabled: 1
+    gpgcheck: 0
+    priority: 1
+  # Example: Directory-based repository
+  - name: "rhel-directory-repo"
+    id: "rhel-directory-repo"
+    url: "http://192.168.135.71:8080/rhel-repo-directory/"
+    type: "single"
+    enabled: 1
+    gpgcheck: 0
+    priority: 2
+  # Add more repositories as needed
+  # - name: "custom-repo"
+  #   id: "custom-repo"
+  #   url: "http://192.168.135.72:8080/custom-repo/"
+  #   type: "single"
+  #   enabled: 1
+  #   gpgcheck: 0
+  #   priority: 3
+
 # Container Registry Settings (basic Docker configuration)
 insecure_registries: []
   #- "192.168.1.10:5000"           # Local registry example
