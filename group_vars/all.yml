@@ -31,7 +31,7 @@ local_registry_additional_args: []
 # The actual path will be: {containerd_data_base_dir}/{hostname}
 # Example: /data/containerd/worker1, /data/containerd/worker2
 # Leave empty or comment out to use default /var/lib/containerd
-containerd_data_base_dir: "/data"  # Base directory for containerd data
+containerd_data_base_dir: ""  # Base directory for containerd data
 # containerd_data_base_dir: ""  # Use this to disable custom path and use default
 
 # System Configuration
@@ -110,10 +110,16 @@ ubuntu_repo_update_cache: true
 #
 enable_rhel_repos: false
 rhel_repos:
-  # Example: ISO-based repository
   - name: "rhel-iso-repo"
     id: "rhel-iso-repo"
-    url: "http://192.168.135.71:8080/rhel-repo-iso/"
+    url: "http://192.168.135.71:8080/rhel-repo/BaseOS"
+    type: "baseos_appstream"  # Options: "single" or "baseos_appstream"
+    enabled: 1
+    gpgcheck: 0
+    priority: 1
+  - name: "rhel-iso-repo2"
+    id: "rhel-iso-repo2"
+    url: "http://192.168.135.71:8080/rhel-repo/AppStream"
     type: "baseos_appstream"  # Options: "single" or "baseos_appstream"
     enabled: 1
     gpgcheck: 0
@@ -121,7 +127,7 @@ rhel_repos:
   # Example: Directory-based repository
   - name: "rhel-directory-repo"
     id: "rhel-directory-repo"
-    url: "http://192.168.135.71:8080/rhel-repo-directory/"
+    url: "http://192.168.135.71:8080/rhel-repo2"
     type: "single"
     enabled: 1
     gpgcheck: 0
