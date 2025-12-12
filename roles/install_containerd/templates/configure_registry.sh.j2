@@ -1,0 +1,73 @@
+#!/bin/bash
+# Configure containerd registry settings
+# This script adds registry mirrors and authentication to /etc/containerd/config.toml
+
+CONFIG_FILE="/etc/containerd/config.toml"
+
+# Find the registry.mirrors section
+MIRRORS_LINE=$(grep -n '^\s*\[plugins."io.containerd.grpc.v1.cri".registry.mirrors\]' "$CONFIG_FILE" | cut -d: -f1)
+CONFIGS_LINE=$(grep -n '^\s*\[plugins."io.containerd.grpc.v1.cri".registry.configs\]' "$CONFIG_FILE" | cut -d: -f1)
+
+if [ -z "$MIRRORS_LINE" ] || [ -z "$CONFIGS_LINE" ]; then
+    echo "Error: Could not find registry sections in containerd config"
+    exit 1
+fi
+
+# Create temporary file for mirrors configuration
+cat > /tmp/registry_mirrors.conf << 'EOF'
+{% if containerd_registry_auth is defined and containerd_registry_auth | length > 0 %}
+{% for registry_config in containerd_registry_auth %}
+{% if registry_config.insecure_skip_verify | default(true) %}
+      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry_config.registry }}"]
+        endpoint = ["http://{{ registry_config.registry }}"]
+{% else %}
+      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry_config.registry }}"]
+        endpoint = ["https://{{ registry_config.registry }}"]
+{% endif %}
+{% endfor %}
+{% elif insecure_registries is defined and insecure_registries | length > 0 %}
+{% for registry in insecure_registries | unique %}
+      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry }}"]
+        endpoint = ["http://{{ registry }}"]
+{% endfor %}
+{% endif %}
+EOF
+
+# Create temporary file for auth configuration
+cat > /tmp/registry_auth.conf << 'EOF'
+{% if containerd_registry_auth is defined and containerd_registry_auth | length > 0 %}
+{% for registry_config in containerd_registry_auth %}
+      [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry_config.registry }}".tls]
+        insecure_skip_verify = {{ registry_config.insecure_skip_verify | default(true) | lower }}
+      [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry_config.registry }}".auth]
+        username = "{{ registry_config.username | default('') }}"
+        password = "{{ registry_config.password | default('') }}"
+        auth = "{{ registry_config.auth | default('') }}"
+        identitytoken = "{{ registry_config.identitytoken | default('') }}"
+{% endfor %}
+{% elif insecure_registries is defined and insecure_registries | length > 0 %}
+{% for registry in insecure_registries | unique %}
+      [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry }}".tls]
+        insecure_skip_verify = true
+      [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry }}".auth]
+        username = ""
+        password = ""
+        auth = ""
+        identitytoken = ""
+{% endfor %}
+{% endif %}
+EOF
+
+# Insert mirrors configuration after the mirrors section header
+sed -i "${MIRRORS_LINE}r /tmp/registry_mirrors.conf" "$CONFIG_FILE"
+
+# Recalculate CONFIGS_LINE after insertion (line numbers changed)
+CONFIGS_LINE=$(grep -n '^\s*\[plugins."io.containerd.grpc.v1.cri".registry.configs\]' "$CONFIG_FILE" | cut -d: -f1)
+
+# Insert auth configuration after the configs section header
+sed -i "${CONFIGS_LINE}r /tmp/registry_auth.conf" "$CONFIG_FILE"
+
+# Cleanup
+rm -f /tmp/registry_mirrors.conf /tmp/registry_auth.conf
+
+echo "Registry configuration applied successfully"
