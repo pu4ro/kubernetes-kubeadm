@@ -2,6 +2,7 @@
 .PHONY: reset ping check-cluster
 .PHONY: tag-ubuntu-repo tag-sysctl tag-packages tag-container tag-kubernetes tag-networking
 .PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials
+.PHONY: tag-set-hostname tag-etc-hosts
 .PHONY: limit-master limit-workers
 .PHONY: command cmd-all cmd-masters cmd-workers cmd-installs cmd-host
 .PHONY: check-workers add-workers check-and-add-workers
@@ -93,6 +94,14 @@ install-production: ## 프로덕션 설치 (전체 기능 + 인증서 + CoreDNS)
 tag-ubuntu-repo: ## Ubuntu APT 저장소 설정 (sources.list 추가)
 	@echo "==> Ubuntu 저장소 설정 중..."
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags ubuntu-repo
+
+tag-set-hostname: ## inventory_hostname으로 시스템 호스트 이름 설정
+	@echo "==> 시스템 호스트 이름 설정 중..."
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags set-hostname
+
+tag-etc-hosts: ## 인벤토리 기반 /etc/hosts 파일 구성
+	@echo "==> /etc/hosts 파일 구성 중..."
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags etc-hosts
 
 tag-sysctl: ## Sysctl 설정 (커널 파라미터, swap 비활성화, 모듈 로드)
 	@echo "==> Sysctl 설정 중..."

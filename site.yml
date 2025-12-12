@@ -10,6 +10,8 @@
   strategy: "{{ 'free' if (parallel_execution | default({})).system_preparation | default(1) == 0 else 'linear' }}"
   roles:
     - { role: setup_ubuntu_repo, tags: ['ubuntu-repo'] }
+    - { role: set_hostname, tags: ['set-hostname'], when: set_hostname_from_inventory | default(false) }
+    - { role: configure_etc_hosts, tags: ['etc-hosts'], when: configure_etc_hosts | default(false) }
     - { role: configure_sysctl, tags: ['base', 'sysctl'] }
     - { role: install_os_package, tags: ['base', 'packages'] }
     - { role: install_containerd, tags: ['base', 'container'] }

@@ -1,0 +1,3 @@
+---
+# defaults file for configure_etc_hosts
+configure_etc_hosts: false

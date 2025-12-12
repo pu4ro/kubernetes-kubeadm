@@ -36,6 +36,8 @@ containerd_data_base_dir: "/data"  # Base directory for containerd data
 
 # System Configuration
 set_timezone: Asia/Seoul
+configure_etc_hosts: true
+set_hostname_from_inventory: true
 
 # NTP/Chrony Configuration
 use_local_ntp: true                    # true: master1 as NTP server, true: use external NTP

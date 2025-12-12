@@ -1,0 +1,5 @@
+---
+- name: Set hostname from inventory
+  hostname:
+    name: "{{ inventory_hostname }}"
+  when: inventory_hostname != ansible_hostname

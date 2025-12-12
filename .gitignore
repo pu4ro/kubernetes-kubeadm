@@ -1,7 +1,8 @@
 # Serena MCP cache and configuration
 .serena/
 .claude
-.AGENTS.md
+AGENTS.md
+GEMINI.md
 
 # Backup files
 *.backup
