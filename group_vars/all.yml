@@ -217,9 +217,9 @@ pause_image: "cr.makina.rocks/external-hub/kubernetes/pause:3.10.1"
 # Usage with tags:
 #   ansible-playbook site.yml --tags install-nvidia-driver
 #
-enable_nvidia_driver_install: false
-nvidia_driver_version: "550.142"
-nvidia_driver_download_url: "http://192.168.135.71:8080/nvidia"
+enable_nvidia_driver_install: true
+nvidia_driver_version: "570.124.06"
+nvidia_driver_download_url: "http://192.168.135.71:8080/rhel-repo2"
 nvidia_driver_filename: "NVIDIA-Linux-x86_64-{{ nvidia_driver_version }}.run"
 nvidia_driver_install_options: "--silent --no-questions --ui=none --disable-nouveau"
 
