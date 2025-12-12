@@ -9,8 +9,8 @@
 .PHONY: nfs-init nfs-install nfs-start nfs-stop nfs-restart nfs-status nfs-reload nfs-show-exports nfs-add-export nfs-remove
 .PHONY: ubuntu-repo-init ubuntu-repo-setup ubuntu-repo-remove ubuntu-repo-status ubuntu-repo-update-sources
 .PHONY: apache-repo-install apache-repo-start apache-repo-stop apache-repo-restart apache-repo-status apache-repo-remove
-.PHONY: rhel-repo-init rhel-repo-setup rhel-repo-setup-iso rhel-repo-setup-directory rhel-repo-remove rhel-repo-status
-.PHONY: httpd-repo-install httpd-repo-start httpd-repo-stop httpd-repo-restart httpd-repo-status httpd-repo-remove
+.PHONY: rhel-repo-init-iso rhel-repo-init-directory rhel-repo-setup-iso rhel-repo-setup-directory rhel-repo-remove-iso rhel-repo-remove-directory rhel-repo-status-iso rhel-repo-status-directory
+.PHONY: httpd-repo-install-iso httpd-repo-install-directory httpd-repo-start httpd-repo-stop httpd-repo-restart httpd-repo-status httpd-repo-remove
 
 .DEFAULT_GOAL := help
 
@@ -433,51 +433,53 @@ apache-repo-remove: ## Apache 저장소 설정 제거 [root 필요]
 
 ##@ RHEL 로컬 저장소 관리
 
-rhel-repo-init: ## RHEL repo 설정 초기화 (.env.rhel-repo.example → .env.rhel-repo)
-	@if [ -f .env.rhel-repo ]; then \
-		echo "==> .env.rhel-repo 파일이 이미 존재합니다."; \
-		echo "기존 설정을 유지합니다. 재설정하려면 .env.rhel-repo를 삭제하세요."; \
+rhel-repo-init-iso: ## RHEL ISO repo 설정 초기화 (.env.rhel-repo-iso.example → .env.rhel-repo-iso)
+	@if [ -f .env.rhel-repo-iso ]; then \
+		echo "==> .env.rhel-repo-iso 파일이 이미 존재합니다."; \
+		echo "기존 설정을 유지합니다. 재설정하려면 .env.rhel-repo-iso를 삭제하세요."; \
 	else \
-		echo "==> .env.rhel-repo 파일 생성 중..."; \
-		cp .env.rhel-repo.example .env.rhel-repo; \
-		echo "==> .env.rhel-repo 파일이 생성되었습니다."; \
-		echo "필요에 따라 .env.rhel-repo 파일을 수정하세요."; \
+		echo "==> .env.rhel-repo-iso 파일 생성 중..."; \
+		cp .env.rhel-repo-iso.example .env.rhel-repo-iso; \
+		echo "==> .env.rhel-repo-iso 파일이 생성되었습니다."; \
+		echo "필요에 따라 .env.rhel-repo-iso 파일을 수정하세요."; \
 	fi
 
-rhel-repo-setup: ## RHEL 로컬 YUM 저장소 자동 설정 (.env에서 타입 감지) [root 필요]
-	@if [ ! -f .env.rhel-repo ]; then \
-		echo "에러: .env.rhel-repo 파일이 없습니다."; \
-		echo "먼저 'make rhel-repo-init'을 실행하세요."; \
-		exit 1; \
-	fi; \
-	REPO_TYPE=$$(grep "^RHEL_REPO_TYPE=" .env.rhel-repo | cut -d'=' -f2); \
-	if [ "$$REPO_TYPE" = "iso" ]; then \
-		echo "==> ISO 타입 저장소 설정 중..."; \
-		sudo ./scripts/manage-rhel-repo.sh setup-iso; \
-	elif [ "$$REPO_TYPE" = "directory" ]; then \
-		echo "==> 디렉토리 타입 저장소 설정 중..."; \
-		sudo ./scripts/manage-rhel-repo.sh setup-directory; \
+rhel-repo-init-directory: ## RHEL 디렉토리 repo 설정 초기화 (.env.rhel-repo-directory.example → .env.rhel-repo-directory)
+	@if [ -f .env.rhel-repo-directory ]; then \
+		echo "==> .env.rhel-repo-directory 파일이 이미 존재합니다."; \
+		echo "기존 설정을 유지합니다. 재설정하려면 .env.rhel-repo-directory를 삭제하세요."; \
 	else \
-		echo "에러: RHEL_REPO_TYPE이 'iso' 또는 'directory'여야 합니다."; \
-		exit 1; \
+		echo "==> .env.rhel-repo-directory 파일 생성 중..."; \
+		cp .env.rhel-repo-directory.example .env.rhel-repo-directory; \
+		echo "==> .env.rhel-repo-directory 파일이 생성되었습니다."; \
+		echo "필요에 따라 .env.rhel-repo-directory 파일을 수정하세요."; \
 	fi
 
 rhel-repo-setup-iso: ## RHEL ISO 기반 저장소 설정 [root 필요]
-	@sudo ./scripts/manage-rhel-repo.sh setup-iso
+	@ENV_FILE=.env.rhel-repo-iso sudo -E ./scripts/manage-rhel-repo.sh setup-iso
 
 rhel-repo-setup-directory: ## RHEL 디렉토리 기반 저장소 설정 (createrepo) [root 필요]
-	@sudo ./scripts/manage-rhel-repo.sh setup-directory
+	@ENV_FILE=.env.rhel-repo-directory sudo -E ./scripts/manage-rhel-repo.sh setup-directory
 
-rhel-repo-remove: ## RHEL 로컬 저장소 설정 제거 [root 필요]
-	@sudo ./scripts/manage-rhel-repo.sh remove
+rhel-repo-remove-iso: ## RHEL ISO 저장소 설정 제거 [root 필요]
+	@ENV_FILE=.env.rhel-repo-iso sudo -E ./scripts/manage-rhel-repo.sh remove
 
-rhel-repo-status: ## RHEL 로컬 저장소 상태 확인 (디렉토리 + httpd 설정)
-	@./scripts/manage-rhel-repo.sh status
+rhel-repo-remove-directory: ## RHEL 디렉토리 저장소 설정 제거 [root 필요]
+	@ENV_FILE=.env.rhel-repo-directory sudo -E ./scripts/manage-rhel-repo.sh remove
+
+rhel-repo-status-iso: ## RHEL ISO 저장소 상태 확인
+	@ENV_FILE=.env.rhel-repo-iso ./scripts/manage-rhel-repo.sh status
+
+rhel-repo-status-directory: ## RHEL 디렉토리 저장소 상태 확인
+	@ENV_FILE=.env.rhel-repo-directory ./scripts/manage-rhel-repo.sh status
 
 ##@ RHEL HTTP 저장소 서버
 
-httpd-repo-install: ## httpd 설치 및 HTTP 저장소 설정 [root 필요]
-	@sudo ./scripts/manage-rhel-repo.sh httpd-install
+httpd-repo-install-iso: ## httpd 설치 및 HTTP 저장소 설정 (ISO) [root 필요]
+	@ENV_FILE=.env.rhel-repo-iso sudo -E ./scripts/manage-rhel-repo.sh httpd-install
+
+httpd-repo-install-directory: ## httpd 설치 및 HTTP 저장소 설정 (디렉토리) [root 필요]
+	@ENV_FILE=.env.rhel-repo-directory sudo -E ./scripts/manage-rhel-repo.sh httpd-install
 
 httpd-repo-start: ## httpd 서비스 시작 [root 필요]
 	@sudo ./scripts/manage-rhel-repo.sh httpd-start

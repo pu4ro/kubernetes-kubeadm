@@ -26,3 +26,6 @@ install_sh/.env
 .env.registry
 .env.nfs
 .env.ubuntu-repo
+.env.rhel-repo
+.env.rhel-repo-iso
+.env.rhel-repo-directory

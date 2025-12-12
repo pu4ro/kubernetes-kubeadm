@@ -4,7 +4,8 @@ set -e
 # Script to manage RHEL/CentOS local YUM repository
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-ENV_FILE="${PROJECT_ROOT}/.env.rhel-repo"
+# Allow ENV_FILE to be overridden via environment variable
+ENV_FILE="${ENV_FILE:-${PROJECT_ROOT}/.env.rhel-repo}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -13,11 +14,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Load environment variables from .env.rhel-repo
+# Load environment variables from env file
 if [ ! -f "$ENV_FILE" ]; then
-    echo -e "${RED}Error: .env.rhel-repo file not found!${NC}"
-    echo -e "${YELLOW}Please copy .env.rhel-repo.example to .env.rhel-repo and configure it.${NC}"
-    echo "cp ${PROJECT_ROOT}/.env.rhel-repo.example ${ENV_FILE}"
+    echo -e "${RED}Error: Environment file not found: ${ENV_FILE}${NC}"
+    echo -e "${YELLOW}Please create the configuration file from an example:${NC}"
+    echo "  For ISO:       cp ${PROJECT_ROOT}/.env.rhel-repo-iso.example ${ENV_FILE}"
+    echo "  For directory: cp ${PROJECT_ROOT}/.env.rhel-repo-directory.example ${ENV_FILE}"
     exit 1
 fi
 
