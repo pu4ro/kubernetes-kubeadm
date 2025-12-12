@@ -1,8 +1,19 @@
 ---
 # Basic Kubernetes Cluster Configuration
 
-# Kubernetes Settings
-kubernetes_version: '1.34.1'
+# Kubernetes Version Configuration
+# Supported Kubernetes versions:
+#   - k8s 1.27.x and below: Uses kubeadm v1beta3 API
+#   - k8s 1.28.x - 1.30.x: Can use v1beta3 or v1beta4 API
+#   - k8s 1.31.x and above: Requires kubeadm v1beta4 API (configured in templates)
+#
+# This playbook uses v1beta4 API format and is optimized for k8s 1.31+
+# Key changes in 1.31+:
+#   - kubeadm config: v1beta3 → v1beta4 (InitConfiguration + ClusterConfiguration)
+#   - kube-vip: Uses super-admin.conf instead of admin.conf
+#   - API server extraArgs: Changed from map to list format (name/value pairs)
+#
+kubernetes_version: '1.34.1'        # Recommended: 1.31.x or higher for full feature support
 dns_domain: cluster.local
 service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
@@ -13,8 +24,20 @@ kube_vip_port: 6443
 kube_vip_interface: ens18
 kube_vip_address: 192.168.135.69  # Uncomment for HA setup
 
-# Container Runtime
-containerd_version: "1.7.6"
+# Container Runtime Configuration
+# Supported containerd versions:
+#   - containerd 1.6.x - 1.7.x: Config version 2 format (deprecated but supported)
+#   - containerd 2.0.x - 2.1.x: Config version 2 format with new plugin structure
+#   - containerd 2.2.x+: Config version 3 format (new pinned_images structure)
+#
+# The playbook automatically detects the installed containerd version and applies
+# the appropriate configuration format. Both old and new formats are supported.
+#
+# Configuration differences by version:
+#   < 2.2: Uses sandbox_image for pause container, old plugin paths
+#   >= 2.2: Uses pinned_images.sandbox, new io.containerd.cri.v1.* plugins
+#
+containerd_version: "1.7.6"         # Reference only (auto-detected at runtime)
 containerd_limit_nproc: 100000      # systemd LimitNPROC for containerd.service
 containerd_limit_nofile: 100000     # systemd LimitNOFILE for containerd.service
 enable_local_registry: false
@@ -175,7 +198,17 @@ containerd_registry_auth:
   #   auth: ""
   #   identitytoken: ""
 
-# Kubernetes pause container image
+# Kubernetes Pause Container Image
+# Pause container versions by Kubernetes version:
+#   - k8s 1.26.x and below: pause:3.9
+#   - k8s 1.27.x - 1.30.x: pause:3.9 or 3.10
+#   - k8s 1.31.x and above: pause:3.10 or 3.10.1 (recommended)
+#
+# The pause container is the infrastructure container that holds network namespaces
+# for all pods. It's configured differently based on containerd version:
+#   - containerd < 2.2: Set via sandbox_image in config.toml
+#   - containerd >= 2.2: Set via pinned_images.sandbox in config.toml (version 3 format)
+#
 pause_image: "cr.makina.rocks/external-hub/kubernetes/pause:3.10.1"
 
 # NVIDIA runtime support for containerd
