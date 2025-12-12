@@ -509,6 +509,18 @@ httpd_install() {
     ln -s "$repo_path" "$symlink_path"
     echo -e "${GREEN}Symlink created successfully${NC}"
 
+    # Clean up old individual VirtualHost files (except the shared one)
+    echo -e "${BLUE}Checking for old VirtualHost configurations${NC}"
+    local old_configs=$(find /etc/httpd/conf.d -name "rhel-repo.conf" -o -name "rhel-repo[0-9].conf" 2>/dev/null)
+    if [ -n "$old_configs" ]; then
+        echo -e "${YELLOW}Removing old individual VirtualHost configurations:${NC}"
+        for config in $old_configs; do
+            echo -e "  - Removing: $config"
+            rm -f "$config"
+        done
+        echo -e "${GREEN}Old configurations removed${NC}"
+    fi
+
     # Use a single shared VirtualHost configuration for all repositories
     local shared_vhost_file="/etc/httpd/conf.d/rhel-repos.conf"
 
