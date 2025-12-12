@@ -139,17 +139,7 @@
 
 # Note: All configuration (root path, NVIDIA runtime, pause image, registry settings for v2)
 # is now handled by the templates (config_v2.toml.j2 and config_v3.toml.j2)
-
 # For containerd >= 2.2, registry configuration uses certs.d method (see below)
-
-    - name: Remove registry configuration script
-      file:
-        path: /tmp/configure_containerd_registry.sh
-        state: absent
-  when:
-    - containerd_major_minor is version('2.2', '<')
-    - (containerd_registry_auth is defined and containerd_registry_auth | length > 0) or
-      (insecure_registries is defined and insecure_registries | length > 0)
 
 - name: Reload systemd daemon (RHEL/CentOS after service file changes)
   systemd:
