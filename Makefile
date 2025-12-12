@@ -9,7 +9,7 @@
 .PHONY: nfs-init nfs-install nfs-start nfs-stop nfs-restart nfs-status nfs-reload nfs-show-exports nfs-add-export nfs-remove
 .PHONY: ubuntu-repo-init ubuntu-repo-setup ubuntu-repo-remove ubuntu-repo-status ubuntu-repo-update-sources
 .PHONY: apache-repo-install apache-repo-start apache-repo-stop apache-repo-restart apache-repo-status apache-repo-remove
-.PHONY: rhel-repo-init rhel-repo-setup rhel-repo-remove rhel-repo-status
+.PHONY: rhel-repo-init rhel-repo-setup rhel-repo-setup-iso rhel-repo-setup-directory rhel-repo-remove rhel-repo-status
 .PHONY: httpd-repo-install httpd-repo-start httpd-repo-stop httpd-repo-restart httpd-repo-status httpd-repo-remove
 
 .DEFAULT_GOAL := help
@@ -444,8 +444,29 @@ rhel-repo-init: ## RHEL repo 설정 초기화 (.env.rhel-repo.example → .env.r
 		echo "필요에 따라 .env.rhel-repo 파일을 수정하세요."; \
 	fi
 
-rhel-repo-setup: ## RHEL 로컬 YUM 저장소 설정 (mv + chown + httpd config) [root 필요]
-	@sudo ./scripts/manage-rhel-repo.sh setup
+rhel-repo-setup: ## RHEL 로컬 YUM 저장소 자동 설정 (.env에서 타입 감지) [root 필요]
+	@if [ ! -f .env.rhel-repo ]; then \
+		echo "에러: .env.rhel-repo 파일이 없습니다."; \
+		echo "먼저 'make rhel-repo-init'을 실행하세요."; \
+		exit 1; \
+	fi; \
+	REPO_TYPE=$$(grep "^RHEL_REPO_TYPE=" .env.rhel-repo | cut -d'=' -f2); \
+	if [ "$$REPO_TYPE" = "iso" ]; then \
+		echo "==> ISO 타입 저장소 설정 중..."; \
+		sudo ./scripts/manage-rhel-repo.sh setup-iso; \
+	elif [ "$$REPO_TYPE" = "directory" ]; then \
+		echo "==> 디렉토리 타입 저장소 설정 중..."; \
+		sudo ./scripts/manage-rhel-repo.sh setup-directory; \
+	else \
+		echo "에러: RHEL_REPO_TYPE이 'iso' 또는 'directory'여야 합니다."; \
+		exit 1; \
+	fi
+
+rhel-repo-setup-iso: ## RHEL ISO 기반 저장소 설정 [root 필요]
+	@sudo ./scripts/manage-rhel-repo.sh setup-iso
+
+rhel-repo-setup-directory: ## RHEL 디렉토리 기반 저장소 설정 (createrepo) [root 필요]
+	@sudo ./scripts/manage-rhel-repo.sh setup-directory
 
 rhel-repo-remove: ## RHEL 로컬 저장소 설정 제거 [root 필요]
 	@sudo ./scripts/manage-rhel-repo.sh remove
