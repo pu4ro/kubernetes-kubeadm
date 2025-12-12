@@ -102,7 +102,6 @@
     test_command: whoami
   when:
     - nvidia_smi_check.rc != 0
-    - nouveau_loaded_check.rc == 0 # Only reboot if nouveau is loaded
   tags: ['nvidia', 'install-nvidia-driver']
 
 - name: Create temporary directory for NVIDIA driver
