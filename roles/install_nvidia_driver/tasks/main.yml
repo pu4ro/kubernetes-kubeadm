@@ -1,0 +1,161 @@
+---
+# NVIDIA GPU Driver Installation Role
+# This role installs NVIDIA GPU drivers on nodes with NVIDIA GPUs
+
+- name: Check if NVIDIA GPU is present
+  shell: lspci | grep -i nvidia
+  register: nvidia_gpu_check
+  changed_when: false
+  failed_when: false
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Display GPU detection result
+  debug:
+    msg: "{{ 'NVIDIA GPU detected' if nvidia_gpu_check.rc == 0 else 'No NVIDIA GPU detected - skipping driver installation' }}"
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Skip driver installation if no GPU detected
+  meta: end_host
+  when: nvidia_gpu_check.rc != 0
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Check if NVIDIA driver is already installed
+  shell: nvidia-smi
+  register: nvidia_smi_check
+  changed_when: false
+  failed_when: false
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Display current NVIDIA driver status
+  debug:
+    msg: "{{ 'NVIDIA driver already installed' if nvidia_smi_check.rc == 0 else 'NVIDIA driver not installed' }}"
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Install kernel and kernel headers (RHEL/CentOS)
+  yum:
+    name:
+      - kernel
+      - kernel-headers
+      - kernel-devel
+      - gcc
+      - make
+      - dkms
+    state: present
+  when:
+    - ansible_os_family == "RedHat"
+    - nvidia_smi_check.rc != 0
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Install kernel and kernel headers (Ubuntu/Debian)
+  apt:
+    name:
+      - linux-headers-{{ ansible_kernel }}
+      - gcc
+      - make
+      - dkms
+    state: present
+    update_cache: yes
+  when:
+    - ansible_os_family == "Debian"
+    - nvidia_smi_check.rc != 0
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Create blacklist file for nouveau driver
+  copy:
+    dest: /etc/modprobe.d/blacklist-nouveau.conf
+    content: |
+      blacklist nouveau
+      options nouveau modeset=0
+    owner: root
+    group: root
+    mode: '0644'
+  when: nvidia_smi_check.rc != 0
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Regenerate initramfs (RHEL/CentOS)
+  command: dracut --force
+  when:
+    - ansible_os_family == "RedHat"
+    - nvidia_smi_check.rc != 0
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Update initramfs (Ubuntu/Debian)
+  command: update-initramfs -u
+  when:
+    - ansible_os_family == "Debian"
+    - nvidia_smi_check.rc != 0
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Create temporary directory for NVIDIA driver
+  file:
+    path: /tmp/nvidia-driver
+    state: directory
+    mode: '0755'
+  when: nvidia_smi_check.rc != 0
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Download NVIDIA driver .run file
+  shell: |
+    wget -O /tmp/nvidia-driver/{{ nvidia_driver_filename }} {{ nvidia_driver_download_url }}/{{ nvidia_driver_filename }}
+  args:
+    creates: /tmp/nvidia-driver/{{ nvidia_driver_filename }}
+  when: nvidia_smi_check.rc != 0
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Make NVIDIA driver installer executable
+  file:
+    path: /tmp/nvidia-driver/{{ nvidia_driver_filename }}
+    mode: '0755'
+  when: nvidia_smi_check.rc != 0
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Display driver installation notice
+  debug:
+    msg: "Installing NVIDIA driver {{ nvidia_driver_version }}. This may take several minutes..."
+  when: nvidia_smi_check.rc != 0
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Install NVIDIA driver
+  shell: |
+    /tmp/nvidia-driver/{{ nvidia_driver_filename }} {{ nvidia_driver_install_options }}
+  when: nvidia_smi_check.rc != 0
+  register: nvidia_install_result
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Display installation result
+  debug:
+    msg: "NVIDIA driver installation completed"
+  when:
+    - nvidia_smi_check.rc != 0
+    - nvidia_install_result is succeeded
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Verify NVIDIA driver installation
+  shell: nvidia-smi
+  register: nvidia_smi_verify
+  changed_when: false
+  when: nvidia_smi_check.rc != 0
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Display nvidia-smi output
+  debug:
+    var: nvidia_smi_verify.stdout_lines
+  when:
+    - nvidia_smi_check.rc != 0
+    - nvidia_smi_verify is succeeded
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Clean up NVIDIA driver installer
+  file:
+    path: /tmp/nvidia-driver
+    state: absent
+  when: nvidia_smi_check.rc != 0
+  tags: ['nvidia', 'install-nvidia-driver']
+
+- name: Reboot notice
+  debug:
+    msg: "IMPORTANT: A system reboot is recommended to fully activate the NVIDIA driver and blacklist nouveau"
+  when:
+    - nvidia_smi_check.rc != 0
+    - nvidia_install_result is succeeded
+  tags: ['nvidia', 'install-nvidia-driver']

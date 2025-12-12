@@ -211,9 +211,26 @@ containerd_registry_auth:
 #
 pause_image: "cr.makina.rocks/external-hub/kubernetes/pause:3.10.1"
 
+# NVIDIA GPU Driver Installation (Optional)
+# Enable this to automatically install NVIDIA GPU drivers
+# 
+# Usage with tags:
+#   ansible-playbook site.yml --tags install-nvidia-driver
+#
+enable_nvidia_driver_install: false
+nvidia_driver_version: "550.142"
+nvidia_driver_download_url: "http://192.168.135.71:8080/nvidia"
+nvidia_driver_filename: "NVIDIA-Linux-x86_64-{{ nvidia_driver_version }}.run"
+nvidia_driver_install_options: "--silent --no-questions --ui=none --disable-nouveau"
+
+# GPU Operator Configuration (optional, for Kubernetes GPU support)
+enable_gpu_operator: false
+gpu_operator_namespace: "gpu-operator"
+gpu_operator_chart_path: "./gpu-operator"
+gpu_operator_driver_enabled: false  # Set to false when installing driver manually
+
 # NVIDIA runtime support for containerd
 # GPU will be auto-detected via lspci, no manual configuration needed
-# No driver installation by Ansible - install NVIDIA Container Toolkit separately
 
 # Docker Registry Credentials Configuration
 # Set docker_login_required to true to enable registry authentication
