@@ -10,7 +10,7 @@
 .PHONY: ubuntu-repo-init ubuntu-repo-setup ubuntu-repo-remove ubuntu-repo-status ubuntu-repo-update-sources
 .PHONY: apache-repo-install apache-repo-start apache-repo-stop apache-repo-restart apache-repo-status apache-repo-remove
 .PHONY: rhel-repo-init-iso rhel-repo-init-directory rhel-repo-setup-iso rhel-repo-setup-directory rhel-repo-remove-iso rhel-repo-remove-directory rhel-repo-status-iso rhel-repo-status-directory
-.PHONY: httpd-repo-install-iso httpd-repo-install-directory httpd-repo-start httpd-repo-stop httpd-repo-restart httpd-repo-status httpd-repo-remove
+.PHONY: httpd-repo-install-iso httpd-repo-install-directory httpd-repo-start httpd-repo-stop httpd-repo-restart httpd-repo-status httpd-repo-remove-iso httpd-repo-remove-directory
 
 .DEFAULT_GOAL := help
 
@@ -493,5 +493,8 @@ httpd-repo-restart: ## httpd 서비스 재시작 [root 필요]
 httpd-repo-status: ## httpd 서비스 상태 확인
 	@./scripts/manage-rhel-repo.sh httpd-status
 
-httpd-repo-remove: ## httpd 저장소 설정 제거 [root 필요]
-	@sudo ./scripts/manage-rhel-repo.sh httpd-remove
+httpd-repo-remove-iso: ## httpd ISO 저장소 설정 제거 [root 필요]
+	@ENV_FILE=.env.rhel-repo-iso sudo -E ./scripts/manage-rhel-repo.sh httpd-remove
+
+httpd-repo-remove-directory: ## httpd 디렉토리 저장소 설정 제거 [root 필요]
+	@ENV_FILE=.env.rhel-repo-directory sudo -E ./scripts/manage-rhel-repo.sh httpd-remove
