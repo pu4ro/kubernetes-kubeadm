@@ -112,14 +112,7 @@ enable_rhel_repos: true
 rhel_repos:
   - name: "rhel-iso-repo"
     id: "rhel-iso-repo"
-    url: "http://192.168.135.71:8080/rhel-repo/BaseOS"
-    type: "baseos_appstream"  # Options: "single" or "baseos_appstream"
-    enabled: 1
-    gpgcheck: 0
-    priority: 1
-  - name: "rhel-iso-repo2"
-    id: "rhel-iso-repo2"
-    url: "http://192.168.135.71:8080/rhel-repo/AppStream"
+    url: "http://192.168.135.71:8080/rhel-repo"
     type: "baseos_appstream"  # Options: "single" or "baseos_appstream"
     enabled: 1
     gpgcheck: 0
