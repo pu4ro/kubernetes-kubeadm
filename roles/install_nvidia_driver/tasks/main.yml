@@ -150,9 +150,14 @@
   when: nvidia_smi_check.rc != 0
   tags: ['nvidia', 'install-nvidia-driver']
 
-- name: Reboot notice
-  debug:
-    msg: "IMPORTANT: A system reboot is recommended to fully activate the NVIDIA driver and blacklist nouveau"
+- name: Reboot to activate NVIDIA driver
+  reboot:
+    msg: "Rebooting to activate NVIDIA driver"
+    connect_timeout: 5
+    reboot_timeout: 600
+    pre_reboot_delay: 0
+    post_reboot_delay: 30
+    test_command: whoami
   when:
     - nvidia_smi_check.rc != 0
     - nvidia_install_result is succeeded
