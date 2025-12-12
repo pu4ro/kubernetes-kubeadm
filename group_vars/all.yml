@@ -183,7 +183,7 @@ containerd_registry_auth:
   #   identitytoken: ""
 
 # Kubernetes pause container image
-pause_image: "cr.makina.rocks/external-hub/kubernetes/pause:3.9"
+pause_image: "cr.makina.rocks/external-hub/kubernetes/pause:3.10.1"
 
 # NVIDIA runtime support for containerd
 # GPU will be auto-detected via lspci, no manual configuration needed
