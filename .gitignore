@@ -25,3 +25,4 @@ __pycache__/
 install_sh/.env
 .env.registry
 .env.nfs
+.env.ubuntu-repo
