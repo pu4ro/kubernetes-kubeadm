@@ -120,47 +120,40 @@
 - name: Generate default containerd configuration
   shell: containerd config default > /etc/containerd/config.toml
 
-# Configure for containerd < 2.2 (version 2 config format)
-- name: Configure containerd < 2.2 using sed
-  block:
-    - name: Enable SystemdCgroup in containerd config
-      shell: sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
-      notify: restart containerd
+# Configure containerd - Simple approach that works for all versions
+- name: Enable SystemdCgroup in containerd config
+  shell: sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
+  notify: restart containerd
 
-    - name: Ensure CRI plugin is enabled
-      shell: sed -i 's/^disabled_plugins = \[\"cri\"\]/disabled_plugins = []/g' /etc/containerd/config.toml
-      notify: restart containerd
+# Optional: Set custom pause image (if different from default)
+- name: Set custom pause image for containerd < 2.2
+  shell: sed -i 's|sandbox_image = "registry.k8s.io/pause:.*"|sandbox_image = "{{ pause_image }}"|g' /etc/containerd/config.toml
+  when: 
+    - containerd_major_minor is version('2.2', '<')
+    - pause_image != "registry.k8s.io/pause:3.10"
+  notify: restart containerd
 
-    - name: Set custom pause image (sandbox_image for containerd < 2.2)
-      shell: sed -i 's|sandbox_image = ".*"|sandbox_image = "{{ pause_image }}"|g' /etc/containerd/config.toml
-      notify: restart containerd
+- name: Set custom pause image for containerd >= 2.2
+  shell: sed -i "s|sandbox = 'registry.k8s.io/pause:.*'|sandbox = '{{ pause_image }}'|g" /etc/containerd/config.toml
+  when: 
+    - containerd_major_minor is version('2.2', '>=')
+    - pause_image != "registry.k8s.io/pause:3.10"
+  notify: restart containerd
 
-    - name: Set default runtime to nvidia (containerd < 2.2)
-      shell: sed -i 's/default_runtime_name = "runc"/default_runtime_name = "nvidia"/g' /etc/containerd/config.toml
-      when: has_nvidia_gpu | default(false) | bool
-      notify: restart containerd
-  when: containerd_major_minor is version('2.2', '<')
+# Optional: Set default runtime to nvidia (only if GPU detected)
+- name: Set default runtime to nvidia for containerd < 2.2
+  shell: sed -i 's/default_runtime_name = "runc"/default_runtime_name = "nvidia"/g' /etc/containerd/config.toml
+  when: 
+    - has_nvidia_gpu | default(false) | bool
+    - containerd_major_minor is version('2.2', '<')
+  notify: restart containerd
 
-# Configure for containerd >= 2.2 (version 3 config format)
-- name: Configure containerd >= 2.2 using sed
-  block:
-    - name: Enable SystemdCgroup in containerd config (v3 format)
-      shell: sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
-      notify: restart containerd
-
-    - name: Ensure CRI plugin is enabled (v3 format)
-      shell: sed -i 's/^disabled_plugins = \[\"cri\"\]/disabled_plugins = []/g' /etc/containerd/config.toml
-      notify: restart containerd
-
-    - name: Set custom pause image (pinned_images.sandbox for containerd >= 2.2)
-      shell: sed -i "s|sandbox = '.*'|sandbox = '{{ pause_image }}'|g" /etc/containerd/config.toml
-      notify: restart containerd
-
-    - name: Set default runtime to nvidia (containerd >= 2.2)
-      shell: sed -i "s/default_runtime_name = 'runc'/default_runtime_name = 'nvidia'/g" /etc/containerd/config.toml
-      when: has_nvidia_gpu | default(false) | bool
-      notify: restart containerd
-  when: containerd_major_minor is version('2.2', '>=')
+- name: Set default runtime to nvidia for containerd >= 2.2
+  shell: sed -i "s/default_runtime_name = 'runc'/default_runtime_name = 'nvidia'/g" /etc/containerd/config.toml
+  when: 
+    - has_nvidia_gpu | default(false) | bool
+    - containerd_major_minor is version('2.2', '>=')
+  notify: restart containerd
 
 # Common configuration for all versions
 - name: Set custom containerd root path
@@ -272,20 +265,22 @@
     - containerd_major_minor is version('2.2', '<')
     - (containerd_registry_auth is defined and containerd_registry_auth | length > 0) or
       (insecure_registries is defined and insecure_registries | length > 0)
-  when: 
-    - (containerd_registry_auth is defined and containerd_registry_auth | length > 0) or
-      (insecure_registries is defined and insecure_registries | length > 0)
 
 - name: Reload systemd daemon (RHEL/CentOS after service file changes)
   systemd:
     daemon_reload: yes
   when: ansible_os_family == "RedHat"
 
-- name: Start and enable containerd service
+- name: Restart containerd service to apply configuration
   systemd:
     name: containerd
-    state: started
+    state: restarted
     enabled: yes
+    daemon_reload: yes
+
+- name: Wait for containerd to be ready after restart
+  pause:
+    seconds: 5
 
 - name: Set CONTAINERD_NAMESPACE environment variable globally
   lineinfile:
@@ -314,6 +309,44 @@
   wait_for:
     path: /run/containerd/containerd.sock
     timeout: 30
+
+- name: Verify containerd CRI plugin is working
+  shell: crictl --runtime-endpoint unix:///run/containerd/containerd.sock version
+  register: crictl_version
+  changed_when: false
+  failed_when: false
+  retries: 3
+  delay: 5
+  until: crictl_version.rc == 0
+
+- name: Display CRI plugin status
+  debug:
+    msg: "CRI plugin status: {{ 'Working' if crictl_version.rc == 0 else 'Failed - Restarting containerd' }}"
+
+- name: Force restart containerd if CRI plugin not working
+  systemd:
+    name: containerd
+    state: restarted
+  when: crictl_version.rc != 0
+
+- name: Wait after forced restart
+  pause:
+    seconds: 10
+  when: crictl_version.rc != 0
+
+- name: Verify CRI plugin after forced restart
+  shell: crictl --runtime-endpoint unix:///run/containerd/containerd.sock version
+  register: crictl_version_after_restart
+  changed_when: false
+  when: crictl_version.rc != 0
+
+- name: Fail if CRI plugin still not working
+  fail:
+    msg: "containerd CRI plugin is not responding. Check containerd logs with: journalctl -xeu containerd"
+  when: 
+    - crictl_version.rc != 0
+    - crictl_version_after_restart is defined
+    - crictl_version_after_restart.rc != 0
 
 # Insecure Registry Configuration (certs.d method)
 - name: Configure insecure registries using certs.d method
