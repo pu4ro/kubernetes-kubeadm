@@ -26,6 +26,42 @@
     - sysctl
     - kernel-modules
 
+# RHEL/CentOS specific: Disable SELinux
+- name: Disable SELinux immediately
+  ansible.builtin.command: setenforce 0
+  when: 
+    - ansible_os_family == "RedHat"
+    - ansible_selinux.status is defined
+    - ansible_selinux.status == "enabled"
+  failed_when: false
+  changed_when: false
+  tags:
+    - sysctl
+    - selinux
+
+- name: Disable SELinux permanently
+  ansible.builtin.lineinfile:
+    path: /etc/selinux/config
+    regexp: '^SELINUX='
+    line: 'SELINUX=disabled'
+    state: present
+  when: ansible_os_family == "RedHat"
+  tags:
+    - sysctl
+    - selinux
+
+# RHEL/CentOS specific: Disable firewalld
+- name: Stop and disable firewalld service
+  ansible.builtin.systemd:
+    name: firewalld
+    state: stopped
+    enabled: no
+  when: ansible_os_family == "RedHat"
+  failed_when: false
+  tags:
+    - sysctl
+    - firewall
+
 - name: Configure sysctl parameters for Kubernetes
   ansible.posix.sysctl:
     name: "{{ item.key }}"
