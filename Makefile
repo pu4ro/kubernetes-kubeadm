@@ -1,11 +1,12 @@
 .PHONY: help install install-step1 install-step2 install-step3 install-all
 .PHONY: reset ping check-cluster
 .PHONY: tag-ubuntu-repo tag-sysctl tag-packages tag-container tag-kubernetes tag-networking
-.PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials
+.PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials tag-nvidia
 .PHONY: tag-set-hostname tag-etc-hosts
 .PHONY: limit-master limit-workers
 .PHONY: command cmd-all cmd-masters cmd-workers cmd-installs cmd-host
 .PHONY: check-workers add-workers check-and-add-workers
+.PHONY: install-nvidia check-nvidia-gpu check-nvidia-driver reboot-gpu-nodes
 .PHONY: registry-start registry-stop registry-restart registry-status registry-remove registry-logs registry-init
 .PHONY: nfs-init nfs-install nfs-start nfs-stop nfs-restart nfs-status nfs-reload nfs-show-exports nfs-add-export nfs-remove
 .PHONY: ubuntu-repo-init ubuntu-repo-setup ubuntu-repo-remove ubuntu-repo-status ubuntu-repo-update-sources
@@ -37,6 +38,7 @@ help: ## 사용 가능한 Make 명령어 목록 표시
 	@echo "  \033[32mmake ping\033[0m              # 호스트 연결 테스트"
 	@echo "  \033[32mmake install\033[0m           # 전체 클러스터 설치"
 	@echo "  \033[32mmake check-cluster\033[0m     # 클러스터 상태 확인"
+	@echo "  \033[32mmake install-nvidia\033[0m    # NVIDIA GPU 드라이버 설치"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf ""} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-28s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1;33m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 	@echo ""
@@ -44,6 +46,7 @@ help: ## 사용 가능한 Make 명령어 목록 표시
 	@echo "  • 특정 호스트 명령: \033[36mmake cmd-host HOST=\"master1\" CMD=\"uptime\"\033[0m"
 	@echo "  • 모든 호스트 명령:  \033[36mmake cmd-all CMD=\"df -h\"\033[0m"
 	@echo "  • 레지스트리 시작:   \033[36mmake registry-init && make registry-start\033[0m"
+	@echo "  • NVIDIA 상태 확인:  \033[36mmake check-nvidia-gpu && make check-nvidia-driver\033[0m"
 	@echo ""
 	@echo "\033[1m더 많은 정보:\033[0m"
 	@echo "  README.md를 참조하거나 https://github.com/your-repo 방문"
@@ -114,6 +117,10 @@ tag-packages: ## OS 패키지 설치 (필수 시스템 패키지)
 tag-container: ## Containerd 설치 및 설정 (GPU 자동 감지 포함)
 	@echo "==> 컨테이너 런타임 설치 중..."
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags container
+
+tag-nvidia: ## NVIDIA GPU 드라이버 설치 (GPU 감지, 드라이버 설치, 검증)
+	@echo "==> NVIDIA GPU 드라이버 설치 중..."
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags install-nvidia-driver
 
 tag-docker-credentials: ## 레지스트리 인증 (nerdctl login + containerd 설정)
 	@echo "==> 레지스트리 인증 설정 중..."
@@ -226,6 +233,24 @@ reinstall-k8s: ## K8s만 재설치 (시스템 준비 완료 가정, k8s+networki
 update-registry: ## 레지스트리 설정 업데이트 (credentials + CoreDNS)
 	@echo "==> 레지스트리 설정 업데이트 중..."
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags docker-credentials,coredns-hosts
+
+install-nvidia: ## NVIDIA GPU 드라이버 설치 (tag-nvidia 별칭)
+	@echo "==> NVIDIA GPU 드라이버 설치 중..."
+	@echo "주의: group_vars/all.yml에서 enable_nvidia_driver_install: true 설정 확인"
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags install-nvidia-driver
+
+check-nvidia-gpu: ## NVIDIA GPU 감지 확인 (lspci | grep -i nvidia)
+	@echo "==> NVIDIA GPU 감지 확인 중..."
+	@ansible all -i $(INVENTORY) -m shell -a "lspci | grep -i nvidia || echo 'No NVIDIA GPU detected'" | grep -v ">>>"
+
+check-nvidia-driver: ## NVIDIA 드라이버 설치 확인 (nvidia-smi)
+	@echo "==> NVIDIA 드라이버 상태 확인 중..."
+	@ansible all -i $(INVENTORY) -m shell -a "nvidia-smi 2>/dev/null || echo 'NVIDIA driver not installed'" | grep -v ">>>"
+
+reboot-gpu-nodes: ## GPU 노드 재부팅 (NVIDIA 드라이버 활성화)
+	@echo "==> GPU 노드 재부팅 중..."
+	@read -p "정말로 GPU 노드를 재부팅하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	ansible all -i $(INVENTORY) -m reboot -a "msg='Rebooting for NVIDIA driver activation' reboot_timeout=600"
 
 dry-run: ## Dry-run 모드 (변경사항 미리보기, --check --diff)
 	@echo "==> Dry run 모드 실행 중..."
