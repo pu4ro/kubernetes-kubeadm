@@ -89,20 +89,125 @@
     path: /etc/containerd/config.toml
     state: absent
 
-- name: Write containerd configuration (NVIDIA support)
-  template:
-    src: containerd_nvidia.j2
-    dest: /etc/containerd/config.toml
-    mode: '0644'
+# Generate default containerd configuration
+- name: Generate default containerd configuration
+  shell: containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+
+# Step 1: Enable SystemdCgroup
+- name: Enable SystemdCgroup in containerd config
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+  notify: restart containerd
+
+# Step 2: Configure custom root path (if specified)
+- name: Set custom containerd root path
+  lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '^root = '
+    line: 'root = "{{ containerd_data_base_dir }}/{{ inventory_hostname }}"'
+    state: present
+  when: containerd_data_base_dir is defined and containerd_data_base_dir != ''
+  notify: restart containerd
+
+# Step 3: Configure pause image
+- name: Set custom pause image (sandbox_image)
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'sandbox_image = ".*?"'
+    replace: 'sandbox_image = "{{ pause_image }}"'
+  notify: restart containerd
+
+# Step 4: Add NVIDIA runtime configuration (if GPU detected)
+- name: Add NVIDIA runtime to containerd config
+  blockinfile:
+    path: /etc/containerd/config.toml
+    marker: "        # {mark} ANSIBLE MANAGED - NVIDIA RUNTIME"
+    insertafter: '^\s+\[plugins\."io\.containerd\.grpc\.v1\.cri"\.containerd\.runtimes\.runc\.options\]'
+    block: |2
+              
+              [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia]
+                runtime_type = "io.containerd.runc.v2"
+                [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
+                  BinaryName = "/usr/bin/nvidia-container-runtime"
+                  SystemdCgroup = true
+    state: present
   when: has_nvidia_gpu | default(false) | bool
   notify: restart containerd
 
-- name: Write containerd configuration (Standard)
-  template:
-    src: containerd_config.toml.j2
-    dest: /etc/containerd/config.toml
-    mode: '0644'
-  when: not (has_nvidia_gpu | default(false) | bool)
+# Step 5: Set default runtime to nvidia (if GPU detected)
+- name: Set default runtime to nvidia
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'default_runtime_name = "runc"'
+    replace: 'default_runtime_name = "nvidia"'
+  when: has_nvidia_gpu | default(false) | bool
+  notify: restart containerd
+
+# Step 6: Configure registry mirrors (if insecure_registries is defined)
+- name: Add registry mirrors configuration
+  blockinfile:
+    path: /etc/containerd/config.toml
+    marker: "      # {mark} ANSIBLE MANAGED - REGISTRY MIRRORS"
+    insertafter: '^\s+\[plugins\."io\.containerd\.grpc\.v1\.cri"\.registry\.mirrors\]'
+    block: |
+      {% if containerd_registry_auth is defined and containerd_registry_auth | length > 0 %}
+      {% for registry_config in containerd_registry_auth %}
+      {% if registry_config.insecure_skip_verify | default(true) %}
+            [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry_config.registry }}"]
+              endpoint = ["http://{{ registry_config.registry }}"]
+      {% else %}
+            [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry_config.registry }}"]
+              endpoint = ["https://{{ registry_config.registry }}"]
+      {% endif %}
+      {% endfor %}
+      {% elif insecure_registries is defined and insecure_registries | length > 0 %}
+      {% for registry in insecure_registries | unique %}
+            [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry }}"]
+              endpoint = ["http://{{ registry }}"]
+      {% endfor %}
+      {% endif %}
+    state: present
+  when: 
+    - (containerd_registry_auth is defined and containerd_registry_auth | length > 0) or
+      (insecure_registries is defined and insecure_registries | length > 0)
+  notify: restart containerd
+
+# Step 7: Configure registry authentication (if defined)
+- name: Add registry authentication configuration
+  blockinfile:
+    path: /etc/containerd/config.toml
+    marker: "      # {mark} ANSIBLE MANAGED - REGISTRY AUTH"
+    insertafter: '^\s+\[plugins\."io\.containerd\.grpc\.v1\.cri"\.registry\.configs\]'
+    block: |
+      {% if containerd_registry_auth is defined and containerd_registry_auth | length > 0 %}
+      {% for registry_config in containerd_registry_auth %}
+            [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry_config.registry }}".tls]
+              insecure_skip_verify = {{ registry_config.insecure_skip_verify | default(true) | lower }}
+            [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry_config.registry }}".auth]
+              username = "{{ registry_config.username | default('') }}"
+              password = "{{ registry_config.password | default('') }}"
+              auth = "{{ registry_config.auth | default('') }}"
+              identitytoken = "{{ registry_config.identitytoken | default('') }}"
+      {% endfor %}
+      {% elif insecure_registries is defined and insecure_registries | length > 0 %}
+      {% for registry in insecure_registries | unique %}
+            [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry }}".tls]
+              insecure_skip_verify = true
+            [plugins."io.containerd.grpc.v1.cri".registry.configs."{{ registry }}".auth]
+              username = ""
+              password = ""
+              auth = ""
+              identitytoken = ""
+      {% endfor %}
+      {% endif %}
+    state: present
+  when: 
+    - (containerd_registry_auth is defined and containerd_registry_auth | length > 0) or
+      (insecure_registries is defined and insecure_registries | length > 0)
   notify: restart containerd
 
 - name: Reload systemd daemon (RHEL/CentOS after service file changes)
