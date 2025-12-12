@@ -9,6 +9,7 @@
 .PHONY: nfs-init nfs-install nfs-start nfs-stop nfs-restart nfs-status nfs-reload nfs-show-exports nfs-add-export nfs-remove
 .PHONY: ubuntu-repo-init ubuntu-repo-setup ubuntu-repo-remove ubuntu-repo-status ubuntu-repo-update-sources
 .PHONY: apache-repo-install apache-repo-start apache-repo-stop apache-repo-restart apache-repo-status apache-repo-remove
+.PHONY: rhel-repo-init rhel-repo-setup rhel-repo-remove rhel-repo-status
 
 .DEFAULT_GOAL := help
 
@@ -428,3 +429,25 @@ apache-repo-status: ## Apache 서비스 상태 확인
 
 apache-repo-remove: ## Apache 저장소 설정 제거 [root 필요]
 	@sudo ./scripts/manage-ubuntu-repo.sh apache-remove
+
+##@ RHEL 로컬 저장소 관리
+
+rhel-repo-init: ## RHEL repo 설정 초기화 (.env.rhel-repo.example → .env.rhel-repo)
+	@if [ -f .env.rhel-repo ]; then \
+		echo "==> .env.rhel-repo 파일이 이미 존재합니다."; \
+		echo "기존 설정을 유지합니다. 재설정하려면 .env.rhel-repo를 삭제하세요."; \
+	else \
+		echo "==> .env.rhel-repo 파일 생성 중..."; \
+		cp .env.rhel-repo.example .env.rhel-repo; \
+		echo "==> .env.rhel-repo 파일이 생성되었습니다."; \
+		echo "필요에 따라 .env.rhel-repo 파일을 수정하세요."; \
+	fi
+
+rhel-repo-setup: ## RHEL 로컬 YUM 저장소 설정 (mv + chown + httpd config) [root 필요]
+	@sudo ./scripts/manage-rhel-repo.sh setup
+
+rhel-repo-remove: ## RHEL 로컬 저장소 설정 제거 [root 필요]
+	@sudo ./scripts/manage-rhel-repo.sh remove
+
+rhel-repo-status: ## RHEL 로컬 저장소 상태 확인 (디렉토리 + httpd 설정)
+	@./scripts/manage-rhel-repo.sh status
