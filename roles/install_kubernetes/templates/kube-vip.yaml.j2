@@ -64,7 +64,7 @@ spec:
   hostNetwork: true
   volumes:
   - hostPath:
-      path: /etc/kubernetes/super-admin.conf
+      path: {% if inventory_hostname == groups['masters'][0] %}/etc/kubernetes/super-admin.conf{% else %}/etc/kubernetes/admin.conf{% endif %}
     name: kubeconfig
 status: {}
 
