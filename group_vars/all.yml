@@ -404,6 +404,10 @@ ubuntu_optional_packages:
   - nerdctl
   - buildkit
 
+# Helmfile Installation (optional, master nodes only)
+# Enable with: enable_helmfile: true
+enable_helmfile: false  # Enable/disable helmfile installation
+
 # Ubuntu/Debian Master-only Packages (installed on 'installs' group)
 ubuntu_master_only_packages:
   - make

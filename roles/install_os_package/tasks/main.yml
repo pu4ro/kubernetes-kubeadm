@@ -113,7 +113,7 @@
   delay: 10
   ignore_errors: true
 
-# Install helmfile (distribution-specific package name)
+# Install helmfile (distribution-specific package name, optional)
 - name: Install helmfile on Debian/Ubuntu
   apt:
     name: "{{ package_name_map.helmfile.Debian }}"
@@ -121,6 +121,7 @@
   when:
     - ansible_os_family == "Debian"
     - inventory_hostname in groups['installs']
+    - enable_helmfile | default(false) | bool
   retries: 3
   delay: 10
   ignore_errors: true
@@ -132,6 +133,7 @@
   when:
     - ansible_os_family == "RedHat"
     - inventory_hostname in groups['installs']
+    - enable_helmfile | default(false) | bool
   retries: 3
   delay: 10
   ignore_errors: true
