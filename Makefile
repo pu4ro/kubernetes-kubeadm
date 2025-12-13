@@ -1,4 +1,5 @@
-.PHONY: help install install-step1 install-step2 install-step3 install-all
+.PHONY: help install install-step1 install-step2 install-step3 install-all install-minimal install-production
+.PHONY: configure-runway configure-gpu-full configure-security apply-all-configs
 .PHONY: reset ping check-cluster
 .PHONY: tag-ubuntu-repo tag-sysctl tag-packages tag-container tag-containerd-config tag-kubernetes tag-networking
 .PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials tag-nvidia tag-oidc-apiserver tag-label-gpu-nodes tag-registry-mirror
@@ -38,14 +39,20 @@ help: ## 사용 가능한 Make 명령어 목록 표시
 	@echo "  \033[32mmake ping\033[0m              # 호스트 연결 테스트"
 	@echo "  \033[32mmake install\033[0m           # 전체 클러스터 설치"
 	@echo "  \033[32mmake check-cluster\033[0m     # 클러스터 상태 확인"
-	@echo "  \033[32mmake install-nvidia\033[0m    # NVIDIA GPU 드라이버 설치"
+	@echo ""
+	@echo "\033[1m신규 기능 사용 (Runway 2.0+):\033[0m"
+	@echo "  \033[32mmake configure-runway\033[0m  # Runway 2.0+ 필수 설정 (레지스트리 미러)"
+	@echo "  \033[32mmake configure-gpu-full\033[0m # GPU 전체 설정 (드라이버+레이블)"
+	@echo "  \033[32mmake tag-oidc-apiserver\033[0m # OIDC 인증 설정"
+	@echo "  \033[32mmake tag-label-gpu-nodes\033[0m # GPU 노드 레이블링"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf ""} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-28s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1;33m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "\033[1m유용한 팁:\033[0m"
 	@echo "  • 특정 호스트 명령: \033[36mmake cmd-host HOST=\"master1\" CMD=\"uptime\"\033[0m"
 	@echo "  • 모든 호스트 명령:  \033[36mmake cmd-all CMD=\"df -h\"\033[0m"
-	@echo "  • 레지스트리 시작:   \033[36mmake registry-init && make registry-start\033[0m"
+	@echo "  • 모든 신규 설정:    \033[36mmake apply-all-configs\033[0m (확인 필요)"
+	@echo "  • GPU 전체 설정:     \033[36mmake configure-gpu-full\033[0m"
 	@echo "  • NVIDIA 상태 확인:  \033[36mmake check-nvidia-gpu && make check-nvidia-driver\033[0m"
 	@echo ""
 	@echo "\033[1m더 많은 정보:\033[0m"
@@ -91,6 +98,45 @@ install-minimal: ## 최소 구성 (sysctl + containerd + k8s + flannel)
 install-production: ## 프로덕션 설치 (전체 기능 + 인증서 + CoreDNS)
 	@echo "==> 프로덕션 전체 설치 중..."
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags sysctl,packages,container,docker-credentials,kubernetes,networking,k8s-certs,coredns-hosts
+
+##@ 신규 기능 조합 설치
+
+configure-runway: ## Runway 2.0+ 필수 설정 일괄 적용 (레지스트리 미러 + 인증 + CoreDNS)
+	@echo "==> Runway 2.0+ 환경 설정 중..."
+	@echo "주의: group_vars/all.yml에서 enable_registry_mirror: true 설정 확인"
+	@$(MAKE) tag-registry-mirror
+	@$(MAKE) tag-docker-credentials
+	@$(MAKE) tag-coredns
+
+configure-gpu-full: ## GPU 전체 설정 (드라이버 + containerd runtime + 노드 레이블)
+	@echo "==> GPU 전체 설정 중..."
+	@echo "주의: group_vars/all.yml에서 enable_nvidia_driver_install: true 설정 확인"
+	@$(MAKE) tag-nvidia
+	@$(MAKE) tag-containerd-config
+	@$(MAKE) tag-label-gpu-nodes
+
+configure-security: ## 보안/인증 설정 (OIDC + 인증서 연장)
+	@echo "==> 보안/인증 설정 중..."
+	@echo "주의: group_vars/all.yml에서 enable_oidc_apiserver: true 설정 확인"
+	@$(MAKE) tag-oidc-apiserver
+	@$(MAKE) tag-certs
+
+apply-all-configs: ## 모든 신규 설정 일괄 적용 (Runway + GPU + OIDC + 레이블)
+	@echo "==> 모든 신규 설정 적용 중..."
+	@echo ""
+	@echo "적용 순서:"
+	@echo "  1. 레지스트리 미러 (Runway 2.0+)"
+	@echo "  2. Containerd 설정 재적용"
+	@echo "  3. GPU 노드 레이블링"
+	@echo "  4. OIDC API 서버 설정"
+	@echo "  5. CoreDNS 호스트 설정"
+	@echo ""
+	@read -p "계속하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	@$(MAKE) tag-registry-mirror
+	@$(MAKE) tag-containerd-config
+	@$(MAKE) tag-label-gpu-nodes
+	@$(MAKE) tag-oidc-apiserver
+	@$(MAKE) tag-coredns
 
 ##@ Tag 기반 설치
 
