@@ -44,20 +44,20 @@
 
 - name: Install distribution-specific packages
   package:
-    name: "{{ package_map[item][ansible_os_family] }}"
+    name: "{{ package_name_map[item][ansible_os_family] }}"
     state: present
   loop:
     - nfs_client
     - time_sync
-  when: package_map[item][ansible_os_family] is defined
+  when: package_name_map[item][ansible_os_family] is defined
   ignore_errors: true
 
 # Master-only package installation (for installs group)
 - name: Install master-only packages on Debian/Ubuntu
   apt:
-    name: "{{ master_only_packages }}"
+    name: "{{ ubuntu_master_only_packages }}"
     state: present
-  when: 
+  when:
     - ansible_os_family == "Debian"
     - inventory_hostname in groups['installs']
   retries: 3
@@ -66,9 +66,9 @@
 
 - name: Install master-only packages on RHEL/CentOS
   package:
-    name: "{{ master_only_rhel_packages }}"
+    name: "{{ rhel_master_only_packages }}"
     state: present
-  when: 
+  when:
     - ansible_os_family == "RedHat"
     - inventory_hostname in groups['installs']
   retries: 3
@@ -78,9 +78,9 @@
 # Install helmfile (distribution-specific package name)
 - name: Install helmfile on Debian/Ubuntu
   apt:
-    name: "{{ package_map.helmfile.Debian }}"
+    name: "{{ package_name_map.helmfile.Debian }}"
     state: present
-  when: 
+  when:
     - ansible_os_family == "Debian"
     - inventory_hostname in groups['installs']
   retries: 3
@@ -89,9 +89,9 @@
 
 - name: Install helmfile on RHEL/CentOS
   package:
-    name: "{{ package_map.helmfile.RedHat }}"
+    name: "{{ package_name_map.helmfile.RedHat }}"
     state: present
-  when: 
+  when:
     - ansible_os_family == "RedHat"
     - inventory_hostname in groups['installs']
   retries: 3

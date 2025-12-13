@@ -374,4 +374,80 @@ registry_mirror_mappings:
   "registry.cn-hangzhou.aliyuncs.com": "registry-cn-hangzhou-aliyuncs-com"
   "registry.k8s.io": "registry-k8s-io"
 
+# OS Package Installation Configuration
+# Configure packages to install for Ubuntu/Debian and RHEL/CentOS systems
+# These lists are used by the install_os_package role
+
+# Ubuntu/Debian Packages
+ubuntu_packages:
+  - kubelet
+  - kubeadm
+  - kubectl
+  - bash-completion
+  - dnsmasq
+  - jq
+  - openssh-server
+  - ca-certificates
+  - nfs-common
+  - nfs-kernel-server
+  - net-tools
+  - containerd
+  - chrony
+  - curl
+  - wget
+  - k9s
+  - nerdctl
+  - buildkit
+
+# Ubuntu/Debian Master-only Packages (installed on 'installs' group)
+ubuntu_master_only_packages:
+  - make
+
+# RHEL/CentOS Required Packages
+rhel_packages:
+  - kubelet
+  - kubeadm
+  - kubectl
+  - bash-completion
+  - dnsmasq
+  - jq
+  - openssh-server
+  - ca-certificates
+  - tree
+  - device-mapper-persistent-data
+  - lvm2
+  - chrony
+  - curl
+  - wget
+  - which
+  - k9s
+
+# RHEL/CentOS Optional Packages (install if available, errors ignored)
+rhel_optional_packages:
+  - nfs-utils
+  - yum-utils
+
+# RHEL/CentOS Master-only Packages (installed on 'installs' group)
+rhel_master_only_packages:
+  - make
+
+# Package Name Mappings (for distribution-specific package names)
+# Used when package names differ between distributions
+package_name_map:
+  nfs_client:
+    Debian: nfs-common
+    RedHat: nfs-utils
+  nfs_server:
+    Debian: nfs-kernel-server
+    RedHat: nfs-utils
+  network_tools:
+    Debian: net-tools
+    RedHat: net-tools
+  time_sync:
+    Debian: chrony
+    RedHat: chrony
+  helmfile:
+    Debian: helmfile
+    RedHat: helmfile-bundle
+
 # ansible-playbook -i inventory.ini site.yml --tags coredns-hosts -e
