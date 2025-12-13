@@ -1,6 +1,6 @@
 .PHONY: help install install-step1 install-step2 install-step3 install-all
 .PHONY: reset ping check-cluster
-.PHONY: tag-ubuntu-repo tag-sysctl tag-packages tag-container tag-kubernetes tag-networking
+.PHONY: tag-ubuntu-repo tag-sysctl tag-packages tag-container tag-containerd-config tag-kubernetes tag-networking
 .PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials tag-nvidia
 .PHONY: tag-set-hostname tag-etc-hosts
 .PHONY: limit-master limit-workers
@@ -117,6 +117,10 @@ tag-packages: ## OS 패키지 설치 (필수 시스템 패키지)
 tag-container: ## Containerd 설치 및 설정 (GPU 자동 감지 포함)
 	@echo "==> 컨테이너 런타임 설치 중..."
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags container
+
+tag-containerd-config: ## Containerd 설정만 재적용 (NVIDIA runtime 포함, 재시작)
+	@echo "==> Containerd 설정 재적용 중..."
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags containerd-config
 
 tag-nvidia: ## NVIDIA GPU 드라이버 설치 (GPU 감지, 드라이버 설치, 검증)
 	@echo "==> NVIDIA GPU 드라이버 설치 중..."

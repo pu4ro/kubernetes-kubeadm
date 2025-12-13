@@ -83,6 +83,7 @@
 - name: Display containerd configuration mode
   debug:
     msg: "Configuring containerd with {{ 'NVIDIA GPU' if (has_nvidia_gpu | default(false) | bool and enable_nvidia_containerd_config | default(true) | bool) else 'standard' }} runtime (GPU detected: {{ has_nvidia_gpu | default(false) }}, NVIDIA config enabled: {{ enable_nvidia_containerd_config | default(true) }})"
+  tags: ['container', 'containerd-config']
 
 # Containerd Configuration
 # Detect containerd version and apply appropriate configuration
@@ -90,24 +91,29 @@
   shell: containerd --version | awk '{print $3}' | sed 's/v//'
   register: installed_containerd_version
   changed_when: false
+  tags: ['container', 'containerd-config']
 
 - name: Display detected containerd version
   debug:
     msg: "Detected containerd version: {{ installed_containerd_version.stdout }}"
+  tags: ['container', 'containerd-config']
 
 - name: Set containerd major version
   set_fact:
     containerd_major_minor: "{{ installed_containerd_version.stdout.split('.')[:2] | join('.') }}"
+  tags: ['container', 'containerd-config']
 
 - name: Display containerd major.minor version
   debug:
     msg: "Containerd major.minor version: {{ containerd_major_minor }}"
+  tags: ['container', 'containerd-config']
 
 # Backup existing config
 - name: Check if containerd config exists
   stat:
     path: /etc/containerd/config.toml
   register: containerd_config_stat
+  tags: ['container', 'containerd-config']
 
 - name: Backup existing containerd config
   copy:
@@ -115,6 +121,7 @@
     dest: /etc/containerd/config.toml.bak
     remote_src: yes
   when: containerd_config_stat.stat.exists
+  tags: ['container', 'containerd-config']
 
 # Generate containerd configuration using templates
 - name: Deploy containerd configuration (version < 2.2)
@@ -126,6 +133,7 @@
     mode: '0644'
   when: containerd_major_minor is version('2.2', '<')
   notify: restart containerd
+  tags: ['container', 'containerd-config']
 
 - name: Deploy containerd configuration (version >= 2.2)
   template:
@@ -136,6 +144,7 @@
     mode: '0644'
   when: containerd_major_minor is version('2.2', '>=')
   notify: restart containerd
+  tags: ['container', 'containerd-config']
 
 # Note: All configuration (root path, NVIDIA runtime, pause image, registry settings for v2)
 # is now handled by the templates (config_v2.toml.j2 and config_v3.toml.j2)
@@ -145,6 +154,7 @@
   systemd:
     daemon_reload: yes
   when: ansible_os_family == "RedHat"
+  tags: ['container', 'containerd-config']
 
 - name: Restart containerd service to apply configuration
   systemd:
@@ -152,10 +162,12 @@
     state: restarted
     enabled: yes
     daemon_reload: yes
+  tags: ['container', 'containerd-config']
 
 - name: Wait for containerd to be ready after restart
   pause:
     seconds: 5
+  tags: ['container', 'containerd-config']
 
 - name: Set CONTAINERD_NAMESPACE environment variable globally
   lineinfile:
@@ -184,6 +196,7 @@
   wait_for:
     path: /run/containerd/containerd.sock
     timeout: 30
+  tags: ['container', 'containerd-config']
 
 - name: Verify containerd CRI plugin is working
   shell: crictl --runtime-endpoint unix:///run/containerd/containerd.sock version
@@ -193,27 +206,32 @@
   retries: 3
   delay: 5
   until: crictl_version.rc == 0
+  tags: ['container', 'containerd-config']
 
 - name: Display CRI plugin status
   debug:
     msg: "CRI plugin status: {{ 'Working' if crictl_version.rc == 0 else 'Failed - Restarting containerd' }}"
+  tags: ['container', 'containerd-config']
 
 - name: Force restart containerd if CRI plugin not working
   systemd:
     name: containerd
     state: restarted
   when: crictl_version.rc != 0
+  tags: ['container', 'containerd-config']
 
 - name: Wait after forced restart
   pause:
     seconds: 10
   when: crictl_version.rc != 0
+  tags: ['container', 'containerd-config']
 
 - name: Verify CRI plugin after forced restart
   shell: crictl --runtime-endpoint unix:///run/containerd/containerd.sock version
   register: crictl_version_after_restart
   changed_when: false
   when: crictl_version.rc != 0
+  tags: ['container', 'containerd-config']
 
 - name: Fail if CRI plugin still not working
   fail:
@@ -222,6 +240,7 @@
     - crictl_version.rc != 0
     - crictl_version_after_restart is defined
     - crictl_version_after_restart.rc != 0
+  tags: ['container', 'containerd-config']
 
 # Insecure Registry Configuration (certs.d method)
 - name: Configure insecure registries using certs.d method
