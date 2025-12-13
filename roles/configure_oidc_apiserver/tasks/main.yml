@@ -1,0 +1,109 @@
+---
+# Configure OIDC Authentication for Kube-APIServer
+# This role modifies the kube-apiserver static pod manifest to add OIDC authentication
+
+- name: Check if kube-apiserver manifest exists
+  stat:
+    path: /etc/kubernetes/manifests/kube-apiserver.yaml
+  register: apiserver_manifest
+
+- name: Fail if kube-apiserver manifest not found
+  fail:
+    msg: "kube-apiserver manifest not found. Ensure Kubernetes is installed first."
+  when: not apiserver_manifest.stat.exists
+
+- name: Backup kube-apiserver manifest
+  copy:
+    src: /etc/kubernetes/manifests/kube-apiserver.yaml
+    dest: /etc/kubernetes/manifests/kube-apiserver.yaml.backup-{{ ansible_date_time.epoch }}
+    remote_src: yes
+    mode: '0600'
+
+- name: Read current kube-apiserver manifest
+  slurp:
+    src: /etc/kubernetes/manifests/kube-apiserver.yaml
+  register: apiserver_manifest_content
+
+- name: Parse kube-apiserver manifest
+  set_fact:
+    apiserver_yaml: "{{ apiserver_manifest_content.content | b64decode | from_yaml }}"
+
+- name: Display current API server command (first 5 args)
+  debug:
+    msg: "Current command: {{ apiserver_yaml.spec.containers[0].command[:5] }}"
+
+- name: Remove existing OIDC flags if present
+  set_fact:
+    apiserver_command_cleaned: "{{ apiserver_yaml.spec.containers[0].command | reject('match', '^--oidc-.*') | list | reject('match', '^--enable-admission-plugins=.*PodNodeSelector.*') | list }}"
+
+- name: Get current admission plugins
+  set_fact:
+    current_admission_plugins: "{{ apiserver_command_cleaned | select('match', '^--enable-admission-plugins=') | first | default('--enable-admission-plugins=NodeRestriction') }}"
+
+- name: Extract admission plugins value
+  set_fact:
+    admission_plugins_value: "{{ current_admission_plugins.split('=')[1] }}"
+
+- name: Add PodNodeSelector to admission plugins if enabled
+  set_fact:
+    new_admission_plugins: "{{ admission_plugins_value }},PodNodeSelector"
+  when: enable_pod_node_selector | default(false) | bool
+
+- name: Keep existing admission plugins if PodNodeSelector not enabled
+  set_fact:
+    new_admission_plugins: "{{ admission_plugins_value }}"
+  when: not (enable_pod_node_selector | default(false) | bool)
+
+- name: Remove old admission-plugins flag
+  set_fact:
+    apiserver_command_no_admission: "{{ apiserver_command_cleaned | reject('match', '^--enable-admission-plugins=') | list }}"
+
+- name: Build new API server command with OIDC flags
+  set_fact:
+    new_apiserver_command: "{{ apiserver_command_no_admission + ['--enable-admission-plugins=' + new_admission_plugins, '--oidc-client-id=' + oidc_client_id, '--oidc-username-claim=' + oidc_username_claim, '--oidc-groups-claim=' + oidc_groups_claim, '--oidc-issuer-url=' + oidc_issuer_url] }}"
+
+- name: Update API server manifest with new command
+  set_fact:
+    updated_apiserver_yaml: "{{ apiserver_yaml | combine({'spec': {'containers': [apiserver_yaml.spec.containers[0] | combine({'command': new_apiserver_command})]}}, recursive=True) }}"
+
+- name: Write updated kube-apiserver manifest
+  copy:
+    content: "{{ updated_apiserver_yaml | to_nice_yaml(indent=2) }}"
+    dest: /etc/kubernetes/manifests/kube-apiserver.yaml
+    mode: '0600'
+    owner: root
+    group: root
+  register: manifest_updated
+
+- name: Wait for API server to restart (Pod recreation by kubelet)
+  pause:
+    seconds: 30
+  when: manifest_updated.changed
+
+- name: Wait for API server to be ready
+  shell: |
+    timeout 120 bash -c 'until kubectl --kubeconfig /etc/kubernetes/admin.conf get --raw /healthz &> /dev/null; do sleep 2; done'
+  register: apiserver_health
+  changed_when: false
+  failed_when: false
+  when: manifest_updated.changed
+
+- name: Display API server health status
+  debug:
+    msg: "{{ 'API server is healthy' if apiserver_health.rc == 0 else 'API server health check failed - check logs with: kubectl -n kube-system logs kube-apiserver-' + inventory_hostname }}"
+  when: manifest_updated.changed
+
+- name: Verify OIDC configuration
+  shell: |
+    kubectl --kubeconfig /etc/kubernetes/admin.conf -n kube-system get pod -l component=kube-apiserver -o yaml | grep -A5 "oidc-issuer-url"
+  register: oidc_verification
+  changed_when: false
+  failed_when: false
+
+- name: Display OIDC verification result
+  debug:
+    msg: "{{ 'OIDC configured successfully' if oidc_verification.rc == 0 else 'OIDC configuration not found in API server pod' }}"
+
+- name: Display updated API server command (OIDC flags only)
+  debug:
+    msg: "{{ new_apiserver_command | select('match', '^--oidc-.*') | list }}"

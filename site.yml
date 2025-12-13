@@ -63,7 +63,15 @@
   roles:
     - { role: configure_coredns_hosts, tags: ['coredns-hosts'], when: configure_coredns_hosts | default(false) }
 
-# Phase 7: Harbor Project Setup (Final)
+# Phase 7: OIDC API Server Configuration (Optional, Sequential on Masters)
+- name: Configure OIDC Authentication for Kube-APIServer
+  hosts: masters
+  become: yes
+  serial: 1  # Execute one master at a time to avoid API server downtime
+  roles:
+    - { role: configure_oidc_apiserver, tags: ['oidc-apiserver'], when: enable_oidc_apiserver | default(false) }
+
+# Phase 8: Harbor Project Setup (Final)
 - name: Harbor Project Setup
   hosts: all
   become: yes

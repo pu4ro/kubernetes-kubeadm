@@ -277,4 +277,30 @@ registry_hosts:
 # CoreDNS Hosts Configuration (add registry hosts to CoreDNS)
 configure_coredns_hosts: true
 
+# OIDC Authentication Configuration for Kube-APIServer
+# Enable OIDC authentication for Kubernetes API server
+# This configures the API server to authenticate users via an external OIDC provider (e.g., Keycloak)
+#
+# Usage with tags:
+#   ansible-playbook site.yml --tags oidc-apiserver    # Configure OIDC only
+#
+enable_oidc_apiserver: false                           # Enable/disable OIDC configuration
+domain_host: "runway.test"                             # Base domain for OIDC issuer URL
+
+# OIDC Provider Configuration
+oidc_client_id: "kubernetes"                           # OIDC client ID registered in the provider
+oidc_username_claim: "preferred_username"              # JWT claim to use as username
+oidc_groups_claim: "client_roles"                      # JWT claim to use for group membership
+oidc_issuer_url: "https://keycloak.{{ domain_host }}/realms/runway"  # OIDC issuer URL
+
+# Additional OIDC settings (optional)
+# oidc_username_prefix: ""                             # Prefix for usernames (e.g., "oidc:")
+# oidc_groups_prefix: ""                               # Prefix for groups (e.g., "oidc:")
+# oidc_ca_file: ""                                     # Path to CA file for OIDC issuer (if self-signed)
+# oidc_required_claim: ""                              # Additional required claims (e.g., "groups=admins")
+
+# PodNodeSelector Admission Plugin
+# Enable PodNodeSelector admission plugin to restrict pod placement
+enable_pod_node_selector: false                        # Enable/disable PodNodeSelector plugin
+
 # ansible-playbook -i inventory.ini site.yml --tags coredns-hosts -e

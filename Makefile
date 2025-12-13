@@ -1,7 +1,7 @@
 .PHONY: help install install-step1 install-step2 install-step3 install-all
 .PHONY: reset ping check-cluster
 .PHONY: tag-ubuntu-repo tag-sysctl tag-packages tag-container tag-containerd-config tag-kubernetes tag-networking
-.PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials tag-nvidia
+.PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials tag-nvidia tag-oidc-apiserver
 .PHONY: tag-set-hostname tag-etc-hosts
 .PHONY: limit-master limit-workers
 .PHONY: command cmd-all cmd-masters cmd-workers cmd-installs cmd-host
@@ -145,6 +145,11 @@ tag-certs: ## K8s 인증서 10년 연장 (API server, controller 등)
 tag-coredns: ## CoreDNS 호스트 설정 (레지스트리 도메인 추가)
 	@echo "==> CoreDNS 설정 중..."
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags coredns-hosts
+
+tag-oidc-apiserver: ## OIDC 인증 설정 (API 서버에 OIDC 옵션 추가, 순차 실행)
+	@echo "==> OIDC API 서버 설정 중..."
+	@echo "주의: group_vars/all.yml에서 enable_oidc_apiserver: true 설정 확인"
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags oidc-apiserver
 
 tag-harbor: ## Harbor 프로젝트 자동 생성
 	@echo "==> Harbor 프로젝트 설정 중..."
