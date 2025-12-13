@@ -1,0 +1,63 @@
+---
+# Label GPU Nodes with gpu=on
+# This role automatically adds 'gpu=on' label to nodes with NVIDIA GPU
+
+- name: Check if has_nvidia_gpu fact exists
+  debug:
+    msg: "GPU detection fact: {{ has_nvidia_gpu | default('not set') }}"
+
+- name: Detect NVIDIA GPU if fact not set
+  shell: lspci | grep -i NVIDIA
+  register: nvidia_gpu_check
+  ignore_errors: true
+  changed_when: false
+  when: has_nvidia_gpu is not defined
+
+- name: Set has_nvidia_gpu fact if not already set
+  set_fact:
+    has_nvidia_gpu: "{{ nvidia_gpu_check.rc == 0 }}"
+    cacheable: yes
+  when: has_nvidia_gpu is not defined
+
+- name: Display GPU detection result
+  debug:
+    msg: "{{ 'NVIDIA GPU detected on ' + inventory_hostname if has_nvidia_gpu | default(false) | bool else 'No NVIDIA GPU detected on ' + inventory_hostname }}"
+
+- name: Label node with gpu=on (if GPU detected)
+  shell: |
+    kubectl label node {{ inventory_hostname }} gpu=on --overwrite
+  delegate_to: "{{ groups['masters'][0] }}"
+  when:
+    - has_nvidia_gpu | default(false) | bool
+    - enable_gpu_node_labels | default(true) | bool
+  changed_when: true
+  register: label_result
+
+- name: Display label result
+  debug:
+    msg: "{{ 'Node ' + inventory_hostname + ' labeled with gpu=on' if label_result is changed else 'Skipped labeling for ' + inventory_hostname }}"
+  when: has_nvidia_gpu | default(false) | bool
+
+- name: Remove gpu label from node (if no GPU detected)
+  shell: |
+    kubectl label node {{ inventory_hostname }} gpu- || true
+  delegate_to: "{{ groups['masters'][0] }}"
+  when:
+    - not (has_nvidia_gpu | default(false) | bool)
+    - enable_gpu_node_labels | default(true) | bool
+  changed_when: false
+  failed_when: false
+
+- name: Verify GPU node labels
+  shell: kubectl get nodes -l gpu=on -o custom-columns=NAME:.metadata.name,GPU:.metadata.labels.gpu --no-headers
+  delegate_to: "{{ groups['masters'][0] }}"
+  register: gpu_labeled_nodes
+  changed_when: false
+  run_once: true
+
+- name: Display GPU-labeled nodes
+  debug:
+    msg: |
+      GPU-labeled nodes:
+      {{ gpu_labeled_nodes.stdout if gpu_labeled_nodes.stdout != '' else 'No nodes labeled with gpu=on' }}
+  run_once: true

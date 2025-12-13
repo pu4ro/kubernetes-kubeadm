@@ -49,6 +49,13 @@
   roles:
     - { role: remove_master_taint, tags: ['kubernetes', 'scheduling'], when: allow_master_scheduling | default(false) }
 
+# Phase 4.5: GPU Node Labeling (Optional)
+- name: Label GPU Nodes
+  hosts: all
+  become: yes
+  roles:
+    - { role: label_gpu_nodes, tags: ['kubernetes', 'label-gpu-nodes'], when: enable_gpu_node_labels | default(true) }
+
 # Phase 5: Certificate Extension (Optional)
 - name: Extend Kubernetes Certificates to 10 Years
   hosts: masters

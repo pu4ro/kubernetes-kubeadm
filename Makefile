@@ -1,7 +1,7 @@
 .PHONY: help install install-step1 install-step2 install-step3 install-all
 .PHONY: reset ping check-cluster
 .PHONY: tag-ubuntu-repo tag-sysctl tag-packages tag-container tag-containerd-config tag-kubernetes tag-networking
-.PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials tag-nvidia tag-oidc-apiserver
+.PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials tag-nvidia tag-oidc-apiserver tag-label-gpu-nodes
 .PHONY: tag-set-hostname tag-etc-hosts
 .PHONY: limit-master limit-workers
 .PHONY: command cmd-all cmd-masters cmd-workers cmd-installs cmd-host
@@ -158,6 +158,10 @@ tag-harbor: ## Harbor 프로젝트 자동 생성
 tag-scheduling: ## Master 노드 Pod 스케줄링 허용 (taint 제거)
 	@echo "==> Master 노드 스케줄링 설정 중..."
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags scheduling
+
+tag-label-gpu-nodes: ## GPU 노드에 gpu=on 레이블 추가 (자동 감지)
+	@echo "==> GPU 노드 레이블링 중..."
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags label-gpu-nodes
 
 tag-local-registry: registry-start ## [DEPRECATED] registry-start 사용 권장
 
