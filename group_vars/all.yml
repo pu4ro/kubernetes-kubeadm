@@ -422,6 +422,14 @@ rhel_packages:
   - which
   - k9s
 
+# RHEL/CentOS 8 Specific Packages (version-pinned)
+rhel8_packages:
+  - containerd.io-1.6.32-3.1.el8
+
+# RHEL/CentOS 9 Specific Packages
+rhel9_packages:
+  - containerd.io
+
 # RHEL/CentOS Optional Packages (install if available, errors ignored)
 rhel_optional_packages:
   - nfs-utils

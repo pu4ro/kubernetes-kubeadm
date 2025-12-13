@@ -34,6 +34,30 @@
   delay: 10
   until: yum_install_result is succeeded
 
+- name: Install RHEL 8 specific packages (containerd.io)
+  package:
+    name: "{{ rhel8_packages }}"
+    state: present
+  when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version == "8"
+  register: yum_rhel8_install_result
+  retries: 3
+  delay: 10
+  until: yum_rhel8_install_result is succeeded
+
+- name: Install RHEL 9 specific packages (containerd.io)
+  package:
+    name: "{{ rhel9_packages }}"
+    state: present
+  when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version == "9"
+  register: yum_rhel9_install_result
+  retries: 3
+  delay: 10
+  until: yum_rhel9_install_result is succeeded
+
 - name: Install optional packages on RHEL/CentOS
   package:
     name: "{{ rhel_optional_packages }}"

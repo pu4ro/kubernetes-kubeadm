@@ -15,32 +15,8 @@
   ignore_errors: yes
   tags: ['base', 'container']
 
-# Phase 2: Install containerd package
-- name: Install containerd package (Ubuntu/Debian)
-  apt:
-    name: containerd
-    state: present
-    update_cache: yes
-  when: ansible_os_family == "Debian"
-  register: containerd_install_ubuntu
-
-- name: Install containerd.io package (RHEL 8)
-  yum:
-    name: containerd.io-1.6.32-3.1.el8
-    state: present
-  when: 
-    - ansible_os_family == "RedHat"
-    - ansible_distribution_major_version == "8"
-  register: containerd_install_rhel8
-
-- name: Install containerd.io package (RHEL 9)
-  yum:
-    name: containerd.io
-    state: present
-  when: 
-    - ansible_os_family == "RedHat"
-    - ansible_distribution_major_version == "9"
-  register: containerd_install_rhel9
+# Phase 2: Containerd package installation is now handled by install_os_package role
+# This role only handles containerd configuration
 
 # RHEL-specific systemd service limits configuration
 - name: Ensure LimitNPROC is set to 100000 (RHEL/CentOS only)
