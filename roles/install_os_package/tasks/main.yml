@@ -24,6 +24,20 @@
   until: apt_install_result is succeeded
   throttle: "{{ 999 if (parallel_execution | default({})).package_installation | default(1) == 0 else (parallel_execution | default({})).package_installation | default(1) }}"
 
+- name: Install optional packages on Debian/Ubuntu (nerdctl, buildkit)
+  apt:
+    name: "{{ ubuntu_optional_packages }}"
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - enable_nerdctl_buildkit | default(false) | bool
+  register: apt_optional_install_result
+  retries: 5
+  delay: 30
+  until: apt_optional_install_result is succeeded
+  ignore_errors: yes
+  throttle: "{{ 999 if (parallel_execution | default({})).package_installation | default(1) == 0 else (parallel_execution | default({})).package_installation | default(1) }}"
+
 - name: Install packages on RHEL/CentOS
   package:
     name: "{{ rhel_packages }}"

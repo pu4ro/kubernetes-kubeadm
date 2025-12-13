@@ -396,6 +396,11 @@ ubuntu_packages:
   - curl
   - wget
   - k9s
+
+# Ubuntu/Debian Optional Packages (installed when enabled)
+# Enable with: enable_nerdctl_buildkit: true
+enable_nerdctl_buildkit: false  # Enable/disable nerdctl and buildkit installation
+ubuntu_optional_packages:
   - nerdctl
   - buildkit
 
