@@ -229,8 +229,12 @@ gpu_operator_namespace: "gpu-operator"
 gpu_operator_chart_path: "./gpu-operator"
 gpu_operator_driver_enabled: false  # Set to false when installing driver manually
 
-# NVIDIA runtime support for containerd
-# GPU will be auto-detected via lspci, no manual configuration needed
+# NVIDIA Containerd Runtime Configuration
+# Enable NVIDIA runtime support in containerd configuration
+# When enabled, containerd will be configured with NVIDIA runtime if GPU is detected
+# GPU detection is automatic via lspci, but this setting controls whether to apply the configuration
+# Set to false to disable NVIDIA runtime configuration even if GPU is detected
+enable_nvidia_containerd_config: false  # Enable/disable NVIDIA runtime in containerd config
 
 # Docker Registry Credentials Configuration
 # Set docker_login_required to true to enable registry authentication

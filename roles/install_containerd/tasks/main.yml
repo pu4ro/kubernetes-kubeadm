@@ -82,7 +82,7 @@
 
 - name: Display containerd configuration mode
   debug:
-    msg: "Configuring containerd with {{ 'NVIDIA GPU' if (has_nvidia_gpu | default(false) | bool) else 'standard' }} runtime (auto-detected)"
+    msg: "Configuring containerd with {{ 'NVIDIA GPU' if (has_nvidia_gpu | default(false) | bool and enable_nvidia_containerd_config | default(true) | bool) else 'standard' }} runtime (GPU detected: {{ has_nvidia_gpu | default(false) }}, NVIDIA config enabled: {{ enable_nvidia_containerd_config | default(true) }})"
 
 # Containerd Configuration
 # Detect containerd version and apply appropriate configuration

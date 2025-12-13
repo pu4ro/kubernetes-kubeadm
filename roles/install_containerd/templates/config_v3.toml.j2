@@ -77,7 +77,7 @@ imports = ['/etc/containerd/conf.d/*.toml']
     ignore_deprecation_warnings = []
 
     [plugins.'io.containerd.cri.v1.runtime'.containerd]
-      default_runtime_name = '{% if has_nvidia_gpu | default(false) | bool %}nvidia{% else %}runc{% endif %}'
+      default_runtime_name = '{% if has_nvidia_gpu | default(false) | bool and enable_nvidia_containerd_config | default(true) | bool %}nvidia{% else %}runc{% endif %}'
       ignore_blockio_not_enabled_errors = false
       ignore_rdt_not_enabled_errors = false
 
@@ -108,7 +108,7 @@ imports = ['/etc/containerd/conf.d/*.toml']
             ShimCgroup = ''
             SystemdCgroup = true
 
-{% if has_nvidia_gpu | default(false) | bool %}
+{% if has_nvidia_gpu | default(false) | bool and enable_nvidia_containerd_config | default(true) | bool %}
         [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.nvidia]
           runtime_type = 'io.containerd.runc.v2'
           runtime_path = ''

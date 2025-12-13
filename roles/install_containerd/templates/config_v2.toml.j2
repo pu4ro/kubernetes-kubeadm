@@ -81,7 +81,7 @@ version = 2
       setup_serially = false
 
     [plugins."io.containerd.grpc.v1.cri".containerd]
-      default_runtime_name = "{% if has_nvidia_gpu | default(false) | bool %}nvidia{% else %}runc{% endif %}"
+      default_runtime_name = "{% if has_nvidia_gpu | default(false) | bool and enable_nvidia_containerd_config | default(true) | bool %}nvidia{% else %}runc{% endif %}"
       disable_snapshot_annotations = true
       discard_unpacked_layers = false
       ignore_blockio_not_enabled_errors = false
@@ -135,7 +135,7 @@ version = 2
             ShimCgroup = ""
             SystemdCgroup = true
 
-{% if has_nvidia_gpu | default(false) | bool %}
+{% if has_nvidia_gpu | default(false) | bool and enable_nvidia_containerd_config | default(true) | bool %}
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia]
           base_runtime_spec = ""
           cni_conf_dir = ""
