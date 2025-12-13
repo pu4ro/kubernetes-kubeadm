@@ -1,7 +1,7 @@
 .PHONY: help install install-step1 install-step2 install-step3 install-all
 .PHONY: reset ping check-cluster
 .PHONY: tag-ubuntu-repo tag-sysctl tag-packages tag-container tag-containerd-config tag-kubernetes tag-networking
-.PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials tag-nvidia tag-oidc-apiserver tag-label-gpu-nodes
+.PHONY: tag-certs tag-coredns tag-harbor tag-docker-credentials tag-nvidia tag-oidc-apiserver tag-label-gpu-nodes tag-registry-mirror
 .PHONY: tag-set-hostname tag-etc-hosts
 .PHONY: limit-master limit-workers
 .PHONY: command cmd-all cmd-masters cmd-workers cmd-installs cmd-host
@@ -121,6 +121,12 @@ tag-container: ## Containerd 설치 및 설정 (GPU 자동 감지 포함)
 tag-containerd-config: ## Containerd 설정만 재적용 (NVIDIA runtime 포함, 재시작)
 	@echo "==> Containerd 설정 재적용 중..."
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags containerd-config
+
+tag-registry-mirror: ## Containerd 레지스트리 미러 설정 (Runway 2.0+ 필수)
+	@echo "==> 레지스트리 미러 설정 중..."
+	@echo "주의: Runway 2.0+ 환경에서 필수 설정입니다"
+	@echo "주의: group_vars/all.yml에서 enable_registry_mirror: true 설정 확인"
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags registry-mirror
 
 tag-nvidia: ## NVIDIA GPU 드라이버 설치 (GPU 감지, 드라이버 설치, 검증)
 	@echo "==> NVIDIA GPU 드라이버 설치 중..."

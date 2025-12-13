@@ -1,0 +1,10 @@
+server = "{{ server_url }}"
+
+[host."https://{{ registry_mirror_host }}/v2/{{ internal_repo_path }}"]
+  capabilities = ["pull", "resolve"]
+  override_path = true
+  [host."https://{{ registry_mirror_host }}/v2/{{ internal_repo_path }}".header]
+    authorization = "Basic {{ registry_mirror_auth_b64 }}"
+
+[host."{{ mirror_host }}"]
+  capabilities = ["pull", "resolve"]

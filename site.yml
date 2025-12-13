@@ -16,6 +16,7 @@
     - { role: configure_sysctl, tags: ['base', 'sysctl'] }
     - { role: install_os_package, tags: ['base', 'packages'] }
     - { role: install_containerd, tags: ['base', 'container'] }
+    - { role: configure_registry_mirror, tags: ['registry-mirror'], when: enable_registry_mirror | default(false) }
     - { role: install_nvidia_driver, tags: ['nvidia', 'install-nvidia-driver'], when: enable_nvidia_driver_install | default(false) }
     - { role: setup-docker-credentials, tags: ['docker-credentials'] }
 
