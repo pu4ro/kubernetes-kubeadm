@@ -326,7 +326,7 @@ configure_coredns_hosts: true
 # Usage with tags:
 #   ansible-playbook site.yml --tags oidc-apiserver    # Configure OIDC only
 #
-enable_oidc_apiserver: false                           # Enable/disable OIDC configuration
+enable_oidc_apiserver: true                           # Enable/disable OIDC configuration
 domain_host: "runway.test"                             # Base domain for OIDC issuer URL
 
 # OIDC Provider Configuration
@@ -343,7 +343,7 @@ oidc_issuer_url: "https://keycloak.{{ domain_host }}/realms/runway"  # OIDC issu
 
 # PodNodeSelector Admission Plugin
 # Enable PodNodeSelector admission plugin to restrict pod placement
-enable_pod_node_selector: false                        # Enable/disable PodNodeSelector plugin
+enable_pod_node_selector: true                        # Enable/disable PodNodeSelector plugin
 
 # Containerd Registry Mirror Configuration
 # IMPORTANT: This configuration is REQUIRED for Runway 2.0+ environments
