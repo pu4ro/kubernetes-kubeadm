@@ -277,6 +277,12 @@
       until: "'True' in node_ready_status.stdout"
       when: hostvars['worker_status_holder']['workers_to_add'] | length > 0
 
+    - name: Add worker role label to newly added worker nodes
+      command: kubectl label node {{ item }} node-role.kubernetes.io/worker= --overwrite
+      with_items: "{{ hostvars['worker_status_holder']['workers_to_add'] }}"
+      when: hostvars['worker_status_holder']['workers_to_add'] | length > 0
+      ignore_errors: true
+
     - name: Display success message
       debug:
         msg:

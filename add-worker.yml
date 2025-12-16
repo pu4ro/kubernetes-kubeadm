@@ -222,6 +222,11 @@
       delay: 15
       until: "'True' in node_ready_status.stdout"
 
+    - name: Add worker role label to worker nodes
+      command: kubectl label node {{ item }} node-role.kubernetes.io/worker= --overwrite
+      with_items: "{{ groups['workers'] }}"
+      ignore_errors: true
+
     - name: Display success message
       debug:
         msg:

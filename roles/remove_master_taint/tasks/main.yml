@@ -33,3 +33,15 @@
     msg: "Taint removal completed for {{ master_node_list | length }} node(s)"
   when: master_node_list | length > 0
 
+- name: Add worker role label to master/control-plane nodes
+  command: kubectl label node {{ item }} node-role.kubernetes.io/worker= --overwrite
+  loop: "{{ master_node_list }}"
+  when: master_node_list | length > 0
+  ignore_errors: true
+  register: label_addition_result
+
+- name: Display worker label addition results
+  debug:
+    msg: "Worker role label added to {{ master_node_list | length }} master node(s)"
+  when: master_node_list | length > 0
+
