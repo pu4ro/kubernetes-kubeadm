@@ -265,19 +265,17 @@
   apt:
     name: nerdctl
     state: present
-  when: 
-    - ansible_os_family == "Debian"
-    - containerd_install_ubuntu is succeeded
+  when: ansible_os_family == "Debian"
   register: nerdctl_install_ubuntu
+  ignore_errors: yes
 
 - name: Install nerdctl package (RHEL/CentOS)
   yum:
     name: nerdctl
     state: present
-  when: 
-    - ansible_os_family == "RedHat"
-    - (containerd_install_rhel8 is succeeded) or (containerd_install_rhel9 is succeeded)
+  when: ansible_os_family == "RedHat"
   register: nerdctl_install_rhel
+  ignore_errors: yes
 
 - name: Verify nerdctl installation
   command: nerdctl --version
@@ -339,11 +337,17 @@
   changed_when: false
   failed_when: false
 
+- name: Check containerd installation
+  command: containerd --version
+  register: containerd_check
+  changed_when: false
+  failed_when: false
+
 - name: Display installation status
   debug:
     msg: |
       Installation completed:
-      - containerd: {{ 'INSTALLED' if (containerd_install_ubuntu is succeeded) or (containerd_install_rhel is succeeded) else 'FAILED' }}
-      - nerdctl: {{ 'INSTALLED' if nerdctl_version_check is succeeded else 'FAILED' }}
-      - buildkit: {{ 'INSTALLED' if (buildkit_install_ubuntu is succeeded) or (buildkit_install_rhel is succeeded) else 'FAILED' }}
+      - containerd: {{ 'INSTALLED' if containerd_check.rc == 0 else 'NOT FOUND' }}
+      - nerdctl: {{ 'INSTALLED' if nerdctl_version_check is succeeded else 'SKIPPED/FAILED' }}
+      - buildkit: {{ 'INSTALLED' if (buildkit_install_ubuntu is succeeded) or (buildkit_install_rhel is succeeded) else 'SKIPPED/FAILED' }}
       - Test: {{ 'PASSED' if containerd_test.rc == 0 else 'FAILED' }}
