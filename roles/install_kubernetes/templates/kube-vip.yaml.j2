@@ -28,7 +28,7 @@ spec:
     - name: cp_namespace
       value: kube-system
     - name: svc_enable
-      value: "true"
+      value: "{{ kube_vip_svc_enable | default(false) | lower }}"
     - name: svc_leasename
       value: plndr-svcs-lock
     - name: vip_leaderelection

@@ -23,6 +23,7 @@ master_ha: true
 kube_vip_port: 6443
 kube_vip_interface: ens18
 kube_vip_address: 192.168.135.69  # Uncomment for HA setup
+kube_vip_svc_enable: false         # Enable/disable kube-vip service load balancing (true/false)
 
 # Container Runtime Configuration
 # Supported containerd versions:
@@ -353,7 +354,7 @@ enable_pod_node_selector: true                        # Enable/disable PodNodeSe
 # Usage with tags:
 #   ansible-playbook site.yml --tags registry-mirror    # Configure mirrors
 #
-enable_registry_mirror: false                          # Enable/disable registry mirror configuration
+enable_registry_mirror: true                          # Enable/disable registry mirror configuration
 registry_mirror_host: "cr.makina.rocks"                # Internal registry host
 registry_mirror_user: "mrx.dev"                        # Registry username
 registry_mirror_password: "GMflzHdAeR3KhGgXoecXR3lTKO0lSX5O"  # Registry password
