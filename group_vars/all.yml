@@ -353,30 +353,26 @@ enable_pod_node_selector: true                        # Enable/disable PodNodeSe
 # Usage with tags:
 #   ansible-playbook site.yml --tags registry-mirror    # Configure mirrors
 #
-enable_registry_mirror: true                         # Enable/disable registry mirror configuration
+enable_registry_mirror: false                          # Enable/disable registry mirror configuration
+registry_mirror_host: "cr.makina.rocks"                # Internal registry host
+registry_mirror_user: "mrx.dev"                        # Registry username
+registry_mirror_password: "GMflzHdAeR3KhGgXoecXR3lTKO0lSX5O"  # Registry password
+registry_mirror_path_prefix: ""                        # Optional path prefix (e.g., "myproject")
 
-# Registry Mirror Configuration
-# Consolidated configuration for internal registry mirror settings
-registry_mirror:
-  host: "cr.makina.rocks"                              # Internal registry host
-  user: "mrx.dev"                                      # Registry username
-  password: "GMflzHdAeR3KhGgXoecXR3lTKO0lSX5O"         # Registry password
-  path_prefix: ""                                      # Optional path prefix (e.g., "myproject")
-  
-  # Registry Mappings (External Registry -> Internal Repository)
-  # Maps external registry domains to internal repository paths
-  # Format: "external.registry.io": "internal-repo-name"
-  mappings:
-    "docker.io": "docker-io"
-    "cr.fluentbit.io": "cr-fluentbit-io"
-    "docker.getcollate.io": "docker-getcollate-io"
-    "docker.gitea.com": "docker-gitea-com"
-    "ecr-public.aws.com": "ecr-public-aws-com"
-    "ghcr.io": "ghcr-io"
-    "nvcr.io": "nvcr-io"
-    "quay.io": "quay-io"
-    "registry.cn-hangzhou.aliyuncs.com": "registry-cn-hangzhou-aliyuncs-com"
-    "registry.k8s.io": "registry-k8s-io"
+# Registry Mappings (External Registry -> Internal Repository)
+# Maps external registry domains to internal repository paths
+# Format: "external.registry.io": "internal-repo-name"
+registry_mirror_mappings:
+  "docker.io": "docker-io"
+  "cr.fluentbit.io": "cr-fluentbit-io"
+  "docker.getcollate.io": "docker-getcollate-io"
+  "docker.gitea.com": "docker-gitea-com"
+  "ecr-public.aws.com": "ecr-public-aws-com"
+  "ghcr.io": "ghcr-io"
+  "nvcr.io": "nvcr-io"
+  "quay.io": "quay-io"
+  "registry.cn-hangzhou.aliyuncs.com": "registry-cn-hangzhou-aliyuncs-com"
+  "registry.k8s.io": "registry-k8s-io"
 
 # OS Package Installation Configuration
 # Configure packages to install for Ubuntu/Debian and RHEL/CentOS systems
