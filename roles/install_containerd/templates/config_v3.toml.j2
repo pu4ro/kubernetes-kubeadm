@@ -51,7 +51,7 @@ imports = ['/etc/containerd/conf.d/*.toml']
       sandbox = '{{ pause_image }}'
 
     [plugins.'io.containerd.cri.v1.images'.registry]
-      config_path = '/etc/containerd/certs.d:/etc/docker/certs.d'
+      config_path = '/etc/containerd/certs.d/'
 
     [plugins.'io.containerd.cri.v1.images'.image_decryption]
       key_model = 'node'
