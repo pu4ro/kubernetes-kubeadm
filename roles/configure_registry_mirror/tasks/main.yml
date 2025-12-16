@@ -15,16 +15,16 @@
 
 - name: Generate base64 encoded basic auth credentials
   set_fact:
-    registry_mirror_auth_b64: "{{ (registry_mirror_user + ':' + registry_mirror_password) | b64encode }}"
+    registry_mirror_auth_b64: "{{ (registry_mirror.user + ':' + registry_mirror.password) | b64encode }}"
   no_log: true
 
 - name: Display registry mirror configuration
   debug:
     msg: |
       Configuring registry mirrors:
-      - Internal registry: {{ registry_mirror_host }}
-      - Path prefix: {{ registry_mirror_path_prefix | default('none') }}
-      - Registries: {{ registry_mirror_mappings.keys() | list | join(', ') }}
+      - Internal registry: {{ registry_mirror.host }}
+      - Path prefix: {{ registry_mirror.path_prefix | default('none') }}
+      - Registries: {{ registry_mirror.mappings.keys() | list | join(', ') }}
 
 - name: Create registry-specific directories
   file:
@@ -33,7 +33,7 @@
     owner: root
     group: root
     mode: '0755'
-  loop: "{{ registry_mirror_mappings | dict2items }}"
+  loop: "{{ registry_mirror.mappings | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
 
@@ -44,13 +44,13 @@
     owner: root
     group: root
     mode: '0644'
-  loop: "{{ registry_mirror_mappings | dict2items }}"
+  loop: "{{ registry_mirror.mappings | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
   vars:
     external_host: "{{ item.key }}"
     internal_repo: "{{ item.value }}"
-    internal_repo_path: "{{ (registry_mirror_path_prefix + '/' + item.value) if registry_mirror_path_prefix else item.value }}"
+    internal_repo_path: "{{ (registry_mirror.path_prefix + '/' + item.value) if registry_mirror.path_prefix else item.value }}"
     # docker.io uses different server/mirror URLs
     server_url: "{{ 'https://docker.io' if item.key == 'docker.io' else 'https://' + item.key }}"
     mirror_host: "{{ 'https://registry-1.docker.io' if item.key == 'docker.io' else 'https://' + item.key }}"
@@ -77,6 +77,6 @@
   debug:
     msg: |
       Registry mirror configuration completed:
-      - Configured registries: {{ registry_mirror_mappings | length }}
+      - Configured registries: {{ registry_mirror.mappings | length }}
       - Configuration directory: /etc/containerd/certs.d
       - Containerd status: {{ 'running' if containerd_status.status.ActiveState == 'active' else 'not running' }}
