@@ -497,6 +497,33 @@ httpd_install() {
     yum install -y "$HTTPD_PACKAGE"
     echo -e "${GREEN}httpd installed successfully${NC}"
 
+    # Disable default ports 80 and 443
+    echo -e "${BLUE}Disabling default ports 80 and 443${NC}"
+    
+    # Disable Listen 80 in main httpd.conf
+    if [ -f /etc/httpd/conf/httpd.conf ]; then
+        if grep -q "^Listen 80" /etc/httpd/conf/httpd.conf; then
+            sed -i 's/^Listen 80/#Listen 80/' /etc/httpd/conf/httpd.conf
+            echo -e "${GREEN}Disabled Listen 80 in /etc/httpd/conf/httpd.conf${NC}"
+        else
+            echo -e "${YELLOW}Listen 80 already disabled or not found in httpd.conf${NC}"
+        fi
+    fi
+    
+    # Disable Listen 443 in ssl.conf if it exists
+    if [ -f /etc/httpd/conf.d/ssl.conf ]; then
+        if grep -q "^Listen 443" /etc/httpd/conf.d/ssl.conf; then
+            sed -i 's/^Listen 443/#Listen 443/' /etc/httpd/conf.d/ssl.conf
+            echo -e "${GREEN}Disabled Listen 443 in /etc/httpd/conf.d/ssl.conf${NC}"
+        else
+            echo -e "${YELLOW}Listen 443 already disabled or not found in ssl.conf${NC}"
+        fi
+    else
+        echo -e "${YELLOW}SSL configuration file not found (ssl.conf)${NC}"
+    fi
+    
+    echo -e "${GREEN}Default ports disabled - httpd will only listen on custom port ${HTTPD_PORT}${NC}"
+
     # Create symlink in web root
     local symlink_path="${HTTPD_DOCUMENT_ROOT}/${HTTPD_REPO_SYMLINK_NAME}"
     echo -e "${BLUE}Creating symlink: $symlink_path -> $repo_path${NC}"
@@ -763,6 +790,25 @@ httpd_remove() {
             echo -e "${BLUE}Restarting httpd service${NC}"
             systemctl restart "$HTTPD_SERVICE"
             echo -e "${GREEN}httpd service restarted${NC}"
+        fi
+
+        # Restore default ports before uninstalling
+        echo -e "${BLUE}Restoring default ports 80 and 443${NC}"
+        
+        # Re-enable Listen 80 in main httpd.conf
+        if [ -f /etc/httpd/conf/httpd.conf ]; then
+            if grep -q "^#Listen 80" /etc/httpd/conf/httpd.conf; then
+                sed -i 's/^#Listen 80/Listen 80/' /etc/httpd/conf/httpd.conf
+                echo -e "${GREEN}Re-enabled Listen 80 in /etc/httpd/conf/httpd.conf${NC}"
+            fi
+        fi
+        
+        # Re-enable Listen 443 in ssl.conf if it exists
+        if [ -f /etc/httpd/conf.d/ssl.conf ]; then
+            if grep -q "^#Listen 443" /etc/httpd/conf.d/ssl.conf; then
+                sed -i 's/^#Listen 443/Listen 443/' /etc/httpd/conf.d/ssl.conf
+                echo -e "${GREEN}Re-enabled Listen 443 in /etc/httpd/conf.d/ssl.conf${NC}"
+            fi
         fi
 
         # Ask about uninstalling httpd
