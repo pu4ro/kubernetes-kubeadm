@@ -63,8 +63,8 @@ spec:
     ip: 127.0.0.1
   hostNetwork: true
   volumes:
-  - hostPath:
+  - name: kubeconfig
+    hostPath:
       path: {% if inventory_hostname == groups['masters'][0] %}/etc/kubernetes/super-admin.conf{% else %}/etc/kubernetes/admin.conf{% endif %}
-    name: kubeconfig
 status: {}
 
