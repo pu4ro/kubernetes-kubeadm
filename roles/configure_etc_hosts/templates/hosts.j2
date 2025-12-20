@@ -5,3 +5,17 @@
 {% for host in groups['all'] %}
 {{ hostvars[host]['ansible_host'] | default(hostvars[host]['inventory_hostname']) }} {{ hostvars[host]['inventory_hostname'] }}
 {% endfor %}
+
+{% if registry_hosts is defined and registry_hosts | length > 0 %}
+# Registry hosts
+{% for hostname, ip in registry_hosts.items() %}
+{{ ip }} {{ hostname }}
+{% endfor %}
+{% endif %}
+
+{% if custom_hosts is defined and custom_hosts | length > 0 %}
+# Custom hosts
+{% for hostname, ip in custom_hosts.items() %}
+{{ ip }} {{ hostname }}
+{% endfor %}
+{% endif %}

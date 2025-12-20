@@ -317,6 +317,19 @@ registry_hosts:
   "harbor.runway.test": "192.168.135.28"
   # Add more registry domains and their IPs as needed
 
+# Custom Host Mappings (for /etc/hosts configuration)
+# Add any custom hostname-to-IP mappings that you need
+# These will be added to /etc/hosts on all nodes
+#
+# Example:
+#   custom_hosts:
+#     "myapp.example.com": "10.0.0.100"
+#     "db.example.com": "10.0.0.101"
+#     "api.example.com": "10.0.0.102"
+#
+custom_hosts: {}
+  # Add your custom host mappings here
+
 # CoreDNS Hosts Configuration (add registry hosts to CoreDNS)
 configure_coredns_hosts: true
 
