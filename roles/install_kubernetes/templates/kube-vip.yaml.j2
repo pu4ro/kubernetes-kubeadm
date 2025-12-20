@@ -66,5 +66,6 @@ spec:
   - name: kubeconfig
     hostPath:
       path: {% if inventory_hostname == groups['masters'][0] %}/etc/kubernetes/super-admin.conf{% else %}/etc/kubernetes/admin.conf{% endif %}
+
 status: {}
 
