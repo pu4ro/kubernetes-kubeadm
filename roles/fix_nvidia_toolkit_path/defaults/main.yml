@@ -1,0 +1,6 @@
+---
+# defaults file for fix_nvidia_toolkit_path
+
+# Enable fixing NVIDIA toolkit path in containerd config
+# This is only needed when NVIDIA driver is installed via .run file
+fix_nvidia_toolkit_path: false

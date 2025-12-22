@@ -257,6 +257,20 @@ nvidia_driver_download_url: "http://192.168.135.71:8080/rhel-repo2"
 nvidia_driver_filename: "NVIDIA-Linux-x86_64-{{ nvidia_driver_version }}.run"
 nvidia_driver_install_options: "--silent --no-questions --ui=none --disable-nouveau"
 
+# NVIDIA Toolkit Path Fix
+# Fix NVIDIA toolkit path in containerd config from /usr/local/nvidia/toolkit to /usr/bin
+# This is required when NVIDIA driver is installed via .run file (not package manager)
+# The .run file installer places binaries in /usr/local/nvidia/toolkit, but containerd
+# may need them in /usr/bin for proper GPU support
+#
+# Usage with tags:
+#   ansible-playbook site.yml --tags fix-nvidia-toolkit-path
+#
+# Or with Makefile:
+#   make fix-nvidia-toolkit-path
+#
+fix_nvidia_toolkit_path: false  # Enable to fix NVIDIA toolkit path (needed for .run file installs)
+
 # GPU Operator Configuration (optional, for Kubernetes GPU support)
 enable_gpu_operator: false
 gpu_operator_namespace: "gpu-operator"

@@ -7,7 +7,7 @@
 .PHONY: limit-master limit-workers
 .PHONY: command cmd-all cmd-masters cmd-workers cmd-installs cmd-host
 .PHONY: check-workers add-workers check-and-add-workers
-.PHONY: install-nvidia check-nvidia-gpu check-nvidia-driver reboot-gpu-nodes
+.PHONY: install-nvidia check-nvidia-gpu check-nvidia-driver fix-nvidia-toolkit-path reboot-gpu-nodes
 .PHONY: registry-start registry-stop registry-restart registry-status registry-remove registry-logs registry-init
 .PHONY: nfs-init nfs-install nfs-start nfs-stop nfs-restart nfs-status nfs-reload nfs-show-exports nfs-add-export nfs-remove
 .PHONY: ubuntu-repo-init ubuntu-repo-setup ubuntu-repo-remove ubuntu-repo-status ubuntu-repo-update-sources
@@ -311,6 +311,11 @@ check-nvidia-gpu: ## NVIDIA GPU 감지 확인 (lspci | grep -i nvidia)
 check-nvidia-driver: ## NVIDIA 드라이버 설치 확인 (nvidia-smi)
 	@echo "==> NVIDIA 드라이버 상태 확인 중..."
 	@ansible all -i $(INVENTORY) -m shell -a "nvidia-smi 2>/dev/null || echo 'NVIDIA driver not installed'" | grep -v ">>>"
+
+fix-nvidia-toolkit-path: ## NVIDIA toolkit 경로 수정 (/usr/local/nvidia/toolkit -> /usr/bin)
+	@echo "==> NVIDIA toolkit 경로 수정 중..."
+	@echo "주의: group_vars/all.yml에서 fix_nvidia_toolkit_path: true 설정 확인"
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags fix-nvidia-toolkit-path
 
 reboot-gpu-nodes: ## GPU 노드 재부팅 (NVIDIA 드라이버 활성화)
 	@echo "==> GPU 노드 재부팅 중..."

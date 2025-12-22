@@ -1,0 +1,47 @@
+---
+- name: Check if containerd config exists
+  stat:
+    path: /etc/containerd/config.toml
+  register: containerd_config
+
+- name: Backup containerd config
+  copy:
+    src: /etc/containerd/config.toml
+    dest: /etc/containerd/config.toml.bak
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0644'
+  when: containerd_config.stat.exists
+
+- name: Replace NVIDIA toolkit path from /usr/local/nvidia/toolkit to /usr/bin
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: '/usr/local/nvidia/toolkit'
+    replace: '/usr/bin'
+    backup: yes
+  register: nvidia_path_replaced
+  when: containerd_config.stat.exists
+
+- name: Verify NVIDIA toolkit path change
+  shell: grep "BinaryName" /etc/containerd/config.toml
+  register: nvidia_binary_check
+  changed_when: false
+  failed_when: false
+  when: containerd_config.stat.exists
+
+- name: Display verification result
+  debug:
+    msg: "{{ nvidia_binary_check.stdout_lines }}"
+  when: 
+    - containerd_config.stat.exists
+    - nvidia_binary_check.stdout_lines is defined
+
+- name: Restart containerd service
+  systemd:
+    name: containerd
+    state: restarted
+    daemon_reload: yes
+  when: 
+    - containerd_config.stat.exists
+    - nvidia_path_replaced.changed
