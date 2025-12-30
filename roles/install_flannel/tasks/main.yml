@@ -17,11 +17,28 @@
   debug:
     msg: "{{ kube_apiserver_status.stdout }}"
     
-- name: Apply kube-flannel configuration
+- name: Check if flannel DaemonSet exists
+  shell: kubectl get daemonset -n kube-flannel kube-flannel-ds --no-headers 2>/dev/null | wc -l
+  register: flannel_ds_exists
+  changed_when: false
+  failed_when: false
+  when: 
+    - inventory_hostname == groups['masters'][0]
+    - kube_apiserver_status.rc == 0
+
+- name: Apply kube-flannel configuration (new installation)
   command: kubectl apply -f /root/kube-flannel.yml
   when: 
     - inventory_hostname == groups['masters'][0]
     - kube_apiserver_status.rc == 0
+    - flannel_ds_exists.stdout | default('0') | int == 0
+
+- name: Display flannel status (already installed)
+  debug:
+    msg: "Flannel DaemonSet already exists, skipping installation"
+  when: 
+    - inventory_hostname == groups['masters'][0]
+    - flannel_ds_exists.stdout | default('0') | int > 0
 
 - name: Wait for all flannel pods to be ready
   shell: >

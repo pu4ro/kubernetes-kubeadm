@@ -1,4 +1,10 @@
+{% set k8s_version_parts = kubernetes_version.split('.') %}
+{% set k8s_minor = k8s_version_parts[1] | int %}
+{% if k8s_minor >= 31 %}
 apiVersion: kubeadm.k8s.io/v1beta4
+{% else %}
+apiVersion: kubeadm.k8s.io/v1beta3
+{% endif %}
 kind: InitConfiguration
 localAPIEndpoint:
   advertiseAddress: {{ ansible_host }}
@@ -6,7 +12,11 @@ localAPIEndpoint:
 nodeRegistration:
   criSocket: unix:///var/run/containerd/containerd.sock
 ---
+{% if k8s_minor >= 31 %}
 apiVersion: kubeadm.k8s.io/v1beta4
+{% else %}
+apiVersion: kubeadm.k8s.io/v1beta3
+{% endif %}
 kind: ClusterConfiguration
 clusterName: kubernetes
 kubernetesVersion: "{{ kubernetes_version }}"
@@ -25,9 +35,14 @@ networking:
   serviceSubnet: {{ service_subnet }}
   podSubnet: {{ pod_subnet }}
 apiServer:
+{% if k8s_minor >= 31 %}
   extraArgs:
   - name: authorization-mode
     value: Node,RBAC
+{% else %}
+  extraArgs:
+    authorization-mode: Node,RBAC
+{% endif %}
   certSANs:
 {%- filter indent(width=4) %}
 
