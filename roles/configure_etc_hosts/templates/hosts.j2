@@ -3,8 +3,17 @@
 
 # Ansible managed hosts
 {% for host in groups['all'] %}
+{% if enable_domain_communication | default(false) %}
+{{ hostvars[host]['ansible_host'] | default(hostvars[host]['inventory_hostname']) }} {{ hostvars[host]['inventory_hostname'] }} {{ hostvars[host]['inventory_hostname'] }}.{{ domain_suffix }}
+{% else %}
 {{ hostvars[host]['ansible_host'] | default(hostvars[host]['inventory_hostname']) }} {{ hostvars[host]['inventory_hostname'] }}
+{% endif %}
 {% endfor %}
+
+{% if enable_domain_communication | default(false) and kube_vip_address is defined %}
+# Kubernetes API domain (points to VIP for HA)
+{{ kube_vip_address }} {{ api_domain }}
+{% endif %}
 
 {% if registry_hosts is defined and registry_hosts | length > 0 %}
 # Registry hosts

@@ -30,6 +30,42 @@ dns:
 etcd:
   local:
     dataDir: /var/lib/etcd
+{% if enable_domain_communication | default(false) %}
+    extraArgs:
+{% if k8s_minor >= 31 %}
+      - name: listen-peer-urls
+        value: "{{ etcd_domain_config.listen_peer_urls }}"
+      - name: listen-client-urls
+        value: "{{ etcd_domain_config.listen_client_urls }}"
+      - name: initial-advertise-peer-urls
+        value: "https://{{ inventory_hostname }}.{{ domain_suffix }}:2380"
+      - name: advertise-client-urls
+        value: "https://{{ inventory_hostname }}.{{ domain_suffix }}:2379"
+      - name: initial-cluster
+        value: "{% for host in groups['masters'] %}{{ host }}=https://{{ host }}.{{ domain_suffix }}:2380{% if not loop.last %},{% endif %}{% endfor %}"
+      - name: initial-cluster-state
+        value: "{{ etcd_domain_config.initial_cluster_state }}"
+      - name: initial-cluster-token
+        value: "{{ etcd_domain_config.initial_cluster_token }}"
+{% else %}
+      listen-peer-urls: "{{ etcd_domain_config.listen_peer_urls }}"
+      listen-client-urls: "{{ etcd_domain_config.listen_client_urls }}"
+      initial-advertise-peer-urls: "https://{{ inventory_hostname }}.{{ domain_suffix }}:2380"
+      advertise-client-urls: "https://{{ inventory_hostname }}.{{ domain_suffix }}:2379"
+      initial-cluster: "{% for host in groups['masters'] %}{{ host }}=https://{{ host }}.{{ domain_suffix }}:2380{% if not loop.last %},{% endif %}{% endfor %}"
+      initial-cluster-state: "{{ etcd_domain_config.initial_cluster_state }}"
+      initial-cluster-token: "{{ etcd_domain_config.initial_cluster_token }}"
+{% endif %}
+    serverCertSANs:
+      - "{{ api_domain }}"
+{% for host in groups['masters'] %}
+      - "{{ host }}.{{ domain_suffix }}"
+{% endfor %}
+    peerCertSANs:
+{% for host in groups['masters'] %}
+      - "{{ host }}.{{ domain_suffix }}"
+{% endfor %}
+{% endif %}
 networking:
   dnsDomain: {{ dns_domain }}
   serviceSubnet: {{ service_subnet }}
@@ -53,6 +89,15 @@ apiServer:
 {% for host in groups['masters'] %}
 - {{ hostvars[host].ansible_host }}
 {% endfor %}
+{% if enable_domain_communication | default(false) %}
+- {{ api_domain }}
+{% for host in groups['masters'] %}
+- {{ host }}.{{ domain_suffix }}
+{% endfor %}
+{% for san in extra_cert_sans | default([]) %}
+- {{ san }}
+{% endfor %}
+{% endif %}
 {%- endfilter %}
 controllerManager: {}
 scheduler: {}

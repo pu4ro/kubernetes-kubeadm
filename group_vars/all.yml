@@ -495,4 +495,40 @@ package_name_map:
     Debian: helmfile
     RedHat: helmfile-bundle
 
+# Domain-based Communication Configuration
+# Enable domain-based communication for etcd and API server
+# This allows cluster components to communicate using DNS names instead of IP addresses
+# Useful for environments where IP addresses may change (cloud, VM migration, etc.)
+#
+# Usage with tags:
+#   ansible-playbook site.yml --tags k8s-init    # Apply during cluster initialization
+#
+enable_domain_communication: true               # Enable/disable domain-based communication
+domain_suffix: "k8s.local"                       # Domain suffix for cluster nodes (e.g., master1.k8s.local)
+api_domain: "k8s-api.internal"                   # Domain for API server (used with load balancer/VIP)
+
+# etcd Domain Configuration
+# When enabled, etcd will advertise and communicate using domain names
+# Format: {inventory_hostname}.{domain_suffix} (e.g., master1.k8s.local)
+etcd_domain_config:
+  # Listen on all interfaces for flexibility
+  listen_peer_urls: "https://0.0.0.0:2380"
+  listen_client_urls: "https://0.0.0.0:2379"
+  # Cluster token for etcd
+  initial_cluster_token: "etcd-cluster-1"
+  initial_cluster_state: "new"
+
+# Additional Certificate SANs for Domain Communication
+# These domains will be added to etcd and API server certificates
+# Automatically includes: {inventory_hostname}.{domain_suffix} for each master
+# Add any additional domains here
+extra_cert_sans:
+  - "localhost"
+  - "kubernetes"
+  - "kubernetes.default"
+  - "kubernetes.default.svc"
+  - "kubernetes.default.svc.cluster.local"
+  # Add custom domains as needed
+  # - "k8s.example.com"
+
 # ansible-playbook -i inventory.ini site.yml --tags coredns-hosts -e
