@@ -15,7 +15,7 @@
 - name: Backup kube-apiserver manifest
   copy:
     src: /etc/kubernetes/manifests/kube-apiserver.yaml
-    dest: /etc/kubernetes/manifests/kube-apiserver.yaml.backup-{{ ansible_date_time.epoch }}
+    dest: /etc/kubernetes/kube-apiserver.yaml.backup-{{ ansible_date_time.epoch }}
     remote_src: yes
     mode: '0600'
 
@@ -58,9 +58,22 @@
   set_fact:
     apiserver_command_no_admission: "{{ apiserver_command_cleaned | reject('match', '^--enable-admission-plugins=') | list }}"
 
+- name: Build base OIDC flags
+  set_fact:
+    oidc_flags:
+      - "--oidc-client-id={{ oidc_client_id }}"
+      - "--oidc-username-claim={{ oidc_username_claim }}"
+      - "--oidc-groups-claim={{ oidc_groups_claim }}"
+      - "--oidc-issuer-url={{ oidc_issuer_url }}"
+
+- name: Add OIDC CA file flag if specified
+  set_fact:
+    oidc_flags: "{{ oidc_flags + ['--oidc-ca-file=' + oidc_ca_file] }}"
+  when: oidc_ca_file is defined and oidc_ca_file | length > 0
+
 - name: Build new API server command with OIDC flags
   set_fact:
-    new_apiserver_command: "{{ apiserver_command_no_admission + ['--enable-admission-plugins=' + new_admission_plugins, '--oidc-client-id=' + oidc_client_id, '--oidc-username-claim=' + oidc_username_claim, '--oidc-groups-claim=' + oidc_groups_claim, '--oidc-issuer-url=' + oidc_issuer_url] }}"
+    new_apiserver_command: "{{ apiserver_command_no_admission + ['--enable-admission-plugins=' + new_admission_plugins] + oidc_flags }}"
 
 - name: Update API server manifest with new command
   set_fact:
