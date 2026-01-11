@@ -1,5 +1,47 @@
 ---
 # Cross-platform package installation
+
+# Ubuntu Repository Setup (before package installation)
+- name: Setup Ubuntu repository before package installation
+  block:
+    - name: Create APT sources list entry for custom repository
+      copy:
+        content: |
+          # Ubuntu Local Repository
+          # Managed by Ansible - Do not edit manually
+          deb [{{ 'trusted=yes ' if ubuntu_repo_trusted | default(true) else '' }}]{{ ubuntu_repo_url }} {{ ubuntu_repo_components | default('./') }}
+        dest: "{{ ubuntu_repo_sources_file | default('/etc/apt/sources.list.d/ubuntu-local-repo.list') }}"
+        owner: root
+        group: root
+        mode: '0644'
+      register: ubuntu_repo_created
+
+    - name: Backup original sources.list (first time only)
+      copy:
+        src: /etc/apt/sources.list
+        dest: /etc/apt/sources.list.backup
+        remote_src: true
+        force: false
+      ignore_errors: true
+
+    - name: Update APT cache after adding custom repository
+      apt:
+        update_cache: yes
+        cache_valid_time: 0
+      when: ubuntu_repo_created is changed
+      register: apt_custom_update
+      retries: 3
+      delay: 5
+      until: apt_custom_update is succeeded
+
+    - name: Display custom repository status
+      debug:
+        msg: "Custom Ubuntu repository configured: {{ ubuntu_repo_url }}"
+  when:
+    - ansible_os_family == "Debian"
+    - enable_ubuntu_repo | default(false) | bool
+    - ubuntu_repo_url | default('') != ''
+
 - name: Update package cache (Debian/Ubuntu)
   apt:
     update_cache: yes
