@@ -24,6 +24,41 @@
         force: false
       ignore_errors: true
 
+    # Ubuntu 24.04: Disable all other apt sources except custom repo
+    - name: Disable default Ubuntu sources on 24.04
+      block:
+        - name: Find all files in sources.list.d (except custom repo)
+          find:
+            paths: /etc/apt/sources.list.d
+            patterns: "*.list,*.sources"
+            excludes:
+              - "ubuntu-local-repo.list"
+          register: other_sources
+
+        - name: Disable other source files by renaming to .disabled
+          command: mv "{{ item.path }}" "{{ item.path }}.disabled"
+          loop: "{{ other_sources.files }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
+          when: not item.path.endswith('.disabled')
+          ignore_errors: true
+
+        - name: Disable /etc/apt/sources.list if exists and not empty
+          block:
+            - name: Check if sources.list exists and has content
+              stat:
+                path: /etc/apt/sources.list
+              register: sources_list_stat
+
+            - name: Rename sources.list to sources.list.disabled
+              command: mv /etc/apt/sources.list /etc/apt/sources.list.disabled
+              when:
+                - sources_list_stat.stat.exists
+                - sources_list_stat.stat.size > 0
+                - not sources_list_stat.stat.islnk
+              ignore_errors: true
+      when: ansible_distribution_version is version('24.04', '>=')
+
     - name: Update APT cache after adding custom repository
       apt:
         update_cache: yes
@@ -36,7 +71,7 @@
 
     - name: Display custom repository status
       debug:
-        msg: "Custom Ubuntu repository configured: {{ ubuntu_repo_url }}"
+        msg: "Custom Ubuntu repository configured: {{ ubuntu_repo_url }}{{ ' (other sources disabled)' if ansible_distribution_version is version('24.04', '>=') else '' }}"
   when:
     - ansible_os_family == "Debian"
     - enable_ubuntu_repo | default(false) | bool
