@@ -232,6 +232,18 @@ containerd_registry_auth:
   #   auth: ""
   #   identitytoken: ""
 
+# Kubernetes Image Repository Configuration
+# Configure which image repository to use for Kubernetes components
+# When disabled, uses the default registry.k8s.io
+#
+# Usage:
+#   enable_custom_image_repository: true   - Use custom registry (internal/mirror)
+#   enable_custom_image_repository: false  - Use default registry.k8s.io
+#
+enable_custom_image_repository: true                   # Enable/disable custom image repository
+k8s_image_repository: "cr.makina.rocks/external-hub/kubernetes"           # Custom registry for k8s components
+coredns_image_repository: "cr.makina.rocks/external-hub/kubernetes/coredns"  # Custom registry for CoreDNS
+
 # Kubernetes Pause Container Image
 # Pause container versions by Kubernetes version:
 #   - k8s 1.26.x and below: pause:3.9
@@ -494,6 +506,27 @@ package_name_map:
   helmfile:
     Debian: helmfile
     RedHat: helmfile-bundle
+
+# Custom CA Certificates Configuration
+# Install custom CA certificates to system trust store
+# This allows the system to trust self-signed or internal CA certificates
+#
+# Usage with tags:
+#   ansible-playbook site.yml --tags ca-certificates    # Install CA certificates
+#
+enable_ca_certificates: false                          # Enable/disable CA certificate installation
+ca_certificates: []
+  # Example configurations:
+  # - name: "internal-ca"                              # Certificate name (used for filename)
+  #   content: |                                        # Inline PEM certificate content
+  #     -----BEGIN CERTIFICATE-----
+  #     MIIDxTCCAq2gAwIBAgIQAqxcJmoLQJuPC3nyrkYldzANBgkqhkiG9w0BAQsFADBs
+  #     ...
+  #     -----END CERTIFICATE-----
+  # - name: "harbor-ca"
+  #   url: "https://harbor.example.com/ca.crt"         # Download from URL
+  # - name: "registry-ca"
+  #   path: "/root/certs/my-ca.crt"                    # Copy from local path
 
 # Domain-based Communication Configuration
 # Enable domain-based communication for etcd and API server

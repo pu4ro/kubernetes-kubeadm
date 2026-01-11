@@ -1,0 +1,124 @@
+---
+# Install CA certificates to system trust store
+# Supports Ubuntu/Debian and RHEL/CentOS
+
+- name: Ensure CA certificates directory exists (Debian/Ubuntu)
+  file:
+    path: /usr/local/share/ca-certificates
+    state: directory
+    mode: '0755'
+  when: ansible_os_family == 'Debian'
+
+- name: Ensure CA certificates directory exists (RedHat/CentOS)
+  file:
+    path: /etc/pki/ca-trust/source/anchors
+    state: directory
+    mode: '0755'
+  when: ansible_os_family == 'RedHat'
+
+# Install certificates from inline content
+- name: Install CA certificate from content (Debian/Ubuntu)
+  copy:
+    content: "{{ item.content }}"
+    dest: "/usr/local/share/ca-certificates/{{ item.name }}.crt"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ ca_certificates | selectattr('content', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: ca_installed_debian_content
+  when: ansible_os_family == 'Debian'
+
+- name: Install CA certificate from content (RedHat/CentOS)
+  copy:
+    content: "{{ item.content }}"
+    dest: "/etc/pki/ca-trust/source/anchors/{{ item.name }}.crt"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ ca_certificates | selectattr('content', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: ca_installed_redhat_content
+  when: ansible_os_family == 'RedHat'
+
+# Install certificates from URL
+- name: Download and install CA certificate from URL (Debian/Ubuntu)
+  get_url:
+    url: "{{ item.url }}"
+    dest: "/usr/local/share/ca-certificates/{{ item.name }}.crt"
+    owner: root
+    group: root
+    mode: '0644'
+    validate_certs: no
+  loop: "{{ ca_certificates | selectattr('url', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: ca_installed_debian_url
+  when: ansible_os_family == 'Debian'
+
+- name: Download and install CA certificate from URL (RedHat/CentOS)
+  get_url:
+    url: "{{ item.url }}"
+    dest: "/etc/pki/ca-trust/source/anchors/{{ item.name }}.crt"
+    owner: root
+    group: root
+    mode: '0644'
+    validate_certs: no
+  loop: "{{ ca_certificates | selectattr('url', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: ca_installed_redhat_url
+  when: ansible_os_family == 'RedHat'
+
+# Install certificates from local path
+- name: Install CA certificate from local path (Debian/Ubuntu)
+  copy:
+    src: "{{ item.path }}"
+    dest: "/usr/local/share/ca-certificates/{{ item.name }}.crt"
+    owner: root
+    group: root
+    mode: '0644'
+    remote_src: yes
+  loop: "{{ ca_certificates | selectattr('path', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: ca_installed_debian_path
+  when: ansible_os_family == 'Debian'
+
+- name: Install CA certificate from local path (RedHat/CentOS)
+  copy:
+    src: "{{ item.path }}"
+    dest: "/etc/pki/ca-trust/source/anchors/{{ item.name }}.crt"
+    owner: root
+    group: root
+    mode: '0644'
+    remote_src: yes
+  loop: "{{ ca_certificates | selectattr('path', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: ca_installed_redhat_path
+  when: ansible_os_family == 'RedHat'
+
+# Update CA trust store
+- name: Update CA certificates (Debian/Ubuntu)
+  command: update-ca-certificates
+  when:
+    - ansible_os_family == 'Debian'
+    - (ca_installed_debian_content.changed | default(false)) or
+      (ca_installed_debian_url.changed | default(false)) or
+      (ca_installed_debian_path.changed | default(false))
+
+- name: Update CA trust (RedHat/CentOS)
+  command: update-ca-trust extract
+  when:
+    - ansible_os_family == 'RedHat'
+    - (ca_installed_redhat_content.changed | default(false)) or
+      (ca_installed_redhat_url.changed | default(false)) or
+      (ca_installed_redhat_path.changed | default(false))
+
+- name: Display installed CA certificates
+  debug:
+    msg: "Installed CA certificates: {{ ca_certificates | map(attribute='name') | list }}"
+  when: ca_certificates | length > 0

@@ -13,6 +13,7 @@
     - { role: setup_ubuntu_repo, tags: ['ubuntu-repo'] }
     - { role: set_hostname, tags: ['set-hostname'], when: set_hostname_from_inventory | default(false) }
     - { role: configure_etc_hosts, tags: ['etc-hosts'], when: configure_etc_hosts | default(false) }
+    - { role: install_ca_certificates, tags: ['ca-certificates'], when: enable_ca_certificates | default(false) }
     - { role: configure_sysctl, tags: ['base', 'sysctl'] }
     - { role: install_os_package, tags: ['base', 'packages'] }
     - { role: install_containerd, tags: ['base', 'container'] }

@@ -24,9 +24,13 @@ kubernetesVersion: "{{ kubernetes_version }}"
 controlPlaneEndpoint: {{ kube_vip_address }}:{{ kube_vip_port }}
 {% endif %}
 certificatesDir: /etc/kubernetes/pki
-imageRepository: cr.makina.rocks/external-hub/kubernetes
+{% if enable_custom_image_repository | default(false) %}
+imageRepository: {{ k8s_image_repository }}
 dns:
-  imageRepository: cr.makina.rocks/external-hub/kubernetes/coredns
+  imageRepository: {{ coredns_image_repository }}
+{% else %}
+imageRepository: registry.k8s.io
+{% endif %}
 etcd:
   local:
     dataDir: /var/lib/etcd

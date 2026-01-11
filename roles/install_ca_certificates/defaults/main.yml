@@ -1,0 +1,27 @@
+---
+# Default variables for install_ca_certificates role
+# These can be overridden in group_vars/all.yml
+
+# Enable/disable CA certificate installation
+enable_ca_certificates: false
+
+# List of CA certificates to install
+# Each entry should have:
+#   - name: descriptive name for the certificate (used for filename)
+#   - content: PEM-encoded certificate content (inline)
+#   - url: URL to download the certificate from (alternative to content)
+#   - path: local path to certificate file (alternative to content)
+#
+# Example:
+# ca_certificates:
+#   - name: "my-internal-ca"
+#     content: |
+#       -----BEGIN CERTIFICATE-----
+#       MIIDxTCCAq2gAwIBAgIQAqxcJmoLQJuPC3nyrkYldzANBgkqhkiG9w0BAQsFADBs
+#       ...
+#       -----END CERTIFICATE-----
+#   - name: "harbor-ca"
+#     url: "https://harbor.example.com/ca.crt"
+#   - name: "registry-ca"
+#     path: "/path/to/ca-certificate.crt"
+ca_certificates: []
