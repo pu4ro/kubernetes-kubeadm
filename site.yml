@@ -16,6 +16,7 @@
     - { role: install_ca_certificates, tags: ['ca-certificates'], when: enable_ca_certificates | default(false) }
     - { role: configure_sysctl, tags: ['base', 'sysctl'] }
     - { role: install_os_package, tags: ['base', 'packages'] }
+    - { role: setup_containerd_disk, tags: ['setup-containerd-disk'], when: enable_containerd_disk | default(false) }
     - { role: install_containerd, tags: ['base', 'container'] }
     - { role: configure_registry_mirror, tags: ['registry-mirror'], when: enable_registry_mirror | default(false) }
     - { role: install_nvidia_driver, tags: ['nvidia', 'install-nvidia-driver'], when: enable_nvidia_driver_install | default(false) }
