@@ -565,3 +565,19 @@ extra_cert_sans:
   # - "k8s.example.com"
 
 # ansible-playbook -i inventory.ini site.yml --tags coredns-hosts -e
+
+# Containerd Disk Configuration
+# Configure a dedicated disk for containerd data directory (/var/lib/containerd)
+# This allows separating container storage from the root filesystem
+#
+# Usage with tags:
+#   ansible-playbook site.yml --tags setup-containerd-disk    # Setup disk only
+#
+# IMPORTANT: The disk will be formatted! All existing data on the disk will be lost!
+# Make sure to specify the correct disk device.
+#
+enable_containerd_disk: false                          # Enable/disable dedicated containerd disk setup
+containerd_disk_device: "/dev/sdb"                     # Disk device to use (e.g., /dev/sdb, /dev/vdb, /dev/nvme1n1)
+containerd_disk_fstype: "xfs"                          # Filesystem type: "ext4" or "xfs"
+containerd_disk_mount_point: "/var/lib/containerd"     # Mount point for containerd data
+containerd_disk_mount_options: "defaults,noatime"      # Mount options for fstab

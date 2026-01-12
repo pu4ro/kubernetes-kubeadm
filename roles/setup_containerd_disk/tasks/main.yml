@@ -1,0 +1,202 @@
+---
+# Setup dedicated disk for containerd data directory
+# This role formats a disk and mounts it to /var/lib/containerd
+
+- name: Display containerd disk configuration
+  debug:
+    msg: |
+      Containerd Disk Setup:
+      - Device: {{ containerd_disk_device }}
+      - Filesystem: {{ containerd_disk_fstype }}
+      - Mount Point: {{ containerd_disk_mount_point }}
+      - Mount Options: {{ containerd_disk_mount_options }}
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+# Phase 1: Validate disk device exists
+- name: Check if disk device exists
+  stat:
+    path: "{{ containerd_disk_device }}"
+  register: disk_device_stat
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+- name: Fail if disk device does not exist
+  fail:
+    msg: "Disk device {{ containerd_disk_device }} does not exist!"
+  when:
+    - enable_containerd_disk | bool
+    - not disk_device_stat.stat.exists
+  tags: ['setup-containerd-disk']
+
+# Phase 2: Check if disk is already mounted
+- name: Check if disk is already mounted
+  shell: mount | grep "{{ containerd_disk_device }}" || true
+  register: disk_mount_check
+  changed_when: false
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+- name: Check if mount point is already mounted
+  shell: mount | grep " {{ containerd_disk_mount_point }} " || true
+  register: mount_point_check
+  changed_when: false
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+# Phase 3: Check if disk already has a filesystem
+- name: Check existing filesystem on disk
+  shell: blkid {{ containerd_disk_device }} || true
+  register: disk_blkid
+  changed_when: false
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+- name: Display disk status
+  debug:
+    msg: |
+      Disk Status:
+      - Device mounted: {{ 'Yes' if disk_mount_check.stdout != '' else 'No' }}
+      - Mount point in use: {{ 'Yes' if mount_point_check.stdout != '' else 'No' }}
+      - Existing filesystem: {{ disk_blkid.stdout if disk_blkid.stdout != '' else 'None' }}
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+# Phase 4: Stop containerd if running (to safely unmount/format)
+- name: Check if containerd service exists
+  shell: systemctl list-unit-files | grep containerd || true
+  register: containerd_service_check
+  changed_when: false
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+- name: Stop containerd service if running
+  systemd:
+    name: containerd
+    state: stopped
+  when:
+    - enable_containerd_disk | bool
+    - containerd_service_check.stdout != ''
+    - disk_blkid.stdout == '' or disk_mount_check.stdout == ''
+  ignore_errors: yes
+  tags: ['setup-containerd-disk']
+
+# Phase 5: Format disk (only if no filesystem exists)
+- name: Format disk with {{ containerd_disk_fstype }}
+  filesystem:
+    fstype: "{{ containerd_disk_fstype }}"
+    dev: "{{ containerd_disk_device }}"
+    force: no
+  when:
+    - enable_containerd_disk | bool
+    - disk_blkid.stdout == ''
+  tags: ['setup-containerd-disk']
+
+# Phase 6: Get UUID of the disk
+- name: Get UUID of the disk
+  shell: blkid -s UUID -o value {{ containerd_disk_device }}
+  register: disk_uuid
+  changed_when: false
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+- name: Display disk UUID
+  debug:
+    msg: "Disk UUID: {{ disk_uuid.stdout }}"
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+# Phase 7: Create mount point directory
+- name: Create mount point directory
+  file:
+    path: "{{ containerd_disk_mount_point }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+# Phase 8: Add entry to /etc/fstab (using UUID)
+- name: Check if fstab entry already exists
+  shell: grep "{{ disk_uuid.stdout }}" /etc/fstab || true
+  register: fstab_check
+  changed_when: false
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+- name: Add fstab entry for containerd disk
+  lineinfile:
+    path: /etc/fstab
+    regexp: ".*{{ containerd_disk_mount_point }}.*"
+    line: "UUID={{ disk_uuid.stdout }}  {{ containerd_disk_mount_point }}  {{ containerd_disk_fstype }}  {{ containerd_disk_mount_options }}  0  2"
+    state: present
+    backup: yes
+  when:
+    - enable_containerd_disk | bool
+    - fstab_check.stdout == ''
+  tags: ['setup-containerd-disk']
+
+# Phase 9: Reload systemd daemon
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+# Phase 10: Mount the disk using mount -a
+- name: Mount all filesystems from fstab
+  shell: mount -a
+  when:
+    - enable_containerd_disk | bool
+    - mount_point_check.stdout == ''
+  tags: ['setup-containerd-disk']
+
+# Phase 11: Verify mount
+- name: Verify disk is mounted
+  shell: mount | grep "{{ containerd_disk_mount_point }}"
+  register: mount_verify
+  changed_when: false
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+- name: Display mount verification
+  debug:
+    msg: "Mount verified: {{ mount_verify.stdout }}"
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+# Phase 12: Set proper permissions on mount point
+- name: Set permissions on containerd data directory
+  file:
+    path: "{{ containerd_disk_mount_point }}"
+    owner: root
+    group: root
+    mode: '0755'
+    state: directory
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']
+
+# Phase 13: Start containerd service if it was stopped
+- name: Start containerd service
+  systemd:
+    name: containerd
+    state: started
+    enabled: yes
+  when:
+    - enable_containerd_disk | bool
+    - containerd_service_check.stdout != ''
+  ignore_errors: yes
+  tags: ['setup-containerd-disk']
+
+- name: Display setup completion message
+  debug:
+    msg: |
+      Containerd disk setup completed successfully!
+      - Device: {{ containerd_disk_device }}
+      - UUID: {{ disk_uuid.stdout }}
+      - Filesystem: {{ containerd_disk_fstype }}
+      - Mounted at: {{ containerd_disk_mount_point }}
+      - fstab entry added for persistent mount
+  when: enable_containerd_disk | bool
+  tags: ['setup-containerd-disk']

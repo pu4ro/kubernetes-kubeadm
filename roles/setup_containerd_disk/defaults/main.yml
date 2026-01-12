@@ -1,0 +1,22 @@
+---
+# Default variables for setup_containerd_disk role
+# These can be overridden in group_vars/all.yml or inventory
+
+# Enable/disable dedicated containerd disk setup
+enable_containerd_disk: false
+
+# Disk device to use for containerd data
+# Examples: /dev/sdb, /dev/vdb, /dev/nvme1n1, /dev/xvdb
+containerd_disk_device: "/dev/sdb"
+
+# Filesystem type: "ext4" or "xfs"
+# xfs is recommended for container workloads (better performance with overlayfs)
+containerd_disk_fstype: "xfs"
+
+# Mount point for containerd data directory
+containerd_disk_mount_point: "/var/lib/containerd"
+
+# Mount options for fstab entry
+# noatime: Don't update access time (better performance)
+# defaults: Use default mount options (rw, suid, dev, exec, auto, nouser, async)
+containerd_disk_mount_options: "defaults,noatime"
