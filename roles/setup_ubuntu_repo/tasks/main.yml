@@ -43,6 +43,33 @@
         force: false
       ignore_errors: true
 
+    # Ubuntu 24.04+ uses /etc/apt/sources.list.d/ubuntu.sources as default
+    # This must be removed/disabled to use custom repository only
+    - name: Check if ubuntu.sources exists (Ubuntu 24.04+)
+      stat:
+        path: /etc/apt/sources.list.d/ubuntu.sources
+      register: ubuntu_sources_file
+
+    - name: Backup ubuntu.sources before removal (Ubuntu 24.04+)
+      copy:
+        src: /etc/apt/sources.list.d/ubuntu.sources
+        dest: /etc/apt/sources.list.d/ubuntu.sources.backup
+        remote_src: true
+        force: false
+      when: ubuntu_sources_file.stat.exists
+
+    - name: Remove ubuntu.sources to disable default repositories (Ubuntu 24.04+)
+      file:
+        path: /etc/apt/sources.list.d/ubuntu.sources
+        state: absent
+      when: ubuntu_sources_file.stat.exists
+      register: ubuntu_sources_removed
+
+    - name: Display ubuntu.sources removal status
+      debug:
+        msg: "Removed /etc/apt/sources.list.d/ubuntu.sources to use custom repository only"
+      when: ubuntu_sources_removed is changed
+
     - name: Update APT cache
       apt:
         update_cache: yes
