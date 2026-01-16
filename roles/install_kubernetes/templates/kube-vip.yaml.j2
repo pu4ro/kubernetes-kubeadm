@@ -65,14 +65,12 @@ spec:
   volumes:
   - name: kubeconfig
     hostPath:
-      # super-admin.conf is available from Kubernetes 1.29+
-      # For older versions, use admin.conf for all nodes
-{%- set k8s_minor_version = kubernetes_version.split('.')[1] | int %}
-{%- if k8s_minor_version >= 29 and inventory_hostname == groups['masters'][0] %}
+{% set k8s_minor_version = kubernetes_version.split('.')[1] | int -%}
+{% if k8s_minor_version >= 29 and inventory_hostname == groups['masters'][0] -%}
       path: /etc/kubernetes/super-admin.conf
-{%- else %}
+{% else -%}
       path: /etc/kubernetes/admin.conf
-{%- endif %}
+{% endif -%}
 
 status: {}
 
