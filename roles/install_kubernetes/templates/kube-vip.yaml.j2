@@ -65,12 +65,7 @@ spec:
   volumes:
   - name: kubeconfig
     hostPath:
-{% set k8s_minor_version = kubernetes_version.split('.')[1] | int -%}
-{% if k8s_minor_version >= 29 and inventory_hostname == groups['masters'][0] -%}
-      path: /etc/kubernetes/super-admin.conf
-{% else -%}
-      path: /etc/kubernetes/admin.conf
-{% endif -%}
+      path: {{ '/etc/kubernetes/super-admin.conf' if (kubernetes_version.split('.')[1] | int >= 29 and inventory_hostname == groups['masters'][0]) else '/etc/kubernetes/admin.conf' }}
 
 status: {}
 
