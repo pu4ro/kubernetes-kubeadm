@@ -27,21 +27,23 @@ Kubernetes 설정 파일의 IP 주소를 변경하는 역할입니다.
 ## 사용법
 
 ```bash
-# 1. 시스템 IP 먼저 변경 (예: netplan)
-sudo vi /etc/netplan/00-installer-config.yaml
+# 환경 변수 설정
+export OLD_IP=192.168.135.42
+export NEW_IP=192.168.135.41
+
+# 1. 시스템 IP 변경 (큰따옴표 사용)
+sudo sed -i "s/$OLD_IP/$NEW_IP/g" /etc/netplan/*.yaml
 sudo netplan apply
 
-# 2. inventory.ini 업데이트
-vi inventory.ini  # ansible_host를 새 IP로 변경
+# 2. inventory 업데이트 (큰따옴표 사용)
+sed -i "s/$OLD_IP/$NEW_IP/g" inventory.ini
 
-# 3. role 실행 (데이터 보존)
-make update-ip-with-certs OLD_IP=192.168.1.100 NEW_IP=192.168.1.200 HOST=master1
-
-# 또는 Ansible 직접 실행
+# 3. role 실행 (큰따옴표 사용)
 ansible-playbook -i inventory.ini update-node-ip.yml \
-  -e 'old_ip=192.168.1.100' \
-  -e 'new_ip=192.168.1.200' \
-  -e 'regenerate_certs=true' \
+  -e "old_ip=$OLD_IP" \
+  -e "new_ip=$NEW_IP" \
+  -e "regenerate_certs=true" \
+  -e "force_new_etcd_cluster=true" \
   --limit master1
 ```
 
