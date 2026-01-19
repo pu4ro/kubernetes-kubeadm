@@ -27,11 +27,15 @@ k8s_kubeconfig_files:
   - controller-manager.conf
   - scheduler.conf
 
-# Whether to restart kubelet after changes
-restart_kubelet: true
-
 # Whether to update /etc/hosts
 update_etc_hosts: true
 
 # Whether to regenerate certificates (if IP is in cert SANs)
 regenerate_certs: false
+
+# Domain communication settings (from group_vars/all.yml)
+# These are used when regenerating certificates to include proper SANs
+# enable_domain_communication: true
+# domain_suffix: "k8s.local"
+# api_domain: "k8s-api.internal"
+# kube_vip_address: "192.168.135.69"

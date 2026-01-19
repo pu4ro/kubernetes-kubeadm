@@ -92,20 +92,54 @@
         - /etc/kubernetes/pki/apiserver-kubelet-client.crt
         - /etc/kubernetes/pki/apiserver-kubelet-client.key
 
-    - name: Regenerate etcd certificates
-      command: kubeadm init phase certs etcd-server
+    # Build extra SANs for certificates
+    - name: Build certificate SANs list
+      set_fact:
+        cert_extra_sans: >-
+          {{ new_ip }},127.0.0.1,localhost,{{ inventory_hostname }}
+          {%- if api_domain is defined -%},{{ api_domain }}{%- endif -%}
+          {%- if enable_domain_communication | default(false) and domain_suffix is defined -%},{{ inventory_hostname }}.{{ domain_suffix }}{%- endif -%}
+          {%- if kube_vip_address is defined -%},{{ kube_vip_address }}{%- endif -%}
+
+    - name: Display certificate SANs
+      debug:
+        msg: "Certificate SANs: {{ cert_extra_sans }}"
+
+    # Regenerate etcd certificates with SANs
+    - name: Regenerate etcd server certificates
+      command: >
+        kubeadm init phase certs etcd-server
+        --apiserver-advertise-address={{ new_ip }}
       
     - name: Regenerate etcd peer certificates
-      command: kubeadm init phase certs etcd-peer
+      command: >
+        kubeadm init phase certs etcd-peer
+        --apiserver-advertise-address={{ new_ip }}
 
-    - name: Regenerate apiserver certificates
-      command: kubeadm init phase certs apiserver
+    # Regenerate apiserver certificates with extra SANs
+    - name: Regenerate apiserver certificates with domain SANs
+      command: >
+        kubeadm init phase certs apiserver
+        --apiserver-advertise-address={{ new_ip }}
+        --apiserver-cert-extra-sans={{ cert_extra_sans }}
 
     - name: Regenerate apiserver-etcd-client certificates
       command: kubeadm init phase certs apiserver-etcd-client
 
     - name: Regenerate apiserver-kubelet-client certificates
       command: kubeadm init phase certs apiserver-kubelet-client
+
+    # Verify new certificate SANs
+    - name: Verify apiserver certificate SANs
+      shell: |
+        openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout | grep -A1 "Subject Alternative Name"
+      register: cert_sans_check
+      ignore_errors: yes
+
+    - name: Display new certificate SANs
+      debug:
+        var: cert_sans_check.stdout_lines
+      when: cert_sans_check.stdout_lines is defined
 
   when: 
     - regenerate_certs | default(false)
