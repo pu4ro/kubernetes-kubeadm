@@ -105,16 +105,12 @@
       debug:
         msg: "Certificate SANs: {{ cert_extra_sans }}"
 
-    # Regenerate etcd certificates with SANs
+    # Regenerate etcd certificates
     - name: Regenerate etcd server certificates
-      command: >
-        kubeadm init phase certs etcd-server
-        --apiserver-advertise-address={{ new_ip }}
+      command: kubeadm init phase certs etcd-server
       
     - name: Regenerate etcd peer certificates
-      command: >
-        kubeadm init phase certs etcd-peer
-        --apiserver-advertise-address={{ new_ip }}
+      command: kubeadm init phase certs etcd-peer
 
     # Regenerate apiserver certificates with extra SANs
     - name: Regenerate apiserver certificates with domain SANs
