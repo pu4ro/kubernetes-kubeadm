@@ -61,6 +61,37 @@
     backup: no
   when: update_etc_hosts | default(true)
 
+# Reset etcd data directory if required (WARNING: This will lose all etcd data!)
+- name: Reset etcd data block
+  block:
+    - name: Check if etcd data directory exists
+      stat:
+        path: /var/lib/etcd/member
+      register: etcd_data_dir
+
+    - name: Backup etcd data directory
+      archive:
+        path: /var/lib/etcd
+        dest: "/var/lib/etcd-backup-{{ ansible_date_time.iso8601_basic_short }}.tar.gz"
+        format: gz
+      when: etcd_data_dir.stat.exists
+
+    - name: Remove etcd data directory
+      file:
+        path: /var/lib/etcd
+        state: absent
+      when: etcd_data_dir.stat.exists
+
+    - name: Recreate empty etcd data directory
+      file:
+        path: /var/lib/etcd
+        state: directory
+        mode: '0700'
+
+  when:
+    - reset_etcd_data | default(false)
+    - is_master_node.stat.exists
+
 # Regenerate certificates if required
 - name: Regenerate certificates block
   block:
@@ -101,10 +132,6 @@
           {%- if enable_domain_communication | default(false) and domain_suffix is defined -%},{{ inventory_hostname }}.{{ domain_suffix }}{%- endif -%}
           {%- if kube_vip_address is defined -%},{{ kube_vip_address }}{%- endif -%}
 
-    - name: Display certificate SANs
-      debug:
-        msg: "Certificate SANs: {{ cert_extra_sans }}"
-
     # Regenerate etcd certificates
     - name: Regenerate etcd server certificates
       command: kubeadm init phase certs etcd-server
@@ -124,18 +151,6 @@
 
     - name: Regenerate apiserver-kubelet-client certificates
       command: kubeadm init phase certs apiserver-kubelet-client
-
-    # Verify new certificate SANs
-    - name: Verify apiserver certificate SANs
-      shell: |
-        openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout | grep -A1 "Subject Alternative Name"
-      register: cert_sans_check
-      ignore_errors: yes
-
-    - name: Display new certificate SANs
-      debug:
-        var: cert_sans_check.stdout_lines
-      when: cert_sans_check.stdout_lines is defined
 
   when: 
     - regenerate_certs | default(false)

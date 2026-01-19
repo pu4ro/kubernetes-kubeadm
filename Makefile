@@ -14,7 +14,7 @@
 .PHONY: apache-repo-install apache-repo-start apache-repo-stop apache-repo-restart apache-repo-status apache-repo-remove
 .PHONY: rhel-repo-init-iso rhel-repo-init-directory rhel-repo-setup-iso rhel-repo-setup-directory rhel-repo-remove-iso rhel-repo-remove-directory rhel-repo-status-iso rhel-repo-status-directory
 .PHONY: httpd-repo-install-iso httpd-repo-install-directory httpd-repo-start httpd-repo-stop httpd-repo-restart httpd-repo-status httpd-repo-remove-iso httpd-repo-remove-directory
-.PHONY: update-ip update-ip-with-certs
+.PHONY: update-ip update-ip-with-certs update-ip-full
 
 .DEFAULT_GOAL := help
 
@@ -294,6 +294,22 @@ update-ip-with-certs: ## 노드 IP 변경 + 인증서 재생성 (OLD_IP, NEW_IP,
 	@echo "==> IP 변경 + 인증서 재생성: $(OLD_IP) -> $(NEW_IP) (호스트: $(HOST))"
 	@read -p "IP를 변경하고 인증서를 재생성하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
 	ansible-playbook -i $(INVENTORY) update-node-ip.yml -e "old_ip=$(OLD_IP)" $(if $(NEW_IP),-e "new_ip=$(NEW_IP)",) -e "regenerate_certs=true" --limit $(HOST)
+
+update-ip-full: ## 노드 IP 변경 + 인증서 + etcd 초기화 (OLD_IP, NEW_IP, HOST 필요) [데이터 손실!]
+	@if [ -z "$(OLD_IP)" ]; then \
+		echo "ERROR: OLD_IP is required"; \
+		echo "Usage: make update-ip-full OLD_IP=192.168.1.100 NEW_IP=192.168.1.200 HOST=master1"; \
+		exit 1; \
+	fi
+	@if [ -z "$(HOST)" ]; then \
+		echo "ERROR: HOST is required"; \
+		echo "Usage: make update-ip-full OLD_IP=192.168.1.100 NEW_IP=192.168.1.200 HOST=master1"; \
+		exit 1; \
+	fi
+	@echo "==> IP 변경 + 인증서 재생성 + etcd 초기화: $(OLD_IP) -> $(NEW_IP) (호스트: $(HOST))"
+	@echo "경고: etcd 데이터가 초기화됩니다! 클러스터 데이터가 손실됩니다."
+	@read -p "계속하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	ansible-playbook -i $(INVENTORY) update-node-ip.yml -e "old_ip=$(OLD_IP)" $(if $(NEW_IP),-e "new_ip=$(NEW_IP)",) -e "regenerate_certs=true" -e "reset_etcd_data=true" --limit $(HOST)
 
 ##@ 유틸리티
 
