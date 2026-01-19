@@ -97,7 +97,7 @@
 
     - name: Wait for API server to be ready on first master
       wait_for:
-        host: "{{ kube_vip_address }}"
+        host: "{{ kube_vip_address if kube_vip_address is defined else (api_domain if enable_domain_communication | default(false) else hostvars[groups['masters'][0]].ansible_host) }}"
         port: "{{ kube_vip_port }}"
         state: started
         delay: 5
@@ -140,7 +140,7 @@
       block:
         - name: Execute kubeadm join for additional masters
           shell: |
-            kubeadm join {{ kube_vip_address }}:{{ kube_vip_port }} --token {{ hostvars[groups['masters'][0]].kubeadm_token.stdout }} \
+            kubeadm join {{ kube_vip_address if kube_vip_address is defined else (api_domain if enable_domain_communication | default(false) else hostvars[groups['masters'][0]].ansible_host) }}:{{ kube_vip_port }} --token {{ hostvars[groups['masters'][0]].kubeadm_token.stdout }} \
               --discovery-token-ca-cert-hash sha256:{{ hostvars[groups['masters'][0]].discovery_token_ca_cert_hash_value }} \
               --control-plane --certificate-key {{ hostvars[groups['masters'][0]].certificate_key }}
           register: join_output

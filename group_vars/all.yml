@@ -22,7 +22,14 @@ pod_subnet: 10.244.0.0/16
 master_ha: true
 kube_vip_port: 6443
 kube_vip_interface: ens18
-kube_vip_address: 192.168.135.69  # Uncomment for HA setup
+# kube_vip_address: 192.168.135.69  # Optional: Set VIP for kube-vip based HA
+#
+# NOTE: kube_vip_address is OPTIONAL when using domain-based communication!
+#   - If kube_vip_address is set: kube-vip will be deployed and manage the VIP
+#   - If NOT set and enable_domain_communication=true: Uses api_domain for control plane endpoint
+#     (requires external DNS/LB configuration)
+#   - For single master: Leave undefined and configure DNS for api_domain -> master IP
+#
 kube_vip_svc_enable: false         # Enable/disable kube-vip service load balancing (true/false)
 
 # Container Runtime Configuration
@@ -532,6 +539,19 @@ ca_certificates: []
 # Enable domain-based communication for etcd and API server
 # This allows cluster components to communicate using DNS names instead of IP addresses
 # Useful for environments where IP addresses may change (cloud, VM migration, etc.)
+#
+# IMPORTANT: When enable_domain_communication is true and kube_vip_address is NOT defined:
+#   - controlPlaneEndpoint will use api_domain instead of IP
+#   - Additional masters will join using api_domain
+#   - You MUST configure DNS to resolve api_domain to the first master's IP (single master)
+#     or to a load balancer IP (HA setup with external LB)
+#
+# Usage scenarios:
+#   1. Single master with domain: Set enable_domain_communication=true, leave kube_vip_address undefined
+#      Configure DNS: api_domain -> first master's IP
+#   2. HA with kube-vip: Set kube_vip_address, kube-vip will manage the VIP
+#   3. HA with external LB: Set enable_domain_communication=true, configure external LB,
+#      DNS: api_domain -> load balancer IP
 #
 # Usage with tags:
 #   ansible-playbook site.yml --tags k8s-init    # Apply during cluster initialization

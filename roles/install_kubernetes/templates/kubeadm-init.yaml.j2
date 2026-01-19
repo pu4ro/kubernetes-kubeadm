@@ -22,6 +22,9 @@ clusterName: kubernetes
 kubernetesVersion: "{{ kubernetes_version }}"
 {% if kube_vip_address is defined %}
 controlPlaneEndpoint: {{ kube_vip_address }}:{{ kube_vip_port }}
+{% elif enable_domain_communication | default(false) and api_domain is defined %}
+{# When domain-based communication is enabled without VIP, use api_domain #}
+controlPlaneEndpoint: {{ api_domain }}:{{ kube_vip_port | default(6443) }}
 {% endif %}
 certificatesDir: /etc/kubernetes/pki
 {% if enable_custom_image_repository | default(false) %}

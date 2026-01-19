@@ -10,9 +10,16 @@
 {% endif %}
 {% endfor %}
 
-{% if enable_domain_communication | default(false) and kube_vip_address is defined %}
-# Kubernetes API domain (points to VIP for HA)
+{% if enable_domain_communication | default(false) and api_domain is defined %}
+# Kubernetes API domain
+{% if kube_vip_address is defined %}
+# Points to VIP for HA with kube-vip
 {{ kube_vip_address }} {{ api_domain }}
+{% else %}
+# Points to first master (for single master or external LB configuration)
+# NOTE: For external LB, override this in custom_hosts with LB IP
+{{ hostvars[groups['masters'][0]]['ansible_host'] | default(hostvars[groups['masters'][0]]['inventory_hostname']) }} {{ api_domain }}
+{% endif %}
 {% endif %}
 
 {% if registry_hosts is defined and registry_hosts | length > 0 %}
