@@ -719,6 +719,41 @@ containerd_data_base_dir: "/data/containerd"  # 호스트별: /data/containerd/{
 make cmd-all CMD="ls -la /data/containerd/"
 ```
 
+### 노드 IP 변경 (update_node_ip Role)
+
+노드의 IP가 변경되었을 때 Kubernetes 설정 파일을 자동으로 업데이트합니다.
+
+**업데이트 대상 파일:**
+- `/etc/kubernetes/manifests/etcd.yaml`
+- `/etc/kubernetes/manifests/kube-apiserver.yaml`
+- `/etc/kubernetes/manifests/kube-controller-manager.yaml`
+- `/etc/kubernetes/manifests/kube-scheduler.yaml`
+- `/etc/kubernetes/*.conf` (admin, kubelet, controller-manager, scheduler)
+- `/etc/hosts`
+- `~/.kube/config`
+
+**사용 방법:**
+
+```bash
+# 기본 사용
+make update-ip OLD_IP=192.168.135.41 NEW_IP=192.168.135.100 HOST=master1
+
+# 인증서 재생성 포함
+make update-ip-with-certs OLD_IP=192.168.135.41 NEW_IP=192.168.135.100 HOST=master1
+
+# Ansible 직접 실행
+ansible-playbook -i inventory.ini update-node-ip.yml \
+  -e 'old_ip=192.168.135.41' \
+  -e 'new_ip=192.168.135.100' \
+  --limit master1
+```
+
+**주요 기능:**
+- kubelet 중지 → 파일 수정 → kubelet 시작
+- 자동 백업 (`.bak` 파일)
+- 선택적 인증서 재생성 (`regenerate_certs=true`)
+- 변경 후 클러스터 상태 확인
+
 ## 📁 프로젝트 구조
 
 ```
