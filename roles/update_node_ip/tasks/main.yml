@@ -12,6 +12,22 @@
     path: "{{ k8s_manifests_dir }}/kube-apiserver.yaml"
   register: is_master_node
 
+# Stop kubelet first to prevent issues during file updates
+- name: Stop kubelet before updating files
+  systemd:
+    name: kubelet
+    state: stopped
+  when: restart_services | default(true)
+
+# Remove all containers to clear kubelet cache
+- name: Remove all containers (crictl rm)
+  shell: crictl rm -af 2>/dev/null || true
+  when: restart_services | default(true)
+
+- name: Remove all pods (crictl rmp)
+  shell: crictl rmp -af 2>/dev/null || true
+  when: restart_services | default(true)
+
 # Update manifest files
 - name: Update IP in Kubernetes manifest files
   replace:
@@ -61,36 +77,10 @@
     backup: no
   when: update_etc_hosts | default(true)
 
-# Reset etcd data directory if required (WARNING: This will lose all etcd data!)
-- name: Reset etcd data block
-  block:
-    - name: Check if etcd data directory exists
-      stat:
-        path: /var/lib/etcd/member
-      register: etcd_data_dir
-
-    - name: Backup etcd data directory
-      archive:
-        path: /var/lib/etcd
-        dest: "/var/lib/etcd-backup-{{ ansible_date_time.iso8601_basic_short }}.tar.gz"
-        format: gz
-      when: etcd_data_dir.stat.exists
-
-    - name: Remove etcd data directory
-      file:
-        path: /var/lib/etcd
-        state: absent
-      when: etcd_data_dir.stat.exists
-
-    - name: Recreate empty etcd data directory
-      file:
-        path: /var/lib/etcd
-        state: directory
-        mode: '0700'
-
-  when:
-    - reset_etcd_data | default(false)
-    - is_master_node.stat.exists
+# Remove backup files from manifests directory
+- name: Remove backup files from manifests directory
+  shell: rm -f /etc/kubernetes/manifests/*~
+  ignore_errors: yes
 
 # Regenerate certificates if required
 - name: Regenerate certificates block
@@ -135,7 +125,7 @@
     # Regenerate etcd certificates
     - name: Regenerate etcd server certificates
       command: kubeadm init phase certs etcd-server
-      
+
     - name: Regenerate etcd peer certificates
       command: kubeadm init phase certs etcd-peer
 
@@ -152,6 +142,105 @@
     - name: Regenerate apiserver-kubelet-client certificates
       command: kubeadm init phase certs apiserver-kubelet-client
 
-  when: 
+  when:
     - regenerate_certs | default(false)
+    - is_master_node.stat.exists
+
+# Force new cluster for etcd (preserves data but resets cluster membership)
+# This is required when IP changes because etcd stores cluster info in its data directory
+- name: Force new etcd cluster block
+  block:
+    - name: Check if etcd data exists
+      stat:
+        path: /var/lib/etcd/member
+      register: etcd_member_dir
+
+    - name: Add --force-new-cluster flag to etcd manifest
+      lineinfile:
+        path: "{{ k8s_manifests_dir }}/etcd.yaml"
+        insertafter: "- etcd"
+        line: "    - --force-new-cluster"
+        state: present
+      when: etcd_member_dir.stat.exists
+
+    - name: Start kubelet to bootstrap etcd with force-new-cluster
+      systemd:
+        name: kubelet
+        state: started
+      when: etcd_member_dir.stat.exists
+
+    - name: Wait for etcd to start with new cluster
+      pause:
+        seconds: 20
+      when: etcd_member_dir.stat.exists
+
+    - name: Stop kubelet to remove force-new-cluster flag
+      systemd:
+        name: kubelet
+        state: stopped
+      when: etcd_member_dir.stat.exists
+
+    - name: Remove all containers again
+      shell: crictl rm -af 2>/dev/null || true
+      when: etcd_member_dir.stat.exists
+
+    - name: Remove all pods again
+      shell: crictl rmp -af 2>/dev/null || true
+      when: etcd_member_dir.stat.exists
+
+    - name: Remove --force-new-cluster flag from etcd manifest
+      lineinfile:
+        path: "{{ k8s_manifests_dir }}/etcd.yaml"
+        line: "    - --force-new-cluster"
+        state: absent
+      when: etcd_member_dir.stat.exists
+
+  when:
+    - force_new_etcd_cluster | default(true)
+    - is_master_node.stat.exists
+    - restart_services | default(true)
+
+# Reset etcd data directory if required (WARNING: This will lose all etcd data!)
+- name: Reset etcd data block
+  block:
+    - name: Check if etcd data directory exists
+      stat:
+        path: /var/lib/etcd/member
+      register: etcd_data_dir
+
+    - name: Backup etcd data directory
+      archive:
+        path: /var/lib/etcd
+        dest: "/var/lib/etcd-backup-{{ ansible_date_time.iso8601_basic_short }}.tar.gz"
+        format: gz
+      when: etcd_data_dir.stat.exists
+
+    - name: Remove etcd data directory
+      file:
+        path: /var/lib/etcd
+        state: absent
+      when: etcd_data_dir.stat.exists
+
+    - name: Recreate empty etcd data directory
+      file:
+        path: /var/lib/etcd
+        state: directory
+        mode: '0700'
+
+  when:
+    - reset_etcd_data | default(false)
+    - is_master_node.stat.exists
+
+# Start services
+- name: Start kubelet
+  systemd:
+    name: kubelet
+    state: started
+  when: restart_services | default(true)
+
+- name: Wait for control plane pods to start
+  pause:
+    seconds: 30
+  when:
+    - restart_services | default(true)
     - is_master_node.stat.exists

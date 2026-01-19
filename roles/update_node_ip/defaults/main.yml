@@ -33,9 +33,19 @@ update_etc_hosts: true
 # Whether to regenerate certificates (if IP is in cert SANs)
 regenerate_certs: false
 
+# Whether to force new etcd cluster (preserves data, resets cluster membership)
+# This uses --force-new-cluster flag to migrate etcd to new IP while keeping data
+# Default: true (recommended for IP changes)
+force_new_etcd_cluster: true
+
 # Whether to reset etcd data directory (WARNING: This will lose all etcd data!)
+# Only use this if force_new_etcd_cluster fails
 # Required when IP changes because etcd stores member info in its data directory
 reset_etcd_data: false
+
+# Whether to restart services after updating files
+# This is required because kubelet caches static pod manifests
+restart_services: true
 
 # Domain communication settings (from group_vars/all.yml)
 # These are used when regenerating certificates to include proper SANs
