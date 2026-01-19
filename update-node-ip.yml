@@ -1,57 +1,26 @@
 ---
 # Update Node IP Playbook
 # 
-# This playbook updates Kubernetes configuration files when a node's IP changes.
+# Kubernetes 설정 파일의 IP를 변경합니다.
+# 주의: 이 플레이북은 파일만 변경합니다. IP 변경은 사용자가 직접 수행해야 합니다.
 #
-# Usage:
+# 사용법:
 #   ansible-playbook -i inventory.ini update-node-ip.yml \
 #     -e 'old_ip=192.168.1.100' \
 #     -e 'new_ip=192.168.1.200' \
 #     --limit master1
 #
-# Variables:
-#   old_ip: (required) The old IP address to replace
-#   new_ip: (optional) The new IP address (defaults to ansible_host)
-#   regenerate_certs: (optional) Set to true to regenerate certificates
-#   update_etc_hosts: (optional) Set to false to skip /etc/hosts update
-#
-# For multi-master clusters:
-#   Run this playbook on one master at a time
-#   After updating, verify etcd cluster health
+# 변수:
+#   old_ip: (필수) 변경 전 IP
+#   new_ip: (선택) 변경 후 IP (기본값: ansible_host)
+#   regenerate_certs: (선택) 인증서 재생성 여부
 
 - name: Update Node IP Configuration
   hosts: masters
   become: yes
   gather_facts: yes
-  serial: 1  # Run on one host at a time for safety
   
-  pre_tasks:
-    - name: Verify old_ip is provided
-      fail:
-        msg: |
-          ERROR: old_ip variable is required!
-          
-          Usage:
-            ansible-playbook -i inventory.ini update-node-ip.yml \
-              -e 'old_ip=192.168.1.100' \
-              -e 'new_ip=192.168.1.200' \
-              --limit master1
-      when: old_ip is not defined
-
   roles:
     - role: update_node_ip
       tags:
         - update-ip
-        - ip-change
-
-  post_tasks:
-    - name: Final status check
-      command: kubectl get nodes -o wide
-      register: final_status
-      ignore_errors: yes
-      changed_when: false
-
-    - name: Display final cluster status
-      debug:
-        var: final_status.stdout_lines
-      when: final_status.stdout_lines is defined

@@ -1,37 +1,16 @@
 ---
 # Update Node IP Role - Main Tasks
 # This role updates Kubernetes configuration files when a node's IP address changes
-
-- name: Validate required variables
-  assert:
-    that:
-      - old_ip is defined
-      - old_ip | length > 0
-    fail_msg: "old_ip variable must be defined. Usage: -e 'old_ip=192.168.1.100'"
+# Note: This role only updates files. User must handle IP change on the system.
 
 - name: Set new_ip from ansible_host if not defined
   set_fact:
     new_ip: "{{ new_ip | default(ansible_host) }}"
 
-- name: Display IP change information
-  debug:
-    msg: "Changing IP from {{ old_ip }} to {{ new_ip }} on {{ inventory_hostname }}"
-
 - name: Check if this is a master node
   stat:
     path: "{{ k8s_manifests_dir }}/kube-apiserver.yaml"
   register: is_master_node
-
-- name: Stop kubelet before making changes
-  service:
-    name: kubelet
-    state: stopped
-  when: is_master_node.stat.exists
-
-- name: Wait for kubelet to stop
-  pause:
-    seconds: 5
-  when: is_master_node.stat.exists
 
 # Update manifest files
 - name: Update IP in Kubernetes manifest files
@@ -42,7 +21,6 @@
     backup: yes
   loop: "{{ k8s_manifest_files }}"
   when: is_master_node.stat.exists
-  register: manifest_update
   ignore_errors: yes
 
 # Update kubeconfig files
@@ -54,7 +32,6 @@
     backup: yes
   loop: "{{ k8s_kubeconfig_files }}"
   when: is_master_node.stat.exists
-  register: kubeconfig_update
   ignore_errors: yes
 
 # Update user's kubeconfig
@@ -66,22 +43,16 @@
     backup: yes
   ignore_errors: yes
 
-# Update etcd configuration in kubelet
-- name: Check if kubelet kubeadm config exists
-  stat:
-    path: /var/lib/kubelet/config.yaml
-  register: kubelet_config
-
+# Update kubelet config
 - name: Update IP in kubelet config
   replace:
     path: /var/lib/kubelet/config.yaml
     regexp: "{{ old_ip }}"
     replace: "{{ new_ip }}"
     backup: yes
-  when: kubelet_config.stat.exists
   ignore_errors: yes
 
-# Update /etc/hosts if configured
+# Update /etc/hosts
 - name: Update IP in /etc/hosts
   replace:
     path: /etc/hosts
@@ -89,24 +60,6 @@
     replace: "{{ new_ip }}\\1"
     backup: yes
   when: update_etc_hosts | default(true)
-
-# Handle etcd data directory update if needed
-- name: Check etcd member list (on first master)
-  shell: |
-    ETCDCTL_API=3 etcdctl \
-      --endpoints=https://127.0.0.1:2379 \
-      --cacert=/etc/kubernetes/pki/etcd/ca.crt \
-      --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
-      --key=/etc/kubernetes/pki/etcd/healthcheck-client.key \
-      member list -w table
-  register: etcd_members
-  when: is_master_node.stat.exists and inventory_hostname == groups['masters'][0]
-  ignore_errors: yes
-
-- name: Display etcd members
-  debug:
-    var: etcd_members.stdout_lines
-  when: etcd_members is defined and etcd_members.stdout_lines is defined
 
 # Regenerate certificates if required
 - name: Regenerate certificates block
@@ -117,7 +70,7 @@
         dest: "/etc/kubernetes/pki-backup-{{ ansible_date_time.iso8601_basic_short }}.tar.gz"
         format: gz
 
-    - name: Remove old etcd certificates (will be regenerated)
+    - name: Remove old etcd certificates
       file:
         path: "{{ item }}"
         state: absent
@@ -157,52 +110,3 @@
   when: 
     - regenerate_certs | default(false)
     - is_master_node.stat.exists
-
-# Restart kubelet
-- name: Start kubelet
-  service:
-    name: kubelet
-    state: started
-  when: 
-    - restart_kubelet | default(true)
-    - is_master_node.stat.exists
-
-- name: Wait for kubelet to start
-  pause:
-    seconds: 10
-  when: is_master_node.stat.exists
-
-# Verify API server is responding
-- name: Wait for API server to be ready
-  wait_for:
-    host: "{{ new_ip }}"
-    port: 6443
-    state: started
-    delay: 5
-    timeout: 120
-  when: is_master_node.stat.exists
-  ignore_errors: yes
-
-# Verify cluster status
-- name: Check node status
-  command: kubectl get nodes -o wide
-  register: node_status
-  when: is_master_node.stat.exists
-  ignore_errors: yes
-  changed_when: false
-
-- name: Display node status
-  debug:
-    var: node_status.stdout_lines
-  when: node_status is defined and node_status.stdout_lines is defined
-
-- name: Display completion message
-  debug:
-    msg: |
-      IP change completed: {{ old_ip }} -> {{ new_ip }}
-      
-      If you encounter issues:
-      1. Check kubelet logs: journalctl -u kubelet -f
-      2. Check etcd logs: crictl logs $(crictl ps -a | grep etcd | awk '{print $1}')
-      3. If certificates need regeneration, run with: -e 'regenerate_certs=true'
-      4. For multi-master setup, update other masters' etcd member configuration
