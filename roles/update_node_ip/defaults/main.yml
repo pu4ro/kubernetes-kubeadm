@@ -1,0 +1,37 @@
+---
+# Update Node IP Role - Default Variables
+
+# Old IP address to replace (required)
+# old_ip: "192.168.1.100"
+
+# New IP address (defaults to current ansible_host)
+# new_ip: "{{ ansible_host }}"
+
+# Kubernetes manifests directory
+k8s_manifests_dir: /etc/kubernetes/manifests
+
+# Kubernetes config directory
+k8s_config_dir: /etc/kubernetes
+
+# Files to update in manifests directory
+k8s_manifest_files:
+  - etcd.yaml
+  - kube-apiserver.yaml
+  - kube-controller-manager.yaml
+  - kube-scheduler.yaml
+
+# Kubeconfig files to update
+k8s_kubeconfig_files:
+  - admin.conf
+  - kubelet.conf
+  - controller-manager.conf
+  - scheduler.conf
+
+# Whether to restart kubelet after changes
+restart_kubelet: true
+
+# Whether to update /etc/hosts
+update_etc_hosts: true
+
+# Whether to regenerate certificates (if IP is in cert SANs)
+regenerate_certs: false

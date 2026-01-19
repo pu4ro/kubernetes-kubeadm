@@ -14,6 +14,7 @@
 .PHONY: apache-repo-install apache-repo-start apache-repo-stop apache-repo-restart apache-repo-status apache-repo-remove
 .PHONY: rhel-repo-init-iso rhel-repo-init-directory rhel-repo-setup-iso rhel-repo-setup-directory rhel-repo-remove-iso rhel-repo-remove-directory rhel-repo-status-iso rhel-repo-status-directory
 .PHONY: httpd-repo-install-iso httpd-repo-install-directory httpd-repo-start httpd-repo-stop httpd-repo-restart httpd-repo-status httpd-repo-remove-iso httpd-repo-remove-directory
+.PHONY: update-ip update-ip-with-certs
 
 .DEFAULT_GOAL := help
 
@@ -261,6 +262,38 @@ reset-workers: ## Worker 노드만 초기화 (kubeadm reset) [확인 필요]
 	@echo "==> Worker 노드 초기화 중..."
 	@read -p "정말로 Worker 노드를 초기화하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
 	ansible-playbook -i $(INVENTORY) $(RESET_PLAYBOOK) --limit workers
+
+##@ IP 변경
+
+update-ip: ## 노드 IP 변경 (OLD_IP, NEW_IP, HOST 필요)
+	@if [ -z "$(OLD_IP)" ]; then \
+		echo "ERROR: OLD_IP is required"; \
+		echo "Usage: make update-ip OLD_IP=192.168.1.100 NEW_IP=192.168.1.200 HOST=master1"; \
+		exit 1; \
+	fi
+	@if [ -z "$(HOST)" ]; then \
+		echo "ERROR: HOST is required"; \
+		echo "Usage: make update-ip OLD_IP=192.168.1.100 NEW_IP=192.168.1.200 HOST=master1"; \
+		exit 1; \
+	fi
+	@echo "==> IP 변경: $(OLD_IP) -> $(NEW_IP) (호스트: $(HOST))"
+	@read -p "IP를 변경하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	ansible-playbook -i $(INVENTORY) update-node-ip.yml -e "old_ip=$(OLD_IP)" $(if $(NEW_IP),-e "new_ip=$(NEW_IP)",) --limit $(HOST)
+
+update-ip-with-certs: ## 노드 IP 변경 + 인증서 재생성 (OLD_IP, NEW_IP, HOST 필요)
+	@if [ -z "$(OLD_IP)" ]; then \
+		echo "ERROR: OLD_IP is required"; \
+		echo "Usage: make update-ip-with-certs OLD_IP=192.168.1.100 NEW_IP=192.168.1.200 HOST=master1"; \
+		exit 1; \
+	fi
+	@if [ -z "$(HOST)" ]; then \
+		echo "ERROR: HOST is required"; \
+		echo "Usage: make update-ip-with-certs OLD_IP=192.168.1.100 NEW_IP=192.168.1.200 HOST=master1"; \
+		exit 1; \
+	fi
+	@echo "==> IP 변경 + 인증서 재생성: $(OLD_IP) -> $(NEW_IP) (호스트: $(HOST))"
+	@read -p "IP를 변경하고 인증서를 재생성하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	ansible-playbook -i $(INVENTORY) update-node-ip.yml -e "old_ip=$(OLD_IP)" $(if $(NEW_IP),-e "new_ip=$(NEW_IP)",) -e "regenerate_certs=true" --limit $(HOST)
 
 ##@ 유틸리티
 

@@ -1,0 +1,57 @@
+---
+# Update Node IP Playbook
+# 
+# This playbook updates Kubernetes configuration files when a node's IP changes.
+#
+# Usage:
+#   ansible-playbook -i inventory.ini update-node-ip.yml \
+#     -e 'old_ip=192.168.1.100' \
+#     -e 'new_ip=192.168.1.200' \
+#     --limit master1
+#
+# Variables:
+#   old_ip: (required) The old IP address to replace
+#   new_ip: (optional) The new IP address (defaults to ansible_host)
+#   regenerate_certs: (optional) Set to true to regenerate certificates
+#   update_etc_hosts: (optional) Set to false to skip /etc/hosts update
+#
+# For multi-master clusters:
+#   Run this playbook on one master at a time
+#   After updating, verify etcd cluster health
+
+- name: Update Node IP Configuration
+  hosts: masters
+  become: yes
+  gather_facts: yes
+  serial: 1  # Run on one host at a time for safety
+  
+  pre_tasks:
+    - name: Verify old_ip is provided
+      fail:
+        msg: |
+          ERROR: old_ip variable is required!
+          
+          Usage:
+            ansible-playbook -i inventory.ini update-node-ip.yml \
+              -e 'old_ip=192.168.1.100' \
+              -e 'new_ip=192.168.1.200' \
+              --limit master1
+      when: old_ip is not defined
+
+  roles:
+    - role: update_node_ip
+      tags:
+        - update-ip
+        - ip-change
+
+  post_tasks:
+    - name: Final status check
+      command: kubectl get nodes -o wide
+      register: final_status
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Display final cluster status
+      debug:
+        var: final_status.stdout_lines
+      when: final_status.stdout_lines is defined
