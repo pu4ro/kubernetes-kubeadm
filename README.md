@@ -656,6 +656,57 @@ master2 ansible_host=192.168.135.32
 master3 ansible_host=192.168.135.33
 ```
 
+### 도메인 기반 통신 (IP 변경 없이 클러스터 구성)
+
+IP 주소를 매번 변경하지 않고 도메인 이름 기반으로 클러스터를 구성할 수 있습니다.
+
+```yaml
+# group_vars/all.yml
+enable_domain_communication: true     # 도메인 기반 통신 활성화
+domain_suffix: "k8s.local"            # 노드 도메인 접미사 (예: master1.k8s.local)
+api_domain: "k8s-api.internal"        # API 서버 도메인
+```
+
+#### 사용 시나리오
+
+**1. 단일 마스터 + 도메인 기반 통신**
+```yaml
+# kube_vip_address를 설정하지 않음
+enable_domain_communication: true
+api_domain: "k8s-api.internal"
+```
+- `/etc/hosts`에 자동으로 `api_domain -> 첫 번째 마스터 IP` 매핑 추가
+- 외부 DNS 서버 설정 시 `api_domain`을 마스터 IP로 해석하도록 구성
+
+**2. HA + kube-vip (기존 방식)**
+```yaml
+master_ha: true
+kube_vip_address: 192.168.135.30    # VIP 설정
+enable_domain_communication: true   # 선택적
+```
+- kube-vip가 VIP를 관리
+- `controlPlaneEndpoint`에 VIP 사용
+
+**3. HA + 외부 로드밸런서**
+```yaml
+master_ha: true
+# kube_vip_address는 설정하지 않음
+enable_domain_communication: true
+api_domain: "k8s-api.internal"
+```
+- 외부 로드밸런서 구성 필요
+- DNS에서 `api_domain`을 로드밸런서 IP로 해석하도록 설정
+- `/etc/hosts` 또는 `custom_hosts`로 로드밸런서 IP 매핑:
+```yaml
+custom_hosts:
+  "k8s-api.internal": "192.168.135.100"  # 로드밸런서 IP
+```
+
+#### 장점
+- 환경 변경 시 IP 주소 수정 불필요
+- DNS 기반 유연한 엔드포인트 관리
+- VM 마이그레이션, 클라우드 환경에 적합
+
 ### Containerd 데이터 디렉토리 커스터마이징
 
 ```yaml
