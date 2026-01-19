@@ -7,7 +7,11 @@ apiVersion: kubeadm.k8s.io/v1beta3
 {% endif %}
 kind: InitConfiguration
 localAPIEndpoint:
+{% if enable_domain_communication | default(false) %}
+  advertiseAddress: {{ inventory_hostname }}.{{ domain_suffix }}
+{% else %}
   advertiseAddress: {{ ansible_host }}
+{% endif %}
   bindPort: 6443
 nodeRegistration:
   criSocket: unix:///var/run/containerd/containerd.sock
@@ -43,12 +47,25 @@ etcd:
    - First master: starts with single-node etcd
    - Additional masters: kubeadm join --control-plane automatically adds etcd members
    Setting initial-cluster with all masters causes quorum failure on first init. #}
+{% if k8s_minor >= 31 %}
+    extraArgs:
+      - name: advertise-client-urls
+        value: "https://{{ inventory_hostname }}.{{ domain_suffix }}:2379"
+      - name: initial-advertise-peer-urls
+        value: "https://{{ inventory_hostname }}.{{ domain_suffix }}:2380"
+{% else %}
+    extraArgs:
+      advertise-client-urls: "https://{{ inventory_hostname }}.{{ domain_suffix }}:2379"
+      initial-advertise-peer-urls: "https://{{ inventory_hostname }}.{{ domain_suffix }}:2380"
+{% endif %}
     serverCertSANs:
-      - "{{ api_domain }}"
+      - "{{ api_domain | default('k8s-api.local') }}"
+      - "{{ inventory_hostname }}.{{ domain_suffix }}"
 {% for host in groups['masters'] %}
       - "{{ host }}.{{ domain_suffix }}"
 {% endfor %}
     peerCertSANs:
+      - "{{ inventory_hostname }}.{{ domain_suffix }}"
 {% for host in groups['masters'] %}
       - "{{ host }}.{{ domain_suffix }}"
 {% endfor %}
