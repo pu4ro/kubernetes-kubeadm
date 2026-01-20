@@ -39,44 +39,6 @@
   when: is_master_node.stat.exists
   ignore_errors: yes
 
-# Fix domain-based URLs to use IP addresses in manifests
-# This is required because etcd certificates may not have domain SANs
-# When enable_domain_communication is true, kubeadm generates manifests with domain names
-# but the certificates only have IP addresses, causing TLS handshake failures
-
-- name: Fix kube-apiserver etcd-servers to use IP instead of domain
-  replace:
-    path: "{{ k8s_manifests_dir }}/kube-apiserver.yaml"
-    regexp: '--etcd-servers=https://{{ inventory_hostname }}.{{ domain_suffix }}:2379'
-    replace: '--etcd-servers=https://{{ new_ip }}:2379'
-    backup: no
-  when:
-    - is_master_node.stat.exists
-    - enable_domain_communication | default(false)
-    - domain_suffix is defined
-
-- name: Fix etcd initial-advertise-peer-urls to use IP instead of domain
-  replace:
-    path: "{{ k8s_manifests_dir }}/etcd.yaml"
-    regexp: '--initial-advertise-peer-urls=https://{{ inventory_hostname }}.{{ domain_suffix }}:2380'
-    replace: '--initial-advertise-peer-urls=https://{{ new_ip }}:2380'
-    backup: no
-  when:
-    - is_master_node.stat.exists
-    - enable_domain_communication | default(false)
-    - domain_suffix is defined
-
-- name: Fix etcd initial-cluster to use IP instead of domain
-  replace:
-    path: "{{ k8s_manifests_dir }}/etcd.yaml"
-    regexp: '--initial-cluster={{ inventory_hostname }}=https://{{ inventory_hostname }}.{{ domain_suffix }}:2380'
-    replace: '--initial-cluster={{ inventory_hostname }}=https://{{ new_ip }}:2380'
-    backup: no
-  when:
-    - is_master_node.stat.exists
-    - enable_domain_communication | default(false)
-    - domain_suffix is defined
-
 # Update kubeconfig files
 - name: Update IP in kubeconfig files
   replace:
@@ -160,12 +122,46 @@
           {%- if enable_domain_communication | default(false) and domain_suffix is defined -%},{{ inventory_hostname }}.{{ domain_suffix }}{%- endif -%}
           {%- if kube_vip_address is defined -%},{{ kube_vip_address }}{%- endif -%}
 
-    # Regenerate etcd certificates
-    - name: Regenerate etcd server certificates
-      command: kubeadm init phase certs etcd-server
+    # Build etcd SANs list for domain communication
+    - name: Build etcd SANs list
+      set_fact:
+        etcd_extra_sans: >-
+          {{ new_ip }},127.0.0.1,localhost,{{ inventory_hostname }}
+          {%- if enable_domain_communication | default(false) and domain_suffix is defined -%},{{ inventory_hostname }}.{{ domain_suffix }}{%- endif -%}
 
-    - name: Regenerate etcd peer certificates
-      command: kubeadm init phase certs etcd-peer
+    # Create kubeadm config for certificate regeneration with etcd SANs
+    - name: Create kubeadm config for cert regeneration
+      copy:
+        content: |
+          apiVersion: kubeadm.k8s.io/v1beta3
+          kind: ClusterConfiguration
+          etcd:
+            local:
+              serverCertSANs:
+                - "{{ new_ip }}"
+                - "127.0.0.1"
+                - "localhost"
+                - "{{ inventory_hostname }}"
+          {% if enable_domain_communication | default(false) and domain_suffix is defined %}
+                - "{{ inventory_hostname }}.{{ domain_suffix }}"
+          {% endif %}
+              peerCertSANs:
+                - "{{ new_ip }}"
+                - "127.0.0.1"
+                - "localhost"
+                - "{{ inventory_hostname }}"
+          {% if enable_domain_communication | default(false) and domain_suffix is defined %}
+                - "{{ inventory_hostname }}.{{ domain_suffix }}"
+          {% endif %}
+        dest: /tmp/kubeadm-cert-config.yaml
+        mode: '0600'
+
+    # Regenerate etcd certificates with domain SANs
+    - name: Regenerate etcd server certificates with SANs
+      command: kubeadm init phase certs etcd-server --config /tmp/kubeadm-cert-config.yaml
+
+    - name: Regenerate etcd peer certificates with SANs
+      command: kubeadm init phase certs etcd-peer --config /tmp/kubeadm-cert-config.yaml
 
     # Regenerate apiserver certificates with extra SANs
     - name: Regenerate apiserver certificates with domain SANs
@@ -179,6 +175,12 @@
 
     - name: Regenerate apiserver-kubelet-client certificates
       command: kubeadm init phase certs apiserver-kubelet-client
+
+    # Cleanup temp config
+    - name: Remove temporary kubeadm config
+      file:
+        path: /tmp/kubeadm-cert-config.yaml
+        state: absent
 
   when:
     - regenerate_certs | default(false)
