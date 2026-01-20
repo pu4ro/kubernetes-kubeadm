@@ -39,6 +39,19 @@
   when: is_master_node.stat.exists
   ignore_errors: yes
 
+# Fix etcd initial-cluster to match initial-advertise-peer-urls format
+# When enable_domain_communication is true, both should use domain names
+- name: Fix etcd initial-cluster to use domain name
+  replace:
+    path: "{{ k8s_manifests_dir }}/etcd.yaml"
+    regexp: '--initial-cluster={{ inventory_hostname }}=https://{{ new_ip }}:2380'
+    replace: '--initial-cluster={{ inventory_hostname }}=https://{{ inventory_hostname }}.{{ domain_suffix }}:2380'
+    backup: no
+  when:
+    - is_master_node.stat.exists
+    - enable_domain_communication | default(false)
+    - domain_suffix is defined
+
 # Update kubeconfig files
 - name: Update IP in kubeconfig files
   replace:
@@ -156,11 +169,11 @@
       register: etcd_member_dir
 
     - name: Add --force-new-cluster flag to etcd manifest
-      lineinfile:
+      replace:
         path: "{{ k8s_manifests_dir }}/etcd.yaml"
-        insertafter: "- etcd"
-        line: "    - --force-new-cluster"
-        state: present
+        regexp: '(- etcd\n)(    - --advertise-client-urls)'
+        replace: '\1    - --force-new-cluster\n\2'
+        backup: no
       when: etcd_member_dir.stat.exists
 
     - name: Start kubelet to bootstrap etcd with force-new-cluster
@@ -171,7 +184,39 @@
 
     - name: Wait for etcd to start with new cluster
       pause:
-        seconds: 20
+        seconds: 30
+      when: etcd_member_dir.stat.exists
+
+    - name: Wait for etcd container to be running
+      shell: |
+        for i in $(seq 1 30); do
+          if crictl ps 2>/dev/null | grep -q etcd; then
+            echo "etcd container is running"
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "etcd container not found after 60 seconds"
+        exit 1
+      register: etcd_check
+      failed_when: false
+      when: etcd_member_dir.stat.exists
+
+    - name: Verify etcd health
+      shell: |
+        crictl exec $(crictl ps -q --name etcd 2>/dev/null | head -1) etcdctl \
+          --endpoints=https://127.0.0.1:2379 \
+          --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+          --cert=/etc/kubernetes/pki/etcd/server.crt \
+          --key=/etc/kubernetes/pki/etcd/server.key \
+          endpoint health 2>&1 || echo "etcd health check failed"
+      register: etcd_health
+      failed_when: false
+      when: etcd_member_dir.stat.exists
+
+    - name: Display etcd health status
+      debug:
+        msg: "{{ etcd_health.stdout | default('etcd health check skipped') }}"
       when: etcd_member_dir.stat.exists
 
     - name: Stop kubelet to remove force-new-cluster flag
@@ -189,10 +234,11 @@
       when: etcd_member_dir.stat.exists
 
     - name: Remove --force-new-cluster flag from etcd manifest
-      lineinfile:
+      replace:
         path: "{{ k8s_manifests_dir }}/etcd.yaml"
-        line: "    - --force-new-cluster"
-        state: absent
+        regexp: '    - --force-new-cluster\n'
+        replace: ''
+        backup: no
       when: etcd_member_dir.stat.exists
 
   when:
