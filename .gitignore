@@ -1,6 +1,7 @@
 # Serena MCP cache and configuration
 .serena/
 .claude
+.omc/
 AGENTS.md
 GEMINI.md
 
