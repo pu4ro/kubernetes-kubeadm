@@ -47,9 +47,26 @@ reset_etcd_data: false
 # This is required because kubelet caches static pod manifests
 restart_services: true
 
+# ========================================
+# HA Mode Configuration
+# ========================================
+
+# HA Mode (auto-detected from master_ha or based on master count)
+ha_mode: "{{ master_ha | default(false) }}"
+
+# Target master for single-master HA update (hostname from inventory)
+# Required when running update-ha-node-ip.yml
+# target_master: ""
+
+# etcd health check timeout in seconds
+etcd_health_timeout: 60
+
+# Wait time between HA operations in seconds
+ha_operation_delay: 30
+
+# Skip etcd member update (domain-based comm uses hostnames, not IPs)
+# When enable_domain_communication is true, etcd uses hostnames like master1.k8s.local
+# so only /etc/hosts needs to be updated, not etcd member URLs
+skip_etcd_member_update: "{{ enable_domain_communication | default(false) }}"
+
 # Domain communication settings (from group_vars/all.yml)
-# These are used when regenerating certificates to include proper SANs
-# enable_domain_communication: true
-# domain_suffix: "k8s.local"
-# api_domain: "k8s-api.internal"
-# kube_vip_address: "192.168.135.69"

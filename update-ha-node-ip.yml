@@ -1,0 +1,90 @@
+---
+# Update HA Node IP Playbook
+# 
+# This playbook handles IP address changes for a single master node in an HA (3-node) Kubernetes cluster.
+#
+# Key differences from single-master IP change:
+# - Uses etcdctl member update instead of --force-new-cluster
+# - Maintains etcd quorum (2/3 nodes) throughout the operation
+# - Updates /etc/hosts on all master nodes
+# - When domain communication is enabled, only /etc/hosts needs updating (etcd uses hostnames)
+#
+# Usage:
+#   # Basic IP change (domain communication enabled - most common)
+#   make update-ha-ip OLD_IP=192.168.135.71 NEW_IP=192.168.135.81 HOST=master1
+#
+#   # IP change with certificate regeneration
+#   make update-ha-ip-with-certs OLD_IP=192.168.135.71 NEW_IP=192.168.135.81 HOST=master1
+#
+# Prerequisites:
+# - The target master must be accessible at NEW_IP (update inventory.ini first)
+# - Other 2 masters must be healthy and reachable
+# - etcd cluster must have 3 members all healthy
+#
+# Variables:
+#   old_ip: (required) The old IP address to replace
+#   new_ip: (optional) The new IP address (defaults to ansible_host from inventory)
+#   regenerate_certs: (optional) Whether to regenerate certificates (default: false)
+#
+# Note: This playbook runs on a single host at a time (serial: 1 is implicit via --limit)
+
+- name: Update HA Node IP
+  hosts: masters
+  become: yes
+  gather_facts: yes
+  serial: 1
+
+  pre_tasks:
+    - name: Validate required variables
+      fail:
+        msg: "old_ip variable is required. Usage: -e 'old_ip=192.168.1.100'"
+      when: old_ip is not defined
+
+    - name: Set new_ip from ansible_host if not defined
+      set_fact:
+        new_ip: "{{ new_ip | default(ansible_host) }}"
+
+    - name: Display operation summary
+      debug:
+        msg: |
+          ============================================
+          HA Node IP Change Operation
+          ============================================
+          Target Host: {{ inventory_hostname }}
+          Old IP: {{ old_ip }}
+          New IP: {{ new_ip }}
+          Regenerate Certs: {{ regenerate_certs | default(false) }}
+          Domain Communication: {{ enable_domain_communication | default(false) }}
+          Domain Suffix: {{ domain_suffix | default('not set') }}
+          ============================================
+
+    - name: Confirm operation
+      pause:
+        prompt: "Press Enter to continue or Ctrl+C to abort"
+      when: ansible_check_mode is not defined or not ansible_check_mode
+
+  roles:
+    - role: update_node_ip
+      vars:
+        ha_mode: true
+
+  tasks:
+    - name: Include HA single master tasks
+      include_tasks: roles/update_node_ip/tasks/ha_single_master.yml
+
+  post_tasks:
+    - name: Operation complete
+      debug:
+        msg: |
+          ============================================
+          HA IP Change Complete
+          ============================================
+          Host: {{ inventory_hostname }}
+          New IP: {{ new_ip }}
+          
+          Next steps:
+          1. Verify cluster health: make check-etcd-health
+          2. Verify member list: make check-etcd-members
+          3. Check nodes: kubectl get nodes
+          4. Check pods: kubectl get pods -A
+          ============================================

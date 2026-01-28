@@ -15,6 +15,7 @@
 .PHONY: rhel-repo-init-iso rhel-repo-init-directory rhel-repo-setup-iso rhel-repo-setup-directory rhel-repo-remove-iso rhel-repo-remove-directory rhel-repo-status-iso rhel-repo-status-directory
 .PHONY: httpd-repo-install-iso httpd-repo-install-directory httpd-repo-start httpd-repo-stop httpd-repo-restart httpd-repo-status httpd-repo-remove-iso httpd-repo-remove-directory
 .PHONY: update-ip update-ip-with-certs update-ip-full
+.PHONY: update-ha-ip update-ha-ip-with-certs check-etcd-health check-etcd-members
 
 .DEFAULT_GOAL := help
 
@@ -310,6 +311,48 @@ update-ip-full: ## 노드 IP 변경 + 인증서 + etcd 초기화 (OLD_IP, NEW_IP
 	@echo "경고: etcd 데이터가 초기화됩니다! 클러스터 데이터가 손실됩니다."
 	@read -p "계속하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
 	ansible-playbook -i $(INVENTORY) update-node-ip.yml -e "old_ip=$(OLD_IP)" $(if $(NEW_IP),-e "new_ip=$(NEW_IP)",) -e "regenerate_certs=true" -e "reset_etcd_data=true" --limit $(HOST)
+
+##@ HA IP 변경
+
+update-ha-ip: ## HA 클러스터 단일 마스터 IP 변경 (OLD_IP, NEW_IP, HOST 필요)
+	@if [ -z "$(OLD_IP)" ]; then \
+		echo "ERROR: OLD_IP is required"; \
+		echo "Usage: make update-ha-ip OLD_IP=192.168.1.100 NEW_IP=192.168.1.200 HOST=master1"; \
+		exit 1; \
+	fi
+	@if [ -z "$(HOST)" ]; then \
+		echo "ERROR: HOST is required"; \
+		echo "Usage: make update-ha-ip OLD_IP=192.168.1.100 NEW_IP=192.168.1.200 HOST=master1"; \
+		exit 1; \
+	fi
+	@echo "==> HA IP 변경: $(OLD_IP) -> $(NEW_IP) (호스트: $(HOST))"
+	@echo "주의: 다른 2개의 마스터 노드가 정상 상태여야 합니다."
+	@read -p "IP를 변경하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	ansible-playbook -i $(INVENTORY) update-ha-node-ip.yml -e "old_ip=$(OLD_IP)" $(if $(NEW_IP),-e "new_ip=$(NEW_IP)",) --limit $(HOST)
+
+update-ha-ip-with-certs: ## HA IP 변경 + 인증서 재생성 (OLD_IP, NEW_IP, HOST 필요)
+	@if [ -z "$(OLD_IP)" ]; then \
+		echo "ERROR: OLD_IP is required"; \
+		echo "Usage: make update-ha-ip-with-certs OLD_IP=192.168.1.100 NEW_IP=192.168.1.200 HOST=master1"; \
+		exit 1; \
+	fi
+	@if [ -z "$(HOST)" ]; then \
+		echo "ERROR: HOST is required"; \
+		echo "Usage: make update-ha-ip-with-certs OLD_IP=192.168.1.100 NEW_IP=192.168.1.200 HOST=master1"; \
+		exit 1; \
+	fi
+	@echo "==> HA IP 변경 + 인증서 재생성: $(OLD_IP) -> $(NEW_IP) (호스트: $(HOST))"
+	@echo "주의: 다른 2개의 마스터 노드가 정상 상태여야 합니다."
+	@read -p "IP를 변경하고 인증서를 재생성하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	ansible-playbook -i $(INVENTORY) update-ha-node-ip.yml -e "old_ip=$(OLD_IP)" $(if $(NEW_IP),-e "new_ip=$(NEW_IP)",) -e "regenerate_certs=true" --limit $(HOST)
+
+check-etcd-health: ## etcd 클러스터 상태 확인 (endpoint health)
+	@echo "==> etcd 클러스터 상태 확인 중..."
+	@ansible masters[0] -i $(INVENTORY) -m shell -a "crictl exec \$$(crictl ps -q --name etcd 2>/dev/null | head -1) etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key endpoint health --cluster" 2>/dev/null | grep -v ">>>" || echo "etcd 상태를 확인할 수 없습니다"
+
+check-etcd-members: ## etcd 멤버 목록 확인 (member list)
+	@echo "==> etcd 멤버 목록 확인 중..."
+	@ansible masters[0] -i $(INVENTORY) -m shell -a "crictl exec \$$(crictl ps -q --name etcd 2>/dev/null | head -1) etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key member list -w table" 2>/dev/null | grep -v ">>>" || echo "etcd 멤버 목록을 확인할 수 없습니다"
 
 ##@ 유틸리티
 

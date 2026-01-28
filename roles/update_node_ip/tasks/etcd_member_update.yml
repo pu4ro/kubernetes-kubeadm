@@ -1,0 +1,98 @@
+---
+# Update etcd member peer URLs in HA cluster
+# This task file is included when updating a single master's IP in an HA cluster
+# It uses etcdctl member update to inform the cluster of the new peer URL
+#
+# Required variables:
+#   - old_ip: The old IP address being replaced
+#   - new_ip: The new IP address
+#   - healthy_master: A healthy master node to run etcdctl commands from
+#   - target_hostname: The hostname of the master being updated (e.g., master1)
+
+- name: "[etcd] Skip etcd member update (domain communication enabled)"
+  debug:
+    msg: >-
+      Domain communication is enabled. etcd uses hostnames ({{ target_hostname }}.{{ domain_suffix }})
+      instead of IP addresses for peer URLs. Only /etc/hosts update is needed.
+  when: skip_etcd_member_update | default(false)
+
+- name: "[etcd] Update member peer URLs block"
+  block:
+    - name: "[etcd] Get etcd member list from healthy master"
+      shell: |
+        crictl exec $(crictl ps -q --name etcd 2>/dev/null | head -1) etcdctl \
+          --endpoints=https://127.0.0.1:2379 \
+          --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+          --cert=/etc/kubernetes/pki/etcd/server.crt \
+          --key=/etc/kubernetes/pki/etcd/server.key \
+          member list -w json
+      delegate_to: "{{ healthy_master }}"
+      register: etcd_member_list_result
+      changed_when: false
+
+    - name: "[etcd] Parse etcd member list"
+      set_fact:
+        etcd_members: "{{ etcd_member_list_result.stdout | from_json }}"
+
+    - name: "[etcd] Display etcd members"
+      debug:
+        msg: "etcd members: {{ etcd_members.members | map(attribute='name') | list }}"
+
+    - name: "[etcd] Find target member by old peer URL"
+      set_fact:
+        target_member: >-
+          {{ etcd_members.members | selectattr('peerURLs', 'search', old_ip) | first | default(none) }}
+
+    - name: "[etcd] Verify target member found"
+      fail:
+        msg: >-
+          Could not find etcd member with peer URL containing {{ old_ip }}.
+          Available members: {{ etcd_members.members | map(attribute='name') | list }}
+      when: target_member is none
+
+    - name: "[etcd] Display target member info"
+      debug:
+        msg: |
+          Target member: {{ target_member.name }}
+          Member ID: {{ target_member.ID }}
+          Current peer URLs: {{ target_member.peerURLs }}
+          New peer URL: https://{{ new_ip }}:2380
+
+    - name: "[etcd] Backup current member list"
+      copy:
+        content: "{{ etcd_member_list_result.stdout | to_nice_json }}"
+        dest: "/tmp/etcd-member-backup-{{ ansible_date_time.iso8601_basic_short }}.json"
+      delegate_to: "{{ healthy_master }}"
+
+    - name: "[etcd] Update member peer URL"
+      shell: |
+        crictl exec $(crictl ps -q --name etcd 2>/dev/null | head -1) etcdctl \
+          --endpoints=https://127.0.0.1:2379 \
+          --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+          --cert=/etc/kubernetes/pki/etcd/server.crt \
+          --key=/etc/kubernetes/pki/etcd/server.key \
+          member update {{ target_member.ID }} --peer-urls=https://{{ new_ip }}:2380
+      delegate_to: "{{ healthy_master }}"
+      register: member_update_result
+
+    - name: "[etcd] Display member update result"
+      debug:
+        msg: "{{ member_update_result.stdout }}"
+
+    - name: "[etcd] Verify member list after update"
+      shell: |
+        crictl exec $(crictl ps -q --name etcd 2>/dev/null | head -1) etcdctl \
+          --endpoints=https://127.0.0.1:2379 \
+          --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+          --cert=/etc/kubernetes/pki/etcd/server.crt \
+          --key=/etc/kubernetes/pki/etcd/server.key \
+          member list
+      delegate_to: "{{ healthy_master }}"
+      register: member_list_after
+      changed_when: false
+
+    - name: "[etcd] Display updated member list"
+      debug:
+        msg: "{{ member_list_after.stdout_lines }}"
+
+  when: not (skip_etcd_member_update | default(false))

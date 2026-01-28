@@ -17,6 +17,7 @@ Ansible을 사용한 Kubernetes 클러스터 자동 배포 도구입니다.
 - [설치 후 작업](#설치-후-작업)
 - [문제 해결](#문제-해결)
 - [추가 기능](#추가-기능)
+- [HA 클러스터 IP 변경](#ha-클러스터-ip-변경)
 
 ## 🎯 개요
 
@@ -753,6 +754,88 @@ ansible-playbook -i inventory.ini update-node-ip.yml \
 - 자동 백업 (`.bak` 파일)
 - 선택적 인증서 재생성 (`regenerate_certs=true`)
 - 변경 후 클러스터 상태 확인
+
+### HA 클러스터 IP 변경
+
+3중화 HA 클러스터에서 마스터 노드의 IP를 변경하는 방법입니다.
+
+**단일 마스터 vs HA 클러스터 차이점:**
+
+| 항목 | 단일 마스터 | HA (3중화) |
+|------|------------|-----------|
+| etcd 처리 | `--force-new-cluster` | `etcdctl member update` |
+| 쿼럼 | 불필요 | 2/3 유지 필요 |
+| 실행 방식 | 단일 호스트 | 순차적 (한 번에 하나씩) |
+
+**Makefile 명령어:**
+
+```bash
+# HA 클러스터 단일 마스터 IP 변경
+make update-ha-ip OLD_IP=192.168.135.71 NEW_IP=192.168.135.81 HOST=master1
+
+# HA IP 변경 + 인증서 재생성
+make update-ha-ip-with-certs OLD_IP=192.168.135.71 NEW_IP=192.168.135.81 HOST=master1
+
+# etcd 상태 확인
+make check-etcd-health
+make check-etcd-members
+```
+
+**여러 마스터 IP 변경 절차:**
+
+```bash
+# 0. 변경 전 상태 확인
+make check-etcd-health
+make check-etcd-members
+
+# === Master 1 변경 ===
+# 1. inventory.ini에서 master1의 IP를 새 IP로 수정
+vi inventory.ini
+# master1 ansible_host=192.168.135.81  (새 IP)
+
+# 2. master1 IP 변경 실행
+make update-ha-ip OLD_IP=192.168.135.71 NEW_IP=192.168.135.81 HOST=master1
+
+# 3. 클러스터 상태 확인 (2/3 정상 확인)
+make check-etcd-health
+
+# === Master 2 변경 ===
+# 4. inventory.ini에서 master2의 IP 수정
+vi inventory.ini
+# master2 ansible_host=192.168.135.82
+
+# 5. master2 IP 변경 실행
+make update-ha-ip OLD_IP=192.168.135.72 NEW_IP=192.168.135.82 HOST=master2
+
+# 6. 클러스터 상태 확인
+make check-etcd-health
+
+# === Master 3 변경 ===
+# 7. inventory.ini에서 master3의 IP 수정
+vi inventory.ini
+# master3 ansible_host=192.168.135.83
+
+# 8. master3 IP 변경 실행
+make update-ha-ip OLD_IP=192.168.135.73 NEW_IP=192.168.135.83 HOST=master3
+
+# 9. 최종 확인
+make check-etcd-health
+make check-etcd-members
+kubectl get nodes
+```
+
+**도메인 통신 사용 시 (권장):**
+
+`enable_domain_communication: true` 설정 시:
+- etcd가 `master1.k8s.local` 같은 호스트명 사용
+- IP 변경 시 `/etc/hosts`만 업데이트됨
+- etcd 멤버 URL 변경 불필요 → 더 안전하고 빠름
+
+**주의사항:**
+- 각 마스터 변경 후 30초 이상 대기 (etcd 안정화)
+- 항상 2개 마스터가 정상 상태여야 함
+- 실패 시 old_ip로 다시 복구 가능
+- IP가 인증서 SAN에 포함된 경우 `update-ha-ip-with-certs` 사용
 
 ## 📁 프로젝트 구조
 

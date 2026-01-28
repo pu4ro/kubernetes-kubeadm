@@ -1,0 +1,366 @@
+---
+# HA Single Master IP Change Workflow
+# This task file handles IP change for a single master in an HA (3-node) cluster
+#
+# Key differences from single-master approach:
+# - Uses etcdctl member update instead of --force-new-cluster
+# - Maintains etcd quorum (2/3 nodes) throughout the operation
+# - Updates /etc/hosts on all masters
+#
+# Required variables:
+#   - old_ip: The old IP address being replaced
+#   - new_ip: The new IP address
+#   - healthy_master: A healthy master to run etcdctl commands from
+
+# ========================================
+# Phase 1: Pre-flight Checks
+# ========================================
+
+- name: "[HA] Phase 1 - Pre-flight checks"
+  debug:
+    msg: "Starting HA IP change: {{ old_ip }} -> {{ new_ip }} on {{ inventory_hostname }}"
+
+- name: "[HA] Check if this is a master node"
+  stat:
+    path: "{{ k8s_manifests_dir }}/kube-apiserver.yaml"
+  register: is_master_node
+
+- name: "[HA] Fail if not a master node"
+  fail:
+    msg: "This role is intended for master nodes only. {{ k8s_manifests_dir }}/kube-apiserver.yaml not found."
+  when: not is_master_node.stat.exists
+
+- name: "[HA] Identify healthy master for etcd operations"
+  set_fact:
+    healthy_master: >-
+      {{ groups['masters'] | difference([inventory_hostname]) | first }}
+  when: healthy_master is not defined
+
+- name: "[HA] Display healthy master"
+  debug:
+    msg: "Using {{ healthy_master }} as healthy master for etcd operations"
+
+- name: "[HA] Check etcd cluster health from healthy master"
+  shell: |
+    crictl exec $(crictl ps -q --name etcd 2>/dev/null | head -1) etcdctl \
+      --endpoints=https://127.0.0.1:2379 \
+      --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+      --cert=/etc/kubernetes/pki/etcd/server.crt \
+      --key=/etc/kubernetes/pki/etcd/server.key \
+      endpoint health
+  delegate_to: "{{ healthy_master }}"
+  register: etcd_health_check
+  changed_when: false
+
+- name: "[HA] Display etcd health"
+  debug:
+    msg: "{{ etcd_health_check.stdout }}"
+
+- name: "[HA] Get etcd member count"
+  shell: |
+    crictl exec $(crictl ps -q --name etcd 2>/dev/null | head -1) etcdctl \
+      --endpoints=https://127.0.0.1:2379 \
+      --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+      --cert=/etc/kubernetes/pki/etcd/server.crt \
+      --key=/etc/kubernetes/pki/etcd/server.key \
+      member list -w json | jq '.members | length'
+  delegate_to: "{{ healthy_master }}"
+  register: etcd_member_count
+  changed_when: false
+
+- name: "[HA] Verify etcd has 3 members"
+  debug:
+    msg: "etcd cluster has {{ etcd_member_count.stdout | trim }} members"
+
+- name: "[HA] Warn if not 3 members"
+  debug:
+    msg: "WARNING: Expected 3 etcd members but found {{ etcd_member_count.stdout | trim }}"
+  when: (etcd_member_count.stdout | trim | int) != 3
+
+# ========================================
+# Phase 2: Update etcd Member URLs (if not using domain communication)
+# ========================================
+
+- name: "[HA] Phase 2 - Update etcd member peer URLs"
+  include_tasks: etcd_member_update.yml
+  vars:
+    target_hostname: "{{ inventory_hostname }}"
+
+# ========================================
+# Phase 3: Stop Services and Update Configuration
+# ========================================
+
+- name: "[HA] Phase 3 - Stop services and update configuration"
+  debug:
+    msg: "Stopping services on {{ inventory_hostname }}"
+
+- name: "[HA] Stop kubelet"
+  systemd:
+    name: kubelet
+    state: stopped
+
+- name: "[HA] Remove all containers"
+  shell: crictl rm -af 2>/dev/null || true
+
+- name: "[HA] Remove all pods"
+  shell: crictl rmp -af 2>/dev/null || true
+
+- name: "[HA] Wait for containers to stop"
+  pause:
+    seconds: 5
+
+# Update manifest files
+- name: "[HA] Update IP in Kubernetes manifest files"
+  replace:
+    path: "{{ k8s_manifests_dir }}/{{ item }}"
+    regexp: "{{ old_ip }}"
+    replace: "{{ new_ip }}"
+    backup: no
+  loop: "{{ k8s_manifest_files }}"
+  ignore_errors: yes
+
+# Update kubeconfig files
+- name: "[HA] Update IP in kubeconfig files"
+  replace:
+    path: "{{ k8s_config_dir }}/{{ item }}"
+    regexp: "{{ old_ip }}"
+    replace: "{{ new_ip }}"
+    backup: no
+  loop: "{{ k8s_kubeconfig_files }}"
+  ignore_errors: yes
+
+# Update user's kubeconfig
+- name: "[HA] Update IP in user's kubeconfig (~/.kube/config)"
+  replace:
+    path: "{{ ansible_env.HOME }}/.kube/config"
+    regexp: "{{ old_ip }}"
+    replace: "{{ new_ip }}"
+    backup: no
+  ignore_errors: yes
+
+# Update kubelet config
+- name: "[HA] Update IP in kubelet config"
+  replace:
+    path: /var/lib/kubelet/config.yaml
+    regexp: "{{ old_ip }}"
+    replace: "{{ new_ip }}"
+    backup: no
+  ignore_errors: yes
+
+# Update /etc/hosts on target host
+- name: "[HA] Update /etc/hosts on target host"
+  replace:
+    path: /etc/hosts
+    regexp: "^{{ old_ip }}(\\s+)"
+    replace: "{{ new_ip }}\\1"
+    backup: no
+  when: update_etc_hosts | default(true)
+
+# Update /etc/hosts on ALL masters (for domain resolution)
+- name: "[HA] Update /etc/hosts on other masters"
+  replace:
+    path: /etc/hosts
+    regexp: "^{{ old_ip }}(\\s+)"
+    replace: "{{ new_ip }}\\1"
+    backup: no
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['masters'] | difference([inventory_hostname]) }}"
+  when: update_etc_hosts | default(true)
+  ignore_errors: yes
+
+# Remove backup files from manifests directory
+- name: "[HA] Remove backup files from manifests directory"
+  shell: rm -f /etc/kubernetes/manifests/*~
+  ignore_errors: yes
+
+# ========================================
+# Phase 4: Regenerate Certificates (Optional)
+# ========================================
+
+- name: "[HA] Phase 4 - Regenerate certificates"
+  block:
+    - name: "[HA] Backup existing certificates"
+      archive:
+        path: /etc/kubernetes/pki
+        dest: "/etc/kubernetes/pki-backup-{{ ansible_date_time.iso8601_basic_short }}.tar.gz"
+        format: gz
+
+    - name: "[HA] Remove old etcd certificates"
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes/pki/etcd/server.crt
+        - /etc/kubernetes/pki/etcd/server.key
+        - /etc/kubernetes/pki/etcd/peer.crt
+        - /etc/kubernetes/pki/etcd/peer.key
+
+    - name: "[HA] Remove old apiserver certificates"
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes/pki/apiserver.crt
+        - /etc/kubernetes/pki/apiserver.key
+        - /etc/kubernetes/pki/apiserver-etcd-client.crt
+        - /etc/kubernetes/pki/apiserver-etcd-client.key
+        - /etc/kubernetes/pki/apiserver-kubelet-client.crt
+        - /etc/kubernetes/pki/apiserver-kubelet-client.key
+
+    # Build extra SANs for certificates (include all master IPs and domains)
+    - name: "[HA] Build certificate SANs list"
+      set_fact:
+        cert_extra_sans: >-
+          {{ new_ip }},127.0.0.1,localhost,{{ inventory_hostname }}
+          {%- if api_domain is defined -%},{{ api_domain }}{%- endif -%}
+          {%- if enable_domain_communication | default(false) and domain_suffix is defined -%},{{ inventory_hostname }}.{{ domain_suffix }}{%- endif -%}
+          {%- if kube_vip_address is defined -%},{{ kube_vip_address }}{%- endif -%}
+          {%- for host in groups['masters'] if host != inventory_hostname -%}
+          ,{{ hostvars[host]['ansible_host'] | default(hostvars[host]['inventory_hostname']) }}
+          {%- if enable_domain_communication | default(false) and domain_suffix is defined -%},{{ host }}.{{ domain_suffix }}{%- endif -%}
+          {%- endfor -%}
+
+    # Create kubeadm config for certificate regeneration with etcd SANs
+    - name: "[HA] Create kubeadm config for cert regeneration"
+      copy:
+        content: |
+          apiVersion: kubeadm.k8s.io/v1beta3
+          kind: ClusterConfiguration
+          etcd:
+            local:
+              serverCertSANs:
+                - "{{ new_ip }}"
+                - "127.0.0.1"
+                - "localhost"
+                - "{{ inventory_hostname }}"
+          {% if enable_domain_communication | default(false) and domain_suffix is defined %}
+                - "{{ inventory_hostname }}.{{ domain_suffix }}"
+          {% endif %}
+              peerCertSANs:
+                - "{{ new_ip }}"
+                - "127.0.0.1"
+                - "localhost"
+                - "{{ inventory_hostname }}"
+          {% if enable_domain_communication | default(false) and domain_suffix is defined %}
+                - "{{ inventory_hostname }}.{{ domain_suffix }}"
+          {% endif %}
+        dest: /tmp/kubeadm-cert-config.yaml
+        mode: '0600'
+
+    # Regenerate etcd certificates with domain SANs
+    - name: "[HA] Regenerate etcd server certificates with SANs"
+      command: kubeadm init phase certs etcd-server --config /tmp/kubeadm-cert-config.yaml
+
+    - name: "[HA] Regenerate etcd peer certificates with SANs"
+      command: kubeadm init phase certs etcd-peer --config /tmp/kubeadm-cert-config.yaml
+
+    # Regenerate apiserver certificates with extra SANs
+    - name: "[HA] Regenerate apiserver certificates with domain SANs"
+      command: >
+        kubeadm init phase certs apiserver
+        --apiserver-advertise-address={{ new_ip }}
+        --apiserver-cert-extra-sans={{ cert_extra_sans }}
+
+    - name: "[HA] Regenerate apiserver-etcd-client certificates"
+      command: kubeadm init phase certs apiserver-etcd-client
+
+    - name: "[HA] Regenerate apiserver-kubelet-client certificates"
+      command: kubeadm init phase certs apiserver-kubelet-client
+
+    # Cleanup temp config
+    - name: "[HA] Remove temporary kubeadm config"
+      file:
+        path: /tmp/kubeadm-cert-config.yaml
+        state: absent
+
+  when: regenerate_certs | default(false)
+
+# ========================================
+# Phase 5: Start Services and Verify
+# ========================================
+
+- name: "[HA] Phase 5 - Start services and verify"
+  debug:
+    msg: "Starting services on {{ inventory_hostname }}"
+
+- name: "[HA] Start kubelet"
+  systemd:
+    name: kubelet
+    state: started
+
+- name: "[HA] Wait for etcd container to be running"
+  shell: |
+    for i in $(seq 1 {{ etcd_health_timeout | default(60) }}); do
+      if crictl ps 2>/dev/null | grep -q etcd; then
+        echo "etcd container is running"
+        exit 0
+      fi
+      sleep 1
+    done
+    echo "etcd container not found after {{ etcd_health_timeout | default(60) }} seconds"
+    exit 1
+  register: etcd_container_check
+  failed_when: false
+
+- name: "[HA] Display etcd container status"
+  debug:
+    msg: "{{ etcd_container_check.stdout }}"
+
+- name: "[HA] Wait for etcd to stabilize"
+  pause:
+    seconds: "{{ ha_operation_delay | default(30) }}"
+
+- name: "[HA] Verify local etcd health"
+  shell: |
+    crictl exec $(crictl ps -q --name etcd 2>/dev/null | head -1) etcdctl \
+      --endpoints=https://127.0.0.1:2379 \
+      --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+      --cert=/etc/kubernetes/pki/etcd/server.crt \
+      --key=/etc/kubernetes/pki/etcd/server.key \
+      endpoint health
+  register: local_etcd_health
+  retries: 5
+  delay: 10
+  until: local_etcd_health.rc == 0
+  ignore_errors: yes
+
+- name: "[HA] Display local etcd health"
+  debug:
+    msg: "{{ local_etcd_health.stdout | default('etcd health check failed') }}"
+
+- name: "[HA] Verify etcd cluster member count from healthy master"
+  shell: |
+    crictl exec $(crictl ps -q --name etcd 2>/dev/null | head -1) etcdctl \
+      --endpoints=https://127.0.0.1:2379 \
+      --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+      --cert=/etc/kubernetes/pki/etcd/server.crt \
+      --key=/etc/kubernetes/pki/etcd/server.key \
+      member list
+  delegate_to: "{{ healthy_master }}"
+  register: final_member_list
+  changed_when: false
+  ignore_errors: yes
+
+- name: "[HA] Display final etcd member list"
+  debug:
+    msg: "{{ final_member_list.stdout_lines | default(['Could not retrieve member list']) }}"
+
+- name: "[HA] Verify kubectl access"
+  shell: kubectl get nodes --no-headers 2>/dev/null | wc -l
+  register: kubectl_check
+  retries: 3
+  delay: 10
+  until: kubectl_check.rc == 0
+  ignore_errors: yes
+
+- name: "[HA] Display kubectl result"
+  debug:
+    msg: "kubectl can see {{ kubectl_check.stdout | default('0') }} nodes"
+
+- name: "[HA] Phase 5 Complete"
+  debug:
+    msg: |
+      HA IP change completed for {{ inventory_hostname }}
+      Old IP: {{ old_ip }}
+      New IP: {{ new_ip }}
+      etcd health: {{ local_etcd_health.stdout | default('check manually') }}
