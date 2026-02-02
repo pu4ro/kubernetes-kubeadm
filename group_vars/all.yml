@@ -607,3 +607,10 @@ containerd_disk_mount_options: "defaults,noatime"      # Mount options for fstab
 # When enabled, rook-ceph resources will be cleaned BEFORE cluster reset
 # (K8s API must be alive for CRD deletion)
 enable_rook_ceph_cleanup: false
+
+# Official Kubernetes Package Repository (pkgs.k8s.io)
+# kubernetes_version에서 major.minor를 자동 추출하여 리포 URL 구성
+enable_official_k8s_repo: false
+
+# Official containerd Repository (download.docker.com)
+enable_official_containerd_repo: false

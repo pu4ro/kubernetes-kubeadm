@@ -218,6 +218,9 @@ tag-label-gpu-nodes: ## GPU 노드에 gpu=on 레이블 추가 (자동 감지)
 	@echo "==> GPU 노드 레이블링 중..."
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags label-gpu-nodes
 
+tag-k8s-repo: ## 공식 K8s/containerd 패키지 리포지토리 설정 (pkgs.k8s.io + docker.com)
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags k8s-official-repo
+
 tag-local-registry: registry-start ## [DEPRECATED] registry-start 사용 권장
 
 ##@ 호스트별 설치

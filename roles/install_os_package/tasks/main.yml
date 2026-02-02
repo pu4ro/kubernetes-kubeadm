@@ -77,6 +77,86 @@
     - enable_ubuntu_repo | default(false) | bool
     - ubuntu_repo_url | default('') != ''
 
+## Official K8s / containerd package repository setup
+- name: Setup official K8s and containerd package repositories
+  block:
+    - name: Extract Kubernetes minor version from kubernetes_version
+      ansible.builtin.set_fact:
+        k8s_minor_version: "{{ kubernetes_version | regex_replace('^v?(\\d+\\.\\d+).*', '\\1') }}"
+
+    # Block A: K8s repo (Ubuntu/Debian)
+    - name: Add official Kubernetes APT repository (Debian/Ubuntu)
+      block:
+        - name: Create /etc/apt/keyrings directory
+          ansible.builtin.file:
+            path: /etc/apt/keyrings
+            state: directory
+            mode: '0755'
+
+        - name: Download Kubernetes APT GPG key
+          ansible.builtin.get_url:
+            url: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_minor_version }}/deb/Release.key"
+            dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+            mode: '0644'
+
+        - name: Add Kubernetes APT repository
+          ansible.builtin.apt_repository:
+            repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/v{{ k8s_minor_version }}/deb/ /"
+            state: present
+      when:
+        - enable_official_k8s_repo | bool
+        - ansible_os_family == "Debian"
+
+    # Block B: K8s repo (RHEL)
+    - name: Add official Kubernetes YUM repository (RHEL)
+      ansible.builtin.yum_repository:
+        name: kubernetes
+        description: Kubernetes Official Repository
+        baseurl: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_minor_version }}/rpm/"
+        gpgkey: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_minor_version }}/rpm/repodata/repomd.xml.key"
+        gpgcheck: yes
+        enabled: yes
+      when:
+        - enable_official_k8s_repo | bool
+        - ansible_os_family == "RedHat"
+
+    # Block C: containerd repo (Ubuntu/Debian)
+    - name: Add official containerd APT repository (Debian/Ubuntu)
+      block:
+        - name: Create /etc/apt/keyrings directory for Docker
+          ansible.builtin.file:
+            path: /etc/apt/keyrings
+            state: directory
+            mode: '0755'
+
+        - name: Download Docker APT GPG key
+          ansible.builtin.get_url:
+            url: "https://download.docker.com/linux/ubuntu/gpg"
+            dest: /etc/apt/keyrings/docker.asc
+            mode: '0644'
+
+        - name: Add Docker APT repository for containerd
+          ansible.builtin.apt_repository:
+            repo: "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+            state: present
+      when:
+        - enable_official_containerd_repo | bool
+        - ansible_os_family == "Debian"
+
+    # Block D: containerd repo (RHEL)
+    - name: Add official containerd YUM repository (RHEL)
+      ansible.builtin.yum_repository:
+        name: docker-ce-stable
+        description: Docker CE Stable
+        baseurl: "https://download.docker.com/linux/centos/$releasever/$basearch/stable"
+        gpgkey: "https://download.docker.com/linux/centos/gpg"
+        gpgcheck: yes
+        enabled: yes
+      when:
+        - enable_official_containerd_repo | bool
+        - ansible_os_family == "RedHat"
+  tags: k8s-official-repo
+
 - name: Update package cache (Debian/Ubuntu)
   apt:
     update_cache: yes
