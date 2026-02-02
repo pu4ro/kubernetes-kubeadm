@@ -208,7 +208,7 @@
 # Install containerd package when not using binary install
 - name: Install containerd package with version pin (Debian)
   apt:
-    name: "containerd={{ containerd_version }}-*"
+    name: "containerd={{ containerd_version }}*"
     state: present
     allow_downgrade: yes
   when:
