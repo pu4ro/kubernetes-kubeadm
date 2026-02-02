@@ -82,21 +82,9 @@
   changed_when: false
   when: cleanup_rook_ceph_wipe_disks | bool
 
-- name: "[Phase 2] Detect Ceph OSD disks (blkid signature)"
+- name: "[Phase 2] Detect Ceph OSD disks (bluestore magic bytes)"
   shell: |
     for dev in $(lsblk -dpno NAME,TYPE | awk '$2=="disk"{print $1}'); do
-      SIG=$(timeout 5 blkid -o value -s TYPE "$dev" 2>/dev/null || true)
-      if echo "$SIG" | grep -qiE 'ceph|bluestore'; then
-        echo "$dev"
-        continue
-      fi
-      # Fallback: check wipefs
-      SIG=$(timeout 5 wipefs -n "$dev" 2>/dev/null || true)
-      if echo "$SIG" | grep -qiE 'ceph|bluestore'; then
-        echo "$dev"
-        continue
-      fi
-      # Fallback: check raw magic bytes for bluestore (offset 0: "bluestore block device")
       MAGIC=$(timeout 5 dd if="$dev" bs=1 count=100 2>/dev/null | cat -v 2>/dev/null || true)
       if echo "$MAGIC" | grep -qi bluestore; then
         echo "$dev"
