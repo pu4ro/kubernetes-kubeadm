@@ -1,0 +1,15 @@
+---
+# Rook-Ceph Cleanup Playbook
+# Usage: ansible-playbook -i inventory.ini cleanup-rook-ceph.yml
+#
+# This playbook removes all Rook-Ceph components:
+#   - Kubernetes resources (namespace, CRDs, CRs)
+#   - OSD disk signatures and LVM volumes
+#   - Rook/Ceph directories and temp files
+#   - Optionally unloads kernel modules
+
+- name: Cleanup Rook-Ceph Storage
+  hosts: all
+  become: yes
+  roles:
+    - { role: cleanup_rook_ceph, tags: ['cleanup-rook-ceph'] }

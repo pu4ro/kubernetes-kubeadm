@@ -1,0 +1,178 @@
+---
+# Rook-Ceph Cleanup Role
+# Removes all Rook-Ceph resources, wipes OSD disks, and cleans directories
+
+# ============================================================
+# Phase 1: Kubernetes Resource Cleanup
+# ============================================================
+
+- name: "[Phase 1] Check if kubectl is available"
+  command: which kubectl
+  register: kubectl_check
+  failed_when: false
+  changed_when: false
+
+- name: "[Phase 1] Check if rook-ceph namespace exists"
+  command: kubectl get namespace rook-ceph
+  register: rook_ns_check
+  failed_when: false
+  changed_when: false
+  when: kubectl_check.rc == 0
+
+- name: "[Phase 1] Delete rook-ceph CephCluster CR (triggers cleanup)"
+  shell: |
+    kubectl -n rook-ceph delete cephcluster --all --timeout=120s 2>/dev/null || true
+  when:
+    - kubectl_check.rc == 0
+    - rook_ns_check.rc is defined and rook_ns_check.rc == 0
+  failed_when: false
+
+- name: "[Phase 1] Wait for OSD pods to terminate"
+  shell: |
+    for i in $(seq 1 30); do
+      COUNT=$(kubectl -n rook-ceph get pods -l app=rook-ceph-osd --no-headers 2>/dev/null | wc -l)
+      if [ "$COUNT" -eq 0 ]; then
+        echo "All OSD pods terminated"
+        exit 0
+      fi
+      sleep 5
+    done
+    echo "Warning: OSD pods still running after timeout"
+  when:
+    - kubectl_check.rc == 0
+    - rook_ns_check.rc is defined and rook_ns_check.rc == 0
+  failed_when: false
+
+- name: "[Phase 1] Patch finalizers on CephCluster resources"
+  shell: |
+    for crd in $(kubectl get crd -o name 2>/dev/null | grep ceph.rook.io); do
+      CRD_NAME=$(echo "$crd" | cut -d/ -f2)
+      for res in $(kubectl -n rook-ceph get "$CRD_NAME" -o name 2>/dev/null); do
+        kubectl -n rook-ceph patch "$res" --type merge -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
+      done
+    done
+  when:
+    - kubectl_check.rc == 0
+    - rook_ns_check.rc is defined and rook_ns_check.rc == 0
+  failed_when: false
+
+- name: "[Phase 1] Delete rook-ceph namespace"
+  command: kubectl delete namespace rook-ceph --timeout=120s
+  when:
+    - kubectl_check.rc == 0
+    - rook_ns_check.rc is defined and rook_ns_check.rc == 0
+  failed_when: false
+
+- name: "[Phase 1] Delete Rook-Ceph CRDs"
+  shell: |
+    kubectl get crd -o name 2>/dev/null | grep ceph.rook.io | xargs -r kubectl delete --timeout=60s 2>/dev/null || true
+  when:
+    - kubectl_check.rc == 0
+    - cleanup_rook_ceph_remove_crds | bool
+  failed_when: false
+
+# ============================================================
+# Phase 2: OSD Disk Auto-Detect & Wipe
+# ============================================================
+
+- name: "[Phase 2] Detect Ceph OSD disks (LVM)"
+  shell: |
+    pvs --noheadings -o pv_name,vg_name 2>/dev/null | grep -i ceph | awk '{print $1}' || true
+  register: ceph_lvm_disks
+  changed_when: false
+  when: cleanup_rook_ceph_wipe_disks | bool
+
+- name: "[Phase 2] Detect Ceph OSD disks (bluestore signature)"
+  shell: |
+    for dev in $(lsblk -dpno NAME,TYPE | awk '$2=="disk"{print $1}'); do
+      if wipefs -n "$dev" 2>/dev/null | grep -qi ceph; then
+        echo "$dev"
+      fi
+    done
+  register: ceph_bluestore_disks
+  changed_when: false
+  when: cleanup_rook_ceph_wipe_disks | bool
+
+- name: "[Phase 2] Build combined OSD disk list"
+  set_fact:
+    ceph_osd_disks: "{{ ((ceph_lvm_disks.stdout_lines | default([])) + (ceph_bluestore_disks.stdout_lines | default([]))) | unique | select('match', '^/dev/') | list }}"
+  when: cleanup_rook_ceph_wipe_disks | bool
+
+- name: "[Phase 2] Display detected OSD disks"
+  debug:
+    msg: "Detected Ceph OSD disks: {{ ceph_osd_disks | default([]) }}"
+
+- name: "[Phase 2] Remove device-mapper mappings for Ceph"
+  shell: |
+    dmsetup ls 2>/dev/null | grep -i ceph | awk '{print $1}' | while read dm; do
+      dmsetup remove "$dm" 2>/dev/null || true
+    done
+  when: cleanup_rook_ceph_wipe_disks | bool
+  failed_when: false
+
+- name: "[Phase 2] Remove Ceph LVM volumes"
+  shell: |
+    # Remove logical volumes
+    for vg in $(vgs --noheadings -o vg_name 2>/dev/null | grep -i ceph | tr -d ' '); do
+      for lv in $(lvs --noheadings -o lv_name "$vg" 2>/dev/null | tr -d ' '); do
+        lvremove -f "${vg}/${lv}" 2>/dev/null || true
+      done
+      vgremove -f "$vg" 2>/dev/null || true
+    done
+    # Remove physical volumes
+    for pv in $(pvs --noheadings -o pv_name,vg_name 2>/dev/null | grep -i ceph | awk '{print $1}'); do
+      pvremove -f "$pv" 2>/dev/null || true
+    done
+  when: cleanup_rook_ceph_wipe_disks | bool
+  failed_when: false
+
+- name: "[Phase 2] Wipe OSD disk signatures and zero first 100MB"
+  shell: |
+    wipefs --all --force "{{ item }}" 2>/dev/null || true
+    dd if=/dev/zero of="{{ item }}" bs=1M count=100 oflag=direct 2>/dev/null || true
+    partprobe "{{ item }}" 2>/dev/null || true
+  loop: "{{ ceph_osd_disks | default([]) }}"
+  when:
+    - cleanup_rook_ceph_wipe_disks | bool
+    - ceph_osd_disks | default([]) | length > 0
+  failed_when: false
+
+# ============================================================
+# Phase 3: Directory Cleanup
+# ============================================================
+
+- name: "[Phase 3] Remove Rook-Ceph directories"
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ cleanup_rook_ceph_directories }}"
+
+- name: "[Phase 3] Remove Rook-Ceph temp files"
+  shell: "rm -rf {{ item }}"
+  loop: "{{ cleanup_rook_ceph_tmp_patterns }}"
+  failed_when: false
+
+# ============================================================
+# Phase 4: Optional Kernel Module Unload
+# ============================================================
+
+- name: "[Phase 4] Unload Ceph kernel modules"
+  modprobe:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - rbd
+    - ceph
+  when: cleanup_rook_ceph_unload_modules | bool
+  failed_when: false
+
+- name: "Rook-Ceph cleanup completed"
+  debug:
+    msg: |
+      Rook-Ceph cleanup completed!
+
+      Cleaned:
+      - Kubernetes resources (namespace, CRDs, CRs)
+      - OSD disks: {{ ceph_osd_disks | default([]) | join(', ') | default('none detected') }}
+      - Directories: {{ cleanup_rook_ceph_directories | join(', ') }}
+      - Kernel modules: {{ 'unloaded (rbd, ceph)' if cleanup_rook_ceph_unload_modules else 'skipped' }}

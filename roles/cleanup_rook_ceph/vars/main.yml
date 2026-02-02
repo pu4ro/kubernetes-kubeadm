@@ -1,0 +1,22 @@
+---
+# Rook-Ceph Cleanup Role Variables
+
+# Whether to wipe OSD disks (dd zero first 100MB + wipefs)
+cleanup_rook_ceph_wipe_disks: true
+
+# Whether to remove Rook-Ceph CRDs from Kubernetes
+cleanup_rook_ceph_remove_crds: true
+
+# Whether to unload ceph/rbd kernel modules after cleanup
+cleanup_rook_ceph_unload_modules: false
+
+# Directories to remove during cleanup
+cleanup_rook_ceph_directories:
+  - /var/lib/rook
+  - /var/lib/ceph
+  - /etc/ceph
+  - /var/log/ceph
+
+# Temp file patterns to remove
+cleanup_rook_ceph_tmp_patterns:
+  - /tmp/rook-*

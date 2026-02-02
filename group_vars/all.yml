@@ -601,3 +601,9 @@ containerd_disk_device: "/dev/sdb"                     # Disk device to use (e.g
 containerd_disk_fstype: "xfs"                          # Filesystem type: "ext4" or "xfs"
 containerd_disk_mount_point: "/var/lib/containerd"     # Mount point for containerd data
 containerd_disk_mount_options: "defaults,noatime"      # Mount options for fstab
+
+# Rook-Ceph Cleanup Configuration
+# Enable this to include rook-ceph cleanup during cluster reset
+# When enabled, rook-ceph resources will be cleaned BEFORE cluster reset
+# (K8s API must be alive for CRD deletion)
+enable_rook_ceph_cleanup: false

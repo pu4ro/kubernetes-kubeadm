@@ -7,6 +7,7 @@
 .PHONY: limit-master limit-workers
 .PHONY: command cmd-all cmd-masters cmd-workers cmd-installs cmd-host
 .PHONY: check-workers add-workers check-and-add-workers
+.PHONY: reset-rook-ceph reset-and-reboot
 .PHONY: install-nvidia check-nvidia-gpu check-nvidia-driver fix-nvidia-toolkit-path reboot-gpu-nodes
 .PHONY: registry-start registry-stop registry-restart registry-status registry-remove registry-logs registry-init
 .PHONY: nfs-init nfs-install nfs-start nfs-stop nfs-restart nfs-status nfs-reload nfs-show-exports nfs-add-export nfs-remove
@@ -258,6 +259,18 @@ reset: ## 전체 클러스터 초기화 (kubeadm reset) [확인 필요]
 	@echo "==> 전체 클러스터 초기화 중..."
 	@read -p "정말로 클러스터를 초기화하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
 	ansible-playbook -i $(INVENTORY) $(RESET_PLAYBOOK)
+
+reset-rook-ceph: ## Rook-Ceph 스토리지 정리 (디스크 + 설정 삭제) [확인 필요]
+	@echo "==> Rook-Ceph 스토리지 정리 중..."
+	@echo "경고: Ceph OSD 디스크가 초기화되고 모든 Rook-Ceph 리소스가 삭제됩니다!"
+	@read -p "계속하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	ansible-playbook -i $(INVENTORY) cleanup-rook-ceph.yml
+
+reset-and-reboot: ## 전체 클러스터 초기화 + 재부팅 (kubeadm reset + reboot) [확인 필요]
+	@echo "==> 전체 클러스터 초기화 및 재부팅..."
+	@echo "경고: 모든 노드가 초기화된 후 재부팅됩니다!"
+	@read -p "정말로 클러스터를 초기화하고 재부팅하시겠습니까? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	ansible-playbook -i $(INVENTORY) $(RESET_PLAYBOOK) -e "reboot_after_reset=true"
 
 reset-workers: ## Worker 노드만 초기화 (kubeadm reset) [확인 필요]
 	@echo "==> Worker 노드 초기화 중..."
