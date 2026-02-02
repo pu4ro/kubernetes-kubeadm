@@ -45,7 +45,7 @@ kube_vip_svc_enable: false         # Enable/disable kube-vip service load balanc
 #   < 2.2: Uses sandbox_image for pause container, old plugin paths
 #   >= 2.2: Uses pinned_images.sandbox, new io.containerd.cri.v1.* plugins
 #
-containerd_version: "1.7.6"         # Reference only (auto-detected at runtime)
+containerd_version: "2.2.0"          # Used for package version pinning and binary install
 containerd_limit_nproc: 100000      # systemd LimitNPROC for containerd.service
 containerd_limit_nofile: 100000     # systemd LimitNOFILE for containerd.service
 enable_local_registry: false
@@ -427,9 +427,6 @@ registry_mirror_mappings:
 
 # Ubuntu/Debian Packages
 ubuntu_packages:
-  - kubelet
-  - kubeadm
-  - kubectl
   - bash-completion
   - dnsmasq
   - jq
@@ -460,9 +457,6 @@ ubuntu_master_only_packages:
 
 # RHEL/CentOS Required Packages
 rhel_packages:
-  - kubelet
-  - kubeadm
-  - kubectl
   - bash-completion
   - dnsmasq
   - jq
@@ -478,12 +472,7 @@ rhel_packages:
   - k9s
 
 # RHEL/CentOS 8 Specific Packages (version-pinned)
-rhel8_packages:
-  - containerd.io-1.6.32-3.1.el8
-
-# RHEL/CentOS 9 Specific Packages
-rhel9_packages:
-  - containerd.io
+# RHEL containerd.io version is pinned via containerd_version variable above
 
 # RHEL/CentOS Optional Packages (install if available, errors ignored)
 rhel_optional_packages:

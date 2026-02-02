@@ -206,14 +206,51 @@
   tags: ['containerd-binary-install']
 
 # Install containerd package when not using binary install
-- name: Install containerd package (Debian)
+- name: Install containerd package with version pin (Debian)
   apt:
-    name: containerd
+    name: "containerd={{ containerd_version }}-*"
     state: present
+    allow_downgrade: yes
   when:
     - not (enable_containerd_binary_install | default(false))
     - ansible_os_family == "Debian"
+  register: apt_containerd_result
+  retries: 5
+  delay: 30
+  until: apt_containerd_result is succeeded
   tags: ['install-os-package']
+
+- name: Hold containerd package at pinned version (Debian)
+  dpkg_selections:
+    name: containerd
+    selection: hold
+  when:
+    - not (enable_containerd_binary_install | default(false))
+    - ansible_os_family == "Debian"
+
+- name: Install Kubernetes packages with version pin (Debian)
+  apt:
+    name:
+      - "kubelet={{ kubernetes_version }}-*"
+      - "kubeadm={{ kubernetes_version }}-*"
+      - "kubectl={{ kubernetes_version }}-*"
+    state: present
+    allow_downgrade: yes
+  when: ansible_os_family == "Debian"
+  register: apt_k8s_install_result
+  retries: 5
+  delay: 30
+  until: apt_k8s_install_result is succeeded
+
+- name: Hold Kubernetes packages at pinned version (Debian)
+  dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+  when: ansible_os_family == "Debian"
 
 - name: Install packages on Debian/Ubuntu
   apt:
@@ -240,6 +277,26 @@
   ignore_errors: yes
   throttle: "{{ 999 if (parallel_execution | default({})).package_installation | default(1) == 0 else (parallel_execution | default({})).package_installation | default(1) }}"
 
+- name: Install Kubernetes packages with version pin (RHEL)
+  yum:
+    name:
+      - "kubelet-{{ kubernetes_version }}"
+      - "kubeadm-{{ kubernetes_version }}"
+      - "kubectl-{{ kubernetes_version }}"
+    state: present
+    allow_downgrade: yes
+  when: ansible_os_family == "RedHat"
+  register: yum_k8s_install_result
+  retries: 3
+  delay: 10
+  until: yum_k8s_install_result is succeeded
+
+- name: Lock Kubernetes packages at pinned version (RHEL)
+  command: yum versionlock kubelet kubeadm kubectl
+  when: ansible_os_family == "RedHat"
+  changed_when: false
+  ignore_errors: yes
+
 - name: Install packages on RHEL/CentOS
   package:
     name: "{{ rhel_packages }}"
@@ -250,31 +307,18 @@
   delay: 10
   until: yum_install_result is succeeded
 
-- name: Install RHEL 8 specific packages (containerd.io)
-  package:
-    name: "{{ rhel8_packages }}"
+- name: Install containerd.io with version pin (RHEL)
+  yum:
+    name: "containerd.io-{{ containerd_version }}"
     state: present
+    allow_downgrade: yes
   when:
     - not (enable_containerd_binary_install | default(false))
     - ansible_os_family == "RedHat"
-    - ansible_distribution_major_version == "8"
-  register: yum_rhel8_install_result
+  register: yum_containerd_install_result
   retries: 3
   delay: 10
-  until: yum_rhel8_install_result is succeeded
-
-- name: Install RHEL 9 specific packages (containerd.io)
-  package:
-    name: "{{ rhel9_packages }}"
-    state: present
-  when:
-    - not (enable_containerd_binary_install | default(false))
-    - ansible_os_family == "RedHat"
-    - ansible_distribution_major_version == "9"
-  register: yum_rhel9_install_result
-  retries: 3
-  delay: 10
-  until: yum_rhel9_install_result is succeeded
+  until: yum_containerd_install_result is succeeded
 
 - name: Install optional packages on RHEL/CentOS
   package:
