@@ -43,7 +43,7 @@
     - rook_ns_check.rc is defined and rook_ns_check.rc == 0
   failed_when: false
 
-- name: "[Phase 1] Patch finalizers on CephCluster resources"
+- name: "[Phase 1] Patch finalizers on all CephCluster CRD resources"
   shell: |
     for crd in $(kubectl get crd -o name 2>/dev/null | grep ceph.rook.io); do
       CRD_NAME=$(echo "$crd" | cut -d/ -f2)
@@ -56,8 +56,38 @@
     - rook_ns_check.rc is defined and rook_ns_check.rc == 0
   failed_when: false
 
+- name: "[Phase 1] Patch finalizers on configmaps and secrets in rook-ceph namespace"
+  shell: |
+    for kind in configmap secret; do
+      for res in $(kubectl -n rook-ceph get "$kind" -o name 2>/dev/null); do
+        kubectl -n rook-ceph patch "$res" --type merge -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
+      done
+    done
+  when:
+    - kubectl_check.rc == 0
+    - rook_ns_check.rc is defined and rook_ns_check.rc == 0
+  failed_when: false
+
+- name: "[Phase 1] Delete all remaining resources in rook-ceph namespace"
+  shell: |
+    kubectl -n rook-ceph delete all --all --timeout=60s 2>/dev/null || true
+  when:
+    - kubectl_check.rc == 0
+    - rook_ns_check.rc is defined and rook_ns_check.rc == 0
+  failed_when: false
+
 - name: "[Phase 1] Delete rook-ceph namespace"
   command: kubectl delete namespace rook-ceph --timeout=120s
+  when:
+    - kubectl_check.rc == 0
+    - rook_ns_check.rc is defined and rook_ns_check.rc == 0
+  failed_when: false
+
+- name: "[Phase 1] Force delete stuck namespace (patch namespace finalizers)"
+  shell: |
+    kubectl get namespace rook-ceph -o json 2>/dev/null | \
+      sed 's/"finalizers":[^]]*]/"finalizers":[]/' | \
+      kubectl replace --raw "/api/v1/namespaces/rook-ceph/finalize" -f - 2>/dev/null || true
   when:
     - kubectl_check.rc == 0
     - rook_ns_check.rc is defined and rook_ns_check.rc == 0
