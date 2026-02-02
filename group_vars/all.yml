@@ -438,7 +438,6 @@ ubuntu_packages:
   - nfs-common
   - nfs-kernel-server
   - net-tools
-  - containerd
   - chrony
   - curl
   - wget
@@ -614,3 +613,10 @@ enable_official_k8s_repo: false
 
 # Official containerd Repository (download.docker.com)
 enable_official_containerd_repo: false
+
+# Containerd Binary Direct Install (GitHub releases)
+# 패키지 매니저 대신 GitHub에서 containerd/runc 바이너리를 직접 다운로드하여 설치
+# true 설정 시 ubuntu_packages의 containerd 및 rhel8/9_packages의 containerd.io 건너뜀
+enable_containerd_binary_install: false
+runc_version: "1.2.4"
+containerd_binary_arch: "amd64"   # amd64 or arm64

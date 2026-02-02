@@ -221,6 +221,9 @@ tag-label-gpu-nodes: ## GPU 노드에 gpu=on 레이블 추가 (자동 감지)
 tag-k8s-repo: ## 공식 K8s/containerd 패키지 리포지토리 설정 (pkgs.k8s.io + docker.com)
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags k8s-official-repo
 
+tag-containerd-binary: ## containerd 바이너리 직접 설치 (GitHub releases에서 다운로드)
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags containerd-binary-install
+
 tag-local-registry: registry-start ## [DEPRECATED] registry-start 사용 권장
 
 ##@ 호스트별 설치

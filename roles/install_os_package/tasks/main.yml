@@ -170,6 +170,51 @@
   until: apt_cache_result is succeeded
   throttle: "{{ 999 if (parallel_execution | default({})).package_installation | default(1) == 0 else (parallel_execution | default({})).package_installation | default(1) }}"
 
+# Containerd binary direct install from GitHub releases
+- block:
+    - name: Download containerd tarball
+      get_url:
+        url: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-{{ containerd_binary_arch }}.tar.gz"
+        dest: "/tmp/containerd-{{ containerd_version }}-linux-{{ containerd_binary_arch }}.tar.gz"
+        mode: '0644'
+
+    - name: Extract containerd to /usr/local
+      unarchive:
+        src: "/tmp/containerd-{{ containerd_version }}-linux-{{ containerd_binary_arch }}.tar.gz"
+        dest: /usr/local
+        remote_src: yes
+
+    - name: Download runc binary
+      get_url:
+        url: "https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.{{ containerd_binary_arch }}"
+        dest: /usr/local/sbin/runc
+        mode: '0755'
+
+    - name: Download containerd systemd service file
+      get_url:
+        url: "https://raw.githubusercontent.com/containerd/containerd/main/containerd.service"
+        dest: /usr/lib/systemd/system/containerd.service
+        mode: '0644'
+
+    - name: Enable and start containerd service
+      systemd:
+        name: containerd
+        daemon_reload: yes
+        enabled: yes
+        state: started
+  when: enable_containerd_binary_install | default(false)
+  tags: ['containerd-binary-install']
+
+# Install containerd package when not using binary install
+- name: Install containerd package (Debian)
+  apt:
+    name: containerd
+    state: present
+  when:
+    - not (enable_containerd_binary_install | default(false))
+    - ansible_os_family == "Debian"
+  tags: ['install-os-package']
+
 - name: Install packages on Debian/Ubuntu
   apt:
     name: "{{ ubuntu_packages }}"
@@ -210,6 +255,7 @@
     name: "{{ rhel8_packages }}"
     state: present
   when:
+    - not (enable_containerd_binary_install | default(false))
     - ansible_os_family == "RedHat"
     - ansible_distribution_major_version == "8"
   register: yum_rhel8_install_result
@@ -222,6 +268,7 @@
     name: "{{ rhel9_packages }}"
     state: present
   when:
+    - not (enable_containerd_binary_install | default(false))
     - ansible_os_family == "RedHat"
     - ansible_distribution_major_version == "9"
   register: yum_rhel9_install_result
