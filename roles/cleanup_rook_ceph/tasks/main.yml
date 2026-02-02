@@ -77,15 +77,28 @@
 
 - name: "[Phase 2] Detect Ceph OSD disks (LVM)"
   shell: |
-    pvs --noheadings -o pv_name,vg_name 2>/dev/null | grep -i ceph | awk '{print $1}' || true
+    timeout 10 pvs --noheadings -o pv_name,vg_name 2>/dev/null | grep -iE 'ceph|rook' | awk '{print $1}' || true
   register: ceph_lvm_disks
   changed_when: false
   when: cleanup_rook_ceph_wipe_disks | bool
 
-- name: "[Phase 2] Detect Ceph OSD disks (bluestore signature)"
+- name: "[Phase 2] Detect Ceph OSD disks (blkid signature)"
   shell: |
     for dev in $(lsblk -dpno NAME,TYPE | awk '$2=="disk"{print $1}'); do
-      if wipefs -n "$dev" 2>/dev/null | grep -qi ceph; then
+      SIG=$(timeout 5 blkid -o value -s TYPE "$dev" 2>/dev/null || true)
+      if echo "$SIG" | grep -qiE 'ceph|bluestore'; then
+        echo "$dev"
+        continue
+      fi
+      # Fallback: check wipefs
+      SIG=$(timeout 5 wipefs -n "$dev" 2>/dev/null || true)
+      if echo "$SIG" | grep -qiE 'ceph|bluestore'; then
+        echo "$dev"
+        continue
+      fi
+      # Fallback: check raw magic bytes for bluestore (offset 0: "bluestore block device")
+      MAGIC=$(timeout 5 dd if="$dev" bs=1 count=100 2>/dev/null | cat -v 2>/dev/null || true)
+      if echo "$MAGIC" | grep -qi bluestore; then
         echo "$dev"
       fi
     done
@@ -93,9 +106,28 @@
   changed_when: false
   when: cleanup_rook_ceph_wipe_disks | bool
 
+- name: "[Phase 2] Detect Ceph OSD disks (rook directory mapping)"
+  shell: |
+    # Check /var/lib/rook for OSD block device symlinks
+    find /var/lib/rook -name "block" -type l 2>/dev/null | while read link; do
+      REAL=$(readlink -f "$link" 2>/dev/null || true)
+      if [ -n "$REAL" ]; then
+        # Resolve to parent disk (e.g., /dev/sdc1 -> /dev/sdc)
+        DISK=$(lsblk -dpno PKNAME "$REAL" 2>/dev/null | head -1)
+        if [ -n "$DISK" ]; then
+          echo "/dev/$DISK"
+        else
+          echo "$REAL"
+        fi
+      fi
+    done | sort -u
+  register: ceph_rook_dir_disks
+  changed_when: false
+  when: cleanup_rook_ceph_wipe_disks | bool
+
 - name: "[Phase 2] Build combined OSD disk list"
   set_fact:
-    ceph_osd_disks: "{{ ((ceph_lvm_disks.stdout_lines | default([])) + (ceph_bluestore_disks.stdout_lines | default([]))) | unique | select('match', '^/dev/') | list }}"
+    ceph_osd_disks: "{{ ((ceph_lvm_disks.stdout_lines | default([])) + (ceph_bluestore_disks.stdout_lines | default([])) + (ceph_rook_dir_disks.stdout_lines | default([]))) | unique | select('match', '^/dev/') | list }}"
   when: cleanup_rook_ceph_wipe_disks | bool
 
 - name: "[Phase 2] Display detected OSD disks"
