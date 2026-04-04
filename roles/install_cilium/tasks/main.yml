@@ -7,12 +7,23 @@
     path: /usr/local/bin/cilium
   register: cilium_cli_installed
 
-- name: Download Cilium CLI
+- name: Install Cilium CLI (Offline)
+  copy:
+    src: "cilium-linux-{{ cilium_arch }}.tar.gz"
+    dest: "/tmp/cilium-linux-{{ cilium_arch }}.tar.gz"
+    mode: '0644'
+  when: 
+    - not cilium_cli_installed.stat.exists
+    - cilium_offline_install | default(false)
+
+- name: Download Cilium CLI (Online)
   get_url:
     url: "https://github.com/cilium/cilium-cli/releases/download/{{ cilium_cli_version }}/cilium-linux-{{ cilium_arch }}.tar.gz"
     dest: "/tmp/cilium-linux-{{ cilium_arch }}.tar.gz"
     mode: '0644'
-  when: not cilium_cli_installed.stat.exists
+  when: 
+    - not cilium_cli_installed.stat.exists
+    - not cilium_offline_install | default(false)
 
 - name: Extract Cilium CLI
   unarchive:
@@ -58,6 +69,7 @@
     cilium_install_cmd: >-
       cilium install
       --version {{ cilium_version }}
+      {% if cilium_image_repository is defined and cilium_image_repository != "" %}--set image.repository={{ cilium_image_repository }}{% endif %}
       {% if cilium_cluster_id is defined %}--set cluster.id={{ cilium_cluster_id }}{% endif %}
       {% if cilium_cluster_name is defined %}--set cluster.name={{ cilium_cluster_name }}{% endif %}
       {% if cilium_hubble_enabled | default(true) %}--set hubble.relay.enabled=true --set hubble.ui.enabled=true{% endif %}

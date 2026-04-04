@@ -120,6 +120,10 @@ network_plugin: "flannel"  # Options: "flannel", "cilium"
 
 # Cilium Configuration
 cilium_version: "1.15.5"
+cilium_cli_version: "v0.16.8"
+cilium_arch: "amd64"
+cilium_offline_install: false  # Set to true to use pre-downloaded CLI and images
+cilium_image_repository: ""    # e.g., "my-registry.local:5000/cilium"
 
 # Master Node Scheduling (allow pods on master for single-node setup)
 allow_master_scheduling: true
