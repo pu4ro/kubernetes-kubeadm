@@ -1,0 +1,7 @@
+---
+validation_busybox_image: "busybox:1.36"
+validation_nginx_image: "nginx:stable-alpine"
+validation_external_url: "http://google.com"
+validation_dns_timeout: 30
+validation_pod_ready_timeout: 120
+validation_curl_timeout: 10

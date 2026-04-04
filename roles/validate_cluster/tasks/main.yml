@@ -1,0 +1,190 @@
+---
+# Kubernetes Cluster Validation Tasks
+# Verifies node status, system pods, DNS, pod-to-pod communication, and external connectivity
+
+# =============================================================================
+# Step 1: Node Status Check
+# =============================================================================
+- name: "[Node Status] Get all nodes"
+  command: kubectl get nodes -o wide
+  register: node_status
+  changed_when: false
+
+- name: "[Node Status] Display node status"
+  debug:
+    msg: "{{ node_status.stdout_lines }}"
+
+- name: "[Node Status] Fail if any node is not Ready"
+  shell: kubectl get nodes --no-headers | grep -v '\bReady\b'
+  register: not_ready_nodes
+  changed_when: false
+  failed_when: false
+
+- name: "[Node Status] Assert all nodes are Ready"
+  assert:
+    that:
+      - not_ready_nodes.stdout == ""
+    fail_msg: "Some nodes are not in Ready state:\n{{ not_ready_nodes.stdout }}"
+    success_msg: "All nodes are in Ready state"
+
+# =============================================================================
+# Step 2: System Pods Check
+# =============================================================================
+- name: "[System Pods] Get kube-system pods"
+  command: kubectl get pods -n kube-system
+  register: system_pods
+  changed_when: false
+
+- name: "[System Pods] Display kube-system pods"
+  debug:
+    msg: "{{ system_pods.stdout_lines }}"
+
+- name: "[System Pods] Check for unhealthy pods"
+  shell: >
+    kubectl get pods -n kube-system --no-headers |
+    grep -v -E '\bRunning\b|\bCompleted\b'
+  register: unhealthy_pods
+  changed_when: false
+  failed_when: false
+
+- name: "[System Pods] Assert all system pods are healthy"
+  assert:
+    that:
+      - unhealthy_pods.stdout == ""
+    fail_msg: "Some kube-system pods are not Running or Completed:\n{{ unhealthy_pods.stdout }}"
+    success_msg: "All kube-system pods are Running or Completed"
+
+# =============================================================================
+# Step 3: DNS Resolution Check
+# =============================================================================
+- name: "[DNS] Create busybox pod for DNS test"
+  command: >
+    kubectl run validate-dns --image={{ validation_busybox_image }}
+    --restart=Never --command -- sleep {{ validation_dns_timeout | int + 30 }}
+  register: dns_pod_create
+  changed_when: dns_pod_create.rc == 0
+
+- name: "[DNS] Wait for busybox pod to be ready"
+  command: kubectl wait --for=condition=Ready pod/validate-dns --timeout={{ validation_pod_ready_timeout }}s
+  changed_when: false
+
+- name: "[DNS] Run nslookup kubernetes.default"
+  command: kubectl exec validate-dns -- nslookup kubernetes.default
+  register: dns_result
+  changed_when: false
+
+- name: "[DNS] Display DNS result"
+  debug:
+    msg: "{{ dns_result.stdout_lines }}"
+
+- name: "[DNS] Assert DNS resolution succeeded"
+  assert:
+    that:
+      - dns_result.rc == 0
+      - "'Address' in dns_result.stdout"
+    fail_msg: "DNS resolution for kubernetes.default failed:\n{{ dns_result.stdout }}\n{{ dns_result.stderr }}"
+    success_msg: "Internal DNS resolution is working"
+
+- name: "[DNS] Cleanup busybox pod"
+  command: kubectl delete pod validate-dns --grace-period=0 --force
+  changed_when: true
+
+# =============================================================================
+# Step 4: Pod-to-Pod Communication
+# =============================================================================
+- name: "[Pod-to-Pod] Deploy first nginx pod"
+  command: >
+    kubectl run validate-nginx-1 --image={{ validation_nginx_image }}
+    --labels=app=validate-nginx,instance=one
+  register: nginx1_create
+  changed_when: nginx1_create.rc == 0
+
+- name: "[Pod-to-Pod] Deploy second nginx pod"
+  command: >
+    kubectl run validate-nginx-2 --image={{ validation_nginx_image }}
+    --labels=app=validate-nginx,instance=two
+  register: nginx2_create
+  changed_when: nginx2_create.rc == 0
+
+- name: "[Pod-to-Pod] Wait for first nginx pod to be ready"
+  command: kubectl wait --for=condition=Ready pod/validate-nginx-1 --timeout={{ validation_pod_ready_timeout }}s
+  changed_when: false
+
+- name: "[Pod-to-Pod] Wait for second nginx pod to be ready"
+  command: kubectl wait --for=condition=Ready pod/validate-nginx-2 --timeout={{ validation_pod_ready_timeout }}s
+  changed_when: false
+
+- name: "[Pod-to-Pod] Get IP of second nginx pod"
+  command: kubectl get pod validate-nginx-2 -o jsonpath='{.status.podIP}'
+  register: nginx2_ip
+  changed_when: false
+
+- name: "[Pod-to-Pod] Display second pod IP"
+  debug:
+    msg: "Pod validate-nginx-2 IP: {{ nginx2_ip.stdout }}"
+
+- name: "[Pod-to-Pod] Curl from first pod to second pod"
+  command: >
+    kubectl exec validate-nginx-1 -- curl -s -o /dev/null -w "%{http_code}"
+    --connect-timeout {{ validation_curl_timeout }} http://{{ nginx2_ip.stdout }}
+  register: pod_curl_result
+  changed_when: false
+
+- name: "[Pod-to-Pod] Assert communication succeeded"
+  assert:
+    that:
+      - pod_curl_result.stdout == "200"
+    fail_msg: "Pod-to-pod communication failed. HTTP status: {{ pod_curl_result.stdout }}"
+    success_msg: "Pod-to-pod communication is working (HTTP 200)"
+
+- name: "[Pod-to-Pod] Cleanup nginx pods"
+  command: kubectl delete pod validate-nginx-1 validate-nginx-2 --grace-period=0 --force
+  changed_when: true
+
+# =============================================================================
+# Step 5: External Connectivity Check
+# =============================================================================
+- name: "[External] Create busybox pod for egress test"
+  command: >
+    kubectl run validate-egress --image={{ validation_busybox_image }}
+    --restart=Never --command -- sleep 60
+  register: egress_pod_create
+  changed_when: egress_pod_create.rc == 0
+
+- name: "[External] Wait for busybox pod to be ready"
+  command: kubectl wait --for=condition=Ready pod/validate-egress --timeout={{ validation_pod_ready_timeout }}s
+  changed_when: false
+
+- name: "[External] Curl external website"
+  command: >
+    kubectl exec validate-egress -- wget -q -O /dev/null --timeout={{ validation_curl_timeout }}
+    {{ validation_external_url }}
+  register: egress_result
+  changed_when: false
+
+- name: "[External] Assert external connectivity succeeded"
+  assert:
+    that:
+      - egress_result.rc == 0
+    fail_msg: "External connectivity check failed. Could not reach {{ validation_external_url }}"
+    success_msg: "External connectivity is working ({{ validation_external_url }} reachable)"
+
+- name: "[External] Cleanup egress test pod"
+  command: kubectl delete pod validate-egress --grace-period=0 --force
+  changed_when: true
+
+# =============================================================================
+# Summary
+# =============================================================================
+- name: "[Validation] All checks passed"
+  debug:
+    msg:
+      - "========================================="
+      - "  Cluster Validation: ALL CHECKS PASSED"
+      - "========================================="
+      - "  - Node Status:          OK"
+      - "  - System Pods:          OK"
+      - "  - DNS Resolution:       OK"
+      - "  - Pod-to-Pod Comms:     OK"
+      - "  - External Connectivity: OK"
+      - "========================================="
