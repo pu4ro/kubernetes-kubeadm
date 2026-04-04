@@ -116,7 +116,10 @@ chrony_service_name: "{{ 'chronyd' if ansible_os_family == 'RedHat' else 'chrony
 chrony_config_path: "{{ '/etc/chrony.conf' if ansible_os_family == 'RedHat' else '/etc/chrony/chrony.conf' }}"
 
 # Network Plugin (flannel is default)
-network_plugin: "flannel"
+network_plugin: "flannel"  # Options: "flannel", "cilium"
+
+# Cilium Configuration
+cilium_version: "1.15.5"
 
 # Master Node Scheduling (allow pods on master for single-node setup)
 allow_master_scheduling: true

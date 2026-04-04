@@ -53,7 +53,7 @@
     - name: Backup ubuntu.sources before removal (Ubuntu 24.04+)
       copy:
         src: /etc/apt/sources.list.d/ubuntu.sources
-        dest: /etc/apt/sources.list.d/ubuntu.sources.backup
+        dest: /etc/apt/ubuntu.sources.backup
         remote_src: true
         force: false
       when: ubuntu_sources_file.stat.exists

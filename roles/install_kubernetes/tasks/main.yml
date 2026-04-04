@@ -236,14 +236,14 @@
 - name: Verify node joined successfully
   command: kubectl get nodes {{ inventory_hostname }}
   delegate_to: "{{ groups['masters'][0] }}"
-  when: inventory_hostname in groups['workers'] and join_result is defined and join_result.rc == 0
+  when: inventory_hostname in groups['workers'] and join_result is defined and join_result is not skipped and join_result.rc == 0
   retries: 5
   delay: 10
 
 - name: Add worker role label to worker nodes
   command: kubectl label node {{ inventory_hostname }} node-role.kubernetes.io/worker= --overwrite
   delegate_to: "{{ groups['masters'][0] }}"
-  when: inventory_hostname in groups['workers'] and join_result is defined and join_result.rc == 0
+  when: inventory_hostname in groups['workers'] and join_result is defined and join_result is not skipped and join_result.rc == 0
   ignore_errors: true
 
 - name: Configure comprehensive PATH in bashrc

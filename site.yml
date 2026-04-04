@@ -43,8 +43,18 @@
 - name: Network Plugin Setup
   hosts: masters
   become: yes
-  roles:
-    - { role: install_flannel, tags: ['kubernetes', 'networking'] }
+  tasks:
+    - name: Install Flannel CNI
+      include_role:
+        name: install_flannel
+      when: network_plugin == "flannel"
+      tags: ['kubernetes', 'networking', 'flannel']
+
+    - name: Install Cilium CNI
+      include_role:
+        name: install_cilium
+      when: network_plugin == "cilium"
+      tags: ['kubernetes', 'networking', 'cilium']
 
 # Phase 4: Optional Master Node Scheduling (if single node)
 - name: Master Node Scheduling Setup
@@ -83,8 +93,9 @@
     - { role: configure_oidc_apiserver, tags: ['oidc-apiserver'], when: enable_oidc_apiserver | default(false) }
 
 # Phase 8: Harbor Project Setup (Final)
-- name: Harbor Project Setup
-  hosts: all
-  become: yes
-  roles:
-    - { role: harbor-project-setup, tags: ['harbor-setup'] }
+# Disabled: Harbor is not available in this environment
+# - name: Harbor Project Setup
+#   hosts: all
+#   become: yes
+#   roles:
+#     - { role: harbor-project-setup, tags: ['harbor-setup'] }

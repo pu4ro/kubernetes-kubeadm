@@ -1,0 +1,111 @@
+---
+# Install Cilium CNI using Cilium CLI
+# This role installs Cilium CLI and deploys Cilium to the Kubernetes cluster
+
+- name: Check if Cilium CLI is already installed
+  stat:
+    path: /usr/local/bin/cilium
+  register: cilium_cli_installed
+
+- name: Download Cilium CLI
+  get_url:
+    url: "https://github.com/cilium/cilium-cli/releases/download/{{ cilium_cli_version }}/cilium-linux-{{ cilium_arch }}.tar.gz"
+    dest: "/tmp/cilium-linux-{{ cilium_arch }}.tar.gz"
+    mode: '0644'
+  when: not cilium_cli_installed.stat.exists
+
+- name: Extract Cilium CLI
+  unarchive:
+    src: "/tmp/cilium-linux-{{ cilium_arch }}.tar.gz"
+    dest: /usr/local/bin
+    remote_src: yes
+  when: not cilium_cli_installed.stat.exists
+
+- name: Clean up Cilium CLI tarball
+  file:
+    path: "/tmp/cilium-linux-{{ cilium_arch }}.tar.gz"
+    state: absent
+  when: not cilium_cli_installed.stat.exists
+
+- name: Verify Cilium CLI installation
+  command: cilium version --client
+  register: cilium_version_output
+  changed_when: false
+
+- name: Display Cilium CLI version
+  debug:
+    msg: "{{ cilium_version_output.stdout }}"
+
+- name: Check if kube-apiserver container is running
+  shell: crictl ps | grep kube-apiserver
+  register: kube_apiserver_status
+  retries: 30
+  delay: 10
+  until: kube_apiserver_status.rc == 0
+  ignore_errors: yes
+
+- name: Check if Cilium is already installed
+  shell: kubectl get daemonset -n kube-system cilium --no-headers 2>/dev/null | wc -l
+  register: cilium_ds_exists
+  changed_when: false
+  failed_when: false
+  when:
+    - inventory_hostname == groups['masters'][0]
+    - kube_apiserver_status.rc == 0
+
+- name: Build Cilium install command
+  set_fact:
+    cilium_install_cmd: >-
+      cilium install
+      --version {{ cilium_version }}
+      {% if cilium_cluster_id is defined %}--set cluster.id={{ cilium_cluster_id }}{% endif %}
+      {% if cilium_cluster_name is defined %}--set cluster.name={{ cilium_cluster_name }}{% endif %}
+      {% if cilium_hubble_enabled | default(true) %}--set hubble.relay.enabled=true --set hubble.ui.enabled=true{% endif %}
+      {% if cilium_encryption_enabled | default(false) %}--set encryption.enabled=true --set encryption.type={{ cilium_encryption_type | default('wireguard') }}{% endif %}
+      {% if cilium_kube_proxy_replacement | default('') != '' %}--set kubeProxyReplacement={{ cilium_kube_proxy_replacement }}{% endif %}
+      {% for extra_set in cilium_extra_helm_values | default([]) %}--set {{ extra_set }} {% endfor %}
+  when:
+    - inventory_hostname == groups['masters'][0]
+    - kube_apiserver_status.rc == 0
+    - cilium_ds_exists.stdout | default('0') | int == 0
+
+- name: Install Cilium (new installation)
+  shell: "{{ cilium_install_cmd }}"
+  register: cilium_install_result
+  when:
+    - inventory_hostname == groups['masters'][0]
+    - kube_apiserver_status.rc == 0
+    - cilium_ds_exists.stdout | default('0') | int == 0
+
+- name: Display Cilium installation result
+  debug:
+    msg: "{{ cilium_install_result.stdout_lines | default([]) }}"
+  when:
+    - inventory_hostname == groups['masters'][0]
+    - cilium_install_result is defined
+    - cilium_install_result.stdout_lines is defined
+
+- name: Display Cilium status (already installed)
+  debug:
+    msg: "Cilium DaemonSet already exists, skipping installation"
+  when:
+    - inventory_hostname == groups['masters'][0]
+    - cilium_ds_exists.stdout | default('0') | int > 0
+
+- name: Wait for Cilium to be ready
+  shell: cilium status --wait
+  register: cilium_status_result
+  retries: 30
+  delay: 10
+  until: cilium_status_result.rc == 0
+  when:
+    - inventory_hostname == groups['masters'][0]
+    - kube_apiserver_status.rc == 0
+  ignore_errors: yes
+
+- name: Display Cilium status
+  debug:
+    msg: "{{ cilium_status_result.stdout_lines | default(['Cilium status check completed']) }}"
+  when:
+    - inventory_hostname == groups['masters'][0]
+    - cilium_status_result is defined
