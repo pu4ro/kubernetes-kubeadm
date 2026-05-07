@@ -261,11 +261,14 @@
   tags: ['container', 'insecure-registry']
 
 # Phase 2: Install nerdctl package (after containerd is ready)
+# Gated by enable_nerdctl_buildkit (default: false)
 - name: Install nerdctl package (Ubuntu/Debian)
   apt:
     name: nerdctl
     state: present
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - enable_nerdctl_buildkit | default(false) | bool
   register: nerdctl_install_ubuntu
   ignore_errors: yes
 
@@ -273,7 +276,9 @@
   yum:
     name: nerdctl
     state: present
-  when: ansible_os_family == "RedHat"
+  when:
+    - ansible_os_family == "RedHat"
+    - enable_nerdctl_buildkit | default(false) | bool
   register: nerdctl_install_rhel
   ignore_errors: yes
 
@@ -281,15 +286,19 @@
   command: nerdctl --version
   register: nerdctl_version_check
   changed_when: false
-  when: (nerdctl_install_ubuntu is succeeded) or (nerdctl_install_rhel is succeeded)
+  when:
+    - enable_nerdctl_buildkit | default(false) | bool
+    - (nerdctl_install_ubuntu is succeeded) or (nerdctl_install_rhel is succeeded)
 
 # Phase 3: Install buildkit package (after nerdctl is ready)
+# Also gated by enable_nerdctl_buildkit
 - name: Install buildkit package (Ubuntu/Debian)
   apt:
     name: buildkit
     state: present
-  when: 
+  when:
     - ansible_os_family == "Debian"
+    - enable_nerdctl_buildkit | default(false) | bool
     - nerdctl_version_check is succeeded
   register: buildkit_install_ubuntu
 
@@ -297,8 +306,9 @@
   yum:
     name: buildkit
     state: present
-  when: 
+  when:
     - ansible_os_family == "RedHat"
+    - enable_nerdctl_buildkit | default(false) | bool
     - nerdctl_version_check is succeeded
   register: buildkit_install_rhel
 
@@ -307,7 +317,9 @@
     path: /etc/buildkit
     state: directory
     mode: '0755'
-  when: (buildkit_install_ubuntu is succeeded) or (buildkit_install_rhel is succeeded)
+  when:
+    - enable_nerdctl_buildkit | default(false) | bool
+    - (buildkit_install_ubuntu is succeeded) or (buildkit_install_rhel is succeeded)
 
 - name: Create buildkitd configuration
   copy:
@@ -321,18 +333,22 @@
     owner: root
     group: root
     mode: '0644'
-  when: (buildkit_install_ubuntu is succeeded) or (buildkit_install_rhel is succeeded)
+  when:
+    - enable_nerdctl_buildkit | default(false) | bool
+    - (buildkit_install_ubuntu is succeeded) or (buildkit_install_rhel is succeeded)
 
 - name: Start and enable buildkit service
   systemd:
     name: buildkit
     state: started
     enabled: yes
-  when: (buildkit_install_ubuntu is succeeded) or (buildkit_install_rhel is succeeded)
+  when:
+    - enable_nerdctl_buildkit | default(false) | bool
+    - (buildkit_install_ubuntu is succeeded) or (buildkit_install_rhel is succeeded)
 
-# Final verification
+# Final verification (uses containerd-native ctr CLI, works without nerdctl)
 - name: Test containerd functionality
-  command: nerdctl images
+  command: ctr version
   register: containerd_test
   changed_when: false
   failed_when: false
@@ -348,6 +364,6 @@
     msg: |
       Installation completed:
       - containerd: {{ 'INSTALLED' if containerd_check.rc == 0 else 'NOT FOUND' }}
-      - nerdctl: {{ 'INSTALLED' if nerdctl_version_check is succeeded else 'SKIPPED/FAILED' }}
-      - buildkit: {{ 'INSTALLED' if (buildkit_install_ubuntu is succeeded) or (buildkit_install_rhel is succeeded) else 'SKIPPED/FAILED' }}
+      - nerdctl: {{ 'INSTALLED' if (nerdctl_version_check is defined and nerdctl_version_check is succeeded) else ('DISABLED' if not (enable_nerdctl_buildkit | default(false) | bool) else 'FAILED') }}
+      - buildkit: {{ 'INSTALLED' if ((buildkit_install_ubuntu is defined and buildkit_install_ubuntu is succeeded) or (buildkit_install_rhel is defined and buildkit_install_rhel is succeeded)) else ('DISABLED' if not (enable_nerdctl_buildkit | default(false) | bool) else 'FAILED') }}
       - Test: {{ 'PASSED' if containerd_test.rc == 0 else 'FAILED' }}
