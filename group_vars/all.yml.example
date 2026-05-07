@@ -1,0 +1,1240 @@
+---
+# ═════════════════════════════════════════════════════════════════════════════
+# Kubernetes Cluster Configuration — Example File
+# ═════════════════════════════════════════════════════════════════════════════
+#
+# 사용법 / Usage:
+#   1. cp group_vars/all.yml.example group_vars/all.yml
+#   2. Edit group_vars/all.yml for your environment (passwords, IPs, registries)
+#   3. NEVER commit group_vars/all.yml — it's gitignored for credential safety
+#
+# 변수 그룹 구성 / Variable Groups:
+#   1.  Kubernetes 기본              / Kubernetes Core
+#   2.  고가용성 (HA)                / High Availability
+#   3.  컨테이너 런타임              / Container Runtime
+#   4.  네트워크 / CNI               / Networking & CNI
+#   5.  시스템 / Sysctl / NTP        / System / Sysctl / NTP
+#   6.  패키지 / 저장소              / Packages & Repositories
+#   7.  인증 / 보안                  / Authentication & Security
+#   8.  GPU / NVIDIA                 / GPU / NVIDIA
+#   9.  레지스트리 미러              / Registry Mirror
+#   10. 인증서 / 스케줄링            / Certificates & Scheduling
+#   11. 디스크 / 스토리지            / Disk & Storage
+#   12. CoreDNS / Hosts              / CoreDNS & Hosts
+#
+# 주석 형식 / Comment format (per variable):
+#   설명 / Description, 타입 / Type, 유효값 / Valid, 기본값 / Default,
+#   의존성 / Depends, 적용 시점 / When, 관련 Role / Role,
+#   변경 시기 / Change when, 주의 / Caveats (선택)
+#
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 1. Kubernetes 기본 / Kubernetes Core
+# 클러스터의 K8s 버전, DNS 도메인, 서비스/Pod 서브넷
+# Cluster K8s version, DNS domain, service/pod subnets
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────
+# kubernetes_version
+# 설명: 설치할 Kubernetes 버전 (kubeadm/kubelet/kubectl 모두 동일)
+# Description: Kubernetes version to install (kubeadm/kubelet/kubectl unified)
+# 타입 / Type:        string
+# 유효값 / Valid:     1.27.x ~ 1.34.x  (≤1.30 → kubeadm v1beta3, ≥1.31 → v1beta4)
+# 기본값 / Default:   "1.34.1"
+# 의존성 / Depends:   none
+# 적용 시점 / When:   tags=kubernetes (Phase 2)
+# 관련 Role / Role:   install_kubernetes
+# 변경 시기 / Change when: 특정 버전이 필요할 때 (예: 운영 정책 LTS, 1.27 고정 환경)
+# 주의 / Caveats:     v1beta3 ↔ v1beta4 분기는 install_kubernetes 템플릿이 자동 처리
+# ─────────────────────────────────────────────────────────────
+kubernetes_version: "1.34.1"
+
+# ─────────────────────────────────────────────────────────────
+# dns_domain
+# 설명: 클러스터 내부 DNS 도메인 (Service FQDN 접미사)
+# Description: Cluster internal DNS domain (Service FQDN suffix)
+# 타입 / Type:        string
+# 유효값 / Valid:     RFC-1035 도메인 형식
+# 기본값 / Default:   "cluster.local"
+# 의존성 / Depends:   none
+# 적용 시점 / When:   tags=kubernetes
+# 관련 Role / Role:   install_kubernetes (kubeadm-init.yaml.j2 → networking.dnsDomain)
+# 변경 시기 / Change when: 멀티클러스터 환경에서 클러스터 간 DNS 충돌 회피
+# 주의 / Caveats:     설치 후 변경은 매우 어려움 — 초기에 확정
+# ─────────────────────────────────────────────────────────────
+dns_domain: cluster.local
+
+# ─────────────────────────────────────────────────────────────
+# service_subnet
+# 설명: ClusterIP Service에 할당될 IP 대역
+# Description: CIDR for ClusterIP Services
+# 타입 / Type:        string (CIDR)
+# 유효값 / Valid:     RFC-1918 사설 대역, /12 권장
+# 기본값 / Default:   "10.96.0.0/12"
+# 의존성 / Depends:   pod_subnet과 겹치면 안 됨
+# 적용 시점 / When:   tags=kubernetes
+# 관련 Role / Role:   install_kubernetes
+# 변경 시기 / Change when: 사내 네트워크와 충돌할 때
+# 주의 / Caveats:     설치 후 변경 불가에 가까움
+# ─────────────────────────────────────────────────────────────
+service_subnet: 10.96.0.0/12
+
+# ─────────────────────────────────────────────────────────────
+# pod_subnet
+# 설명: Pod에 할당될 IP 대역
+# Description: CIDR for Pods
+# 타입 / Type:        string (CIDR)
+# 유효값 / Valid:     RFC-1918 사설 대역, /16 권장
+# 기본값 / Default:   "10.244.0.0/16"  (Flannel 기본값과 일치)
+# 의존성 / Depends:   service_subnet과 겹치면 안 됨, CNI 설정과 일치
+# 적용 시점 / When:   tags=kubernetes,networking
+# 관련 Role / Role:   install_kubernetes, install_flannel, install_cilium
+# 변경 시기 / Change when: 더 큰 Pod 수용량이 필요 (예: /14)
+# 주의 / Caveats:     CNI 설정 (예: Flannel ConfigMap) 변경도 함께 필요
+# ─────────────────────────────────────────────────────────────
+pod_subnet: 10.244.0.0/16
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 2. 고가용성 (HA) / High Availability
+# 멀티 마스터, kube-vip, 도메인 기반 통신
+# Multi-master, kube-vip, domain-based communication
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────
+# master_ha
+# 설명: 다중 마스터(HA) 모드 활성화. true면 controlPlaneEndpoint 사용
+# Description: Enable multi-master (HA) mode; uses controlPlaneEndpoint
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   true
+# 의존성 / Depends:   inventory.ini의 [masters]에 2개 이상 호스트 필요 시 true
+# 적용 시점 / When:   tags=kubernetes (kubeadm init/join)
+# 관련 Role / Role:   install_kubernetes
+# 변경 시기 / Change when: 단일 마스터 PoC면 false, 운영은 true 권장
+# 주의 / Caveats:     true일 때 kube_vip_address 또는 enable_domain_communication 중 하나 필요
+# ─────────────────────────────────────────────────────────────
+master_ha: true
+
+# ─────────────────────────────────────────────────────────────
+# kube_vip_port
+# 설명: kube-vip이 사용하는 API 서버 포트
+# Description: API server port managed by kube-vip
+# 타입 / Type:        int
+# 유효값 / Valid:     1–65535 (기본 6443 권장)
+# 기본값 / Default:   6443
+# 의존성 / Depends:   master_ha=true 또는 enable_domain_communication=true
+# 적용 시점 / When:   tags=kubernetes
+# 관련 Role / Role:   install_kubernetes
+# 변경 시기 / Change when: 외부 LB가 다른 포트로 매핑할 때
+# ─────────────────────────────────────────────────────────────
+kube_vip_port: 6443
+
+# ─────────────────────────────────────────────────────────────
+# kube_vip_interface
+# 설명: kube-vip이 VIP를 부착할 네트워크 인터페이스
+# Description: Network interface for kube-vip to bind the VIP
+# 타입 / Type:        string
+# 유효값 / Valid:     OS의 실제 인터페이스 이름 (eth0, ens18, enp1s0 등)
+# 기본값 / Default:   "ens18"  (Proxmox 기본; 환경에 맞게 변경 필수!)
+# 의존성 / Depends:   kube_vip_address 정의 시 필수
+# 적용 시점 / When:   tags=kubernetes
+# 관련 Role / Role:   install_kubernetes (kube-vip.yaml.j2)
+# 변경 시기 / Change when: 환경별 NIC 이름 차이 (`ip link show` 로 확인)
+# 주의 / Caveats:     틀린 이름이면 VIP가 부착되지 않아 클러스터가 형성되지 않음
+# ─────────────────────────────────────────────────────────────
+kube_vip_interface: ens18
+
+# ─────────────────────────────────────────────────────────────
+# kube_vip_address (선택)
+# 설명: kube-vip이 관리할 VIP. 미설정 + enable_domain_communication=true면 도메인 사용
+# Description: VIP for kube-vip; if unset and enable_domain_communication=true, uses api_domain
+# 타입 / Type:        string (IPv4)
+# 유효값 / Valid:     마스터 노드와 동일 서브넷의 미사용 IP
+# 기본값 / Default:   undefined (주석 처리)
+# 의존성 / Depends:   master_ha=true
+# 적용 시점 / When:   tags=kubernetes
+# 관련 Role / Role:   install_kubernetes
+# 변경 시기 / Change when: kube-vip 기반 HA 사용 시 정의 / 외부 LB 사용 시 미정의
+# 주의 / Caveats:     단일 마스터 + 도메인 통신만으로 HA 흉내 가능
+# ─────────────────────────────────────────────────────────────
+# kube_vip_address: 192.168.1.30
+
+# ─────────────────────────────────────────────────────────────
+# kube_vip_svc_enable
+# 설명: kube-vip 서비스 LoadBalancer 기능 활성화 (Service of type LoadBalancer)
+# Description: Enable kube-vip's Service Load Balancer feature
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   kube_vip_address 정의 시에만 의미 있음
+# 적용 시점 / When:   tags=kubernetes
+# 관련 Role / Role:   install_kubernetes
+# 변경 시기 / Change when: MetalLB 대신 kube-vip로 LB 서비스 제공할 때
+# ─────────────────────────────────────────────────────────────
+kube_vip_svc_enable: false
+
+# ─────────────────────────────────────────────────────────────
+# enable_domain_communication
+# 설명: 도메인 기반 etcd/API 통신. IP 변경에 강건한 클러스터 구성
+# Description: Use domain names for etcd/API communication; resilient to IP changes
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   true
+# 의존성 / Depends:   domain_suffix, api_domain 함께 사용
+# 적용 시점 / When:   tags=kubernetes (kubeadm init 시 controlPlaneEndpoint=api_domain)
+# 관련 Role / Role:   install_kubernetes (kubeadm-init.yaml.j2)
+# 변경 시기 / Change when: 클라우드 마이그레이션 / VM 이동이 잦은 환경
+# 주의 / Caveats:     api_domain DNS가 마스터 IP(또는 LB) 로 해석되어야 함
+# ─────────────────────────────────────────────────────────────
+enable_domain_communication: true
+
+# ─────────────────────────────────────────────────────────────
+# domain_suffix
+# 설명: 노드 호스트명에 부착할 도메인 접미사 (예: master1.k8s.local)
+# Description: Domain suffix for cluster nodes (e.g., master1.k8s.local)
+# 타입 / Type:        string
+# 유효값 / Valid:     RFC-1035 도메인
+# 기본값 / Default:   "k8s.local"
+# 의존성 / Depends:   enable_domain_communication=true
+# 적용 시점 / When:   tags=kubernetes,etc-hosts
+# 관련 Role / Role:   configure_etc_hosts, install_kubernetes
+# 변경 시기 / Change when: 사내 도메인 정책에 맞춤
+# ─────────────────────────────────────────────────────────────
+domain_suffix: "k8s.local"
+
+# ─────────────────────────────────────────────────────────────
+# api_domain
+# 설명: API 서버 도메인 (controlPlaneEndpoint). DNS 또는 /etc/hosts로 해석되어야 함
+# Description: API server domain (controlPlaneEndpoint); must resolve via DNS or /etc/hosts
+# 타입 / Type:        string
+# 유효값 / Valid:     RFC-1035 도메인
+# 기본값 / Default:   "k8s-api.internal"
+# 의존성 / Depends:   enable_domain_communication=true
+# 적용 시점 / When:   tags=kubernetes
+# 관련 Role / Role:   install_kubernetes, configure_etc_hosts
+# 변경 시기 / Change when: 외부 LB 사용 시 LB 도메인으로 매핑
+# 주의 / Caveats:     custom_hosts 또는 외부 DNS에서 마스터 IP / LB IP로 매핑 필수
+# ─────────────────────────────────────────────────────────────
+api_domain: "k8s-api.internal"
+
+# ─────────────────────────────────────────────────────────────
+# etcd_domain_config (dict)
+# 설명: 도메인 통신 사용 시 etcd 리스닝/클러스터 설정
+# Description: etcd listen URLs and cluster token for domain-based communication
+# 타입 / Type:        dict
+# 유효값 / Valid:     listen_peer_urls / listen_client_urls / initial_cluster_token / initial_cluster_state
+# 기본값 / Default:   0.0.0.0 리스닝 + new 클러스터 상태
+# 의존성 / Depends:   enable_domain_communication=true
+# 적용 시점 / When:   tags=kubernetes
+# 관련 Role / Role:   install_kubernetes (kubeadm-init.yaml.j2 etcd 섹션)
+# 변경 시기 / Change when: 멀티 클러스터 멤버 토큰 분리 시
+# ─────────────────────────────────────────────────────────────
+etcd_domain_config:
+  listen_peer_urls: "https://0.0.0.0:2380"
+  listen_client_urls: "https://0.0.0.0:2379"
+  initial_cluster_token: "etcd-cluster-1"
+  initial_cluster_state: "new"
+
+# ─────────────────────────────────────────────────────────────
+# extra_cert_sans (list)
+# 설명: API 서버 인증서에 추가할 SAN 항목
+# Description: Additional Subject Alternative Names for API server cert
+# 타입 / Type:        list[string]
+# 유효값 / Valid:     도메인 또는 IP
+# 기본값 / Default:   localhost, kubernetes.* 4종
+# 의존성 / Depends:   enable_domain_communication=true 시 자동으로 master 도메인 추가됨
+# 적용 시점 / When:   tags=kubernetes
+# 관련 Role / Role:   install_kubernetes
+# 변경 시기 / Change when: 외부 도메인으로 API에 접근할 때 (예: k8s.example.com)
+# ─────────────────────────────────────────────────────────────
+extra_cert_sans:
+  - "localhost"
+  - "kubernetes"
+  - "kubernetes.default"
+  - "kubernetes.default.svc"
+  - "kubernetes.default.svc.cluster.local"
+  # - "k8s.example.com"
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 3. 컨테이너 런타임 / Container Runtime
+# containerd 버전, 데이터 디렉토리, 로컬 레지스트리, runc, sandbox image
+# containerd version, data directory, local registry, runc, sandbox image
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────
+# containerd_version
+# 설명: 설치할 containerd 버전 (패키지 핀 + 바이너리 다운로드용)
+# Description: containerd version to install (used for both apt/yum pin and binary download)
+# 타입 / Type:        string
+# 유효값 / Valid:     1.6.x ~ 2.2.x  (<2.2 → config v2, ≥2.2 → config v3 자동 감지)
+# 기본값 / Default:   "2.2.0"
+# 의존성 / Depends:   none
+# 적용 시점 / When:   tags=container,base
+# 관련 Role / Role:   install_containerd
+# 변경 시기 / Change when: 특정 버전 호환성이 필요할 때 (1.7.x도 OK)
+# 주의 / Caveats:     pause_image 와 버전 호환성 확인 (3.10+ 권장 for ≥1.31)
+# ─────────────────────────────────────────────────────────────
+containerd_version: "2.2.0"
+
+# ─────────────────────────────────────────────────────────────
+# containerd_limit_nproc / containerd_limit_nofile
+# 설명: containerd.service의 systemd LimitNPROC / LimitNOFILE
+# Description: systemd resource limits for containerd.service
+# 타입 / Type:        int
+# 유효값 / Valid:     1 ~ 1048576
+# 기본값 / Default:   100000 / 100000
+# 의존성 / Depends:   none
+# 적용 시점 / When:   tags=container
+# 관련 Role / Role:   install_containerd
+# 변경 시기 / Change when: 매우 많은 Pod/컨테이너 (>1000) 운영 시 상향
+# ─────────────────────────────────────────────────────────────
+containerd_limit_nproc: 100000
+containerd_limit_nofile: 100000
+
+# ─────────────────────────────────────────────────────────────
+# containerd_data_base_dir
+# 설명: containerd 데이터 베이스 디렉토리. 빈 값이면 기본값 /var/lib/containerd
+# Description: Base directory for containerd data; empty = default /var/lib/containerd
+# 타입 / Type:        string
+# 유효값 / Valid:     절대 경로 또는 빈 문자열. 실제 경로: {base}/{hostname}
+# 기본값 / Default:   ""  (예: "/data/containerd" 설정 시 → /data/containerd/master1)
+# 의존성 / Depends:   none (enable_containerd_disk와는 별개)
+# 적용 시점 / When:   tags=container
+# 관련 Role / Role:   install_containerd
+# 변경 시기 / Change when: 별도 데이터 디스크에 컨테이너 이미지/데이터 분리 시
+# 주의 / Caveats:     enable_containerd_disk: true 와 함께 쓸 때 경로 충돌 주의
+# ─────────────────────────────────────────────────────────────
+containerd_data_base_dir: ""
+
+# ─────────────────────────────────────────────────────────────
+# enable_local_registry
+# 설명: 노드에 로컬 Docker registry 컨테이너 자동 실행 (오프라인 미러용)
+# Description: Run a local Docker registry container on nodes (for offline mirroring)
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   local_registry_* 변수
+# 적용 시점 / When:   tags=local-registry
+# 관련 Role / Role:   local_registry
+# 변경 시기 / Change when: 격리된 환경에서 자체 미러를 띄울 때
+# 주의 / Caveats:     운영 환경은 별도 Harbor/Nexus 사용 권장
+# ─────────────────────────────────────────────────────────────
+enable_local_registry: false
+local_registry_image: "registry:2"                           # 사용할 registry 이미지 / Registry image
+local_registry_image_tar: "/root/docker.tar.gz"              # 오프라인 이미지 tar 경로 / Offline image tarball
+local_registry_container_name: "local-registry"              # 컨테이너 이름 / Container name
+local_registry_host_port: 80                                 # 호스트 포트 / Host port (외부 접근)
+local_registry_container_port: 5000                          # 컨테이너 내부 포트 / Container port
+local_registry_data_dir: "/opt/local-registry/data"          # 호스트 데이터 디렉토리 / Host data dir
+local_registry_additional_args: []                           # docker run 추가 인자 / Extra docker run args
+
+# ─────────────────────────────────────────────────────────────
+# pause_image
+# 설명: kubelet이 사용할 pause 컨테이너 이미지 (sandbox image)
+# Description: Pause container image for kubelet (network namespace holder)
+# 타입 / Type:        string
+# 유효값 / Valid:     레지스트리 경로 + 태그
+# 기본값 / Default:   "registry.k8s.io/pause:3.10"  (예시는 내부 미러)
+# 의존성 / Depends:   K8s 버전과 호환 — ≥1.31은 3.10+ 권장
+# 적용 시점 / When:   tags=container,kubernetes
+# 관련 Role / Role:   install_containerd, install_kubernetes
+# 변경 시기 / Change when: 내부 레지스트리 사용 / 특정 버전 핀 필요 시
+# 주의 / Caveats:     containerd <2.2: sandbox_image, ≥2.2: pinned_images.sandbox 사용 (자동)
+# ─────────────────────────────────────────────────────────────
+pause_image: "registry.k8s.io/pause:3.10"
+
+# ─────────────────────────────────────────────────────────────
+# enable_custom_image_repository
+# 설명: K8s 컴포넌트(apiserver/etcd/kube-proxy/coredns) 이미지를 사설 레지스트리에서 받기
+# Description: Pull K8s component images from custom repository
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false  (true: 내부 미러, false: registry.k8s.io)
+# 의존성 / Depends:   k8s_image_repository, coredns_image_repository
+# 적용 시점 / When:   tags=kubernetes
+# 관련 Role / Role:   install_kubernetes
+# 변경 시기 / Change when: 오프라인 / 내부망 환경
+# ─────────────────────────────────────────────────────────────
+enable_custom_image_repository: false
+k8s_image_repository: "harbor.example.com/external-hub/kubernetes"
+coredns_image_repository: "harbor.example.com/external-hub/kubernetes/coredns"
+
+# ─────────────────────────────────────────────────────────────
+# enable_official_k8s_repo
+# 설명: 공식 K8s APT/YUM 저장소 (pkgs.k8s.io) 사용. major.minor 자동 추출
+# Description: Use official Kubernetes repository (pkgs.k8s.io); minor version auto-derived
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false  (사내 저장소 우선; 인터넷 가능 시 true)
+# 의존성 / Depends:   인터넷 연결, kubernetes_version
+# 적용 시점 / When:   tags=k8s-official-repo, packages
+# 관련 Role / Role:   install_kubernetes
+# 변경 시기 / Change when: 사내 미러 미운영 환경
+# ─────────────────────────────────────────────────────────────
+enable_official_k8s_repo: false
+
+# ─────────────────────────────────────────────────────────────
+# enable_official_containerd_repo
+# 설명: 공식 Docker 저장소 (download.docker.com) 사용
+# Description: Use official Docker containerd repository
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   인터넷 연결
+# 적용 시점 / When:   tags=container,packages
+# 관련 Role / Role:   install_containerd
+# 변경 시기 / Change when: 사내 미러 미운영 환경
+# ─────────────────────────────────────────────────────────────
+enable_official_containerd_repo: false
+
+# ─────────────────────────────────────────────────────────────
+# enable_containerd_binary_install
+# 설명: 패키지 매니저 대신 GitHub releases에서 containerd/runc 바이너리 직접 설치
+# Description: Install containerd/runc binaries directly from GitHub releases instead of package manager
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   runc_version, containerd_binary_arch
+# 적용 시점 / When:   tags=containerd-binary-install,container
+# 관련 Role / Role:   install_containerd
+# 변경 시기 / Change when: 패키지 저장소가 막혔거나 특정 빌드가 필요할 때
+# 주의 / Caveats:     true 시 ubuntu_packages의 containerd, rhel의 containerd.io 패키지는 건너뜀
+# ─────────────────────────────────────────────────────────────
+enable_containerd_binary_install: false
+runc_version: "1.2.4"                                        # 함께 설치할 runc 버전 / runc version to install
+containerd_binary_arch: "amd64"                              # 바이너리 아키텍처 / Binary arch: amd64 | arm64
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 4. 네트워크 / CNI / Networking & CNI
+# CNI 플러그인 선택 (Flannel | Cilium), Cilium 옵션
+# CNI plugin selection (Flannel | Cilium), Cilium options
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────
+# network_plugin
+# 설명: 사용할 CNI 플러그인 선택
+# Description: CNI plugin to deploy
+# 타입 / Type:        string
+# 유효값 / Valid:     "flannel" | "cilium"
+# 기본값 / Default:   "flannel"
+# 의존성 / Depends:   "cilium" 선택 시 cilium_* 변수 검토
+# 적용 시점 / When:   tags=networking,cilium,flannel
+# 관련 Role / Role:   install_flannel | install_cilium
+# 변경 시기 / Change when: NetworkPolicy/Hubble/eBPF 필요 시 cilium, 단순/저자원은 flannel
+# 주의 / Caveats:     설치 후 변경은 사실상 클러스터 재구축 수준
+# ─────────────────────────────────────────────────────────────
+network_plugin: "flannel"
+
+# ─────────────────────────────────────────────────────────────
+# cilium_version
+# 설명: Cilium Helm 차트 버전 (cilium install --version 인자)
+# Description: Cilium version (passed to `cilium install --version`)
+# 타입 / Type:        string
+# 유효값 / Valid:     공식 Cilium 릴리스
+# 기본값 / Default:   "1.15.5"
+# 의존성 / Depends:   network_plugin: cilium
+# 적용 시점 / When:   tags=cilium,networking
+# 관련 Role / Role:   install_cilium
+# 변경 시기 / Change when: 보안 패치 / 신기능 / K8s 버전 호환성
+# ─────────────────────────────────────────────────────────────
+cilium_version: "1.15.5"
+
+# ─────────────────────────────────────────────────────────────
+# cilium_cli_version
+# 설명: Cilium CLI 바이너리 버전 (GitHub releases 태그)
+# Description: Cilium CLI binary version (GitHub releases tag)
+# 타입 / Type:        string
+# 유효값 / Valid:     "v0.16.x" 등
+# 기본값 / Default:   "v0.16.8"
+# 의존성 / Depends:   network_plugin: cilium
+# 적용 시점 / When:   tags=cilium
+# 관련 Role / Role:   install_cilium
+# 변경 시기 / Change when: cilium_version과 호환 매트릭스 확인 후
+# ─────────────────────────────────────────────────────────────
+cilium_cli_version: "v0.16.8"
+
+# ─────────────────────────────────────────────────────────────
+# cilium_arch
+# 설명: Cilium CLI 바이너리 아키텍처
+# Description: Cilium CLI binary architecture
+# 타입 / Type:        string
+# 유효값 / Valid:     "amd64" | "arm64"
+# 기본값 / Default:   "amd64"
+# 의존성 / Depends:   호스트 CPU 아키텍처
+# 적용 시점 / When:   tags=cilium
+# 관련 Role / Role:   install_cilium
+# 변경 시기 / Change when: ARM64 노드 (예: AWS Graviton, Apple Silicon)
+# ─────────────────────────────────────────────────────────────
+cilium_arch: "amd64"
+
+# ─────────────────────────────────────────────────────────────
+# cilium_offline_install
+# 설명: 사전 다운로드한 cilium-linux-{arch}.tar.gz를 사용 (인터넷 차단 환경)
+# Description: Use pre-staged cilium tarball (air-gapped environments)
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   role의 files/ 디렉토리에 tarball 사전 배치 필요
+# 적용 시점 / When:   tags=cilium
+# 관련 Role / Role:   install_cilium
+# 변경 시기 / Change when: 인터넷 미연결 클러스터
+# 주의 / Caveats:     true면 이미지도 cilium_image_repository로 내부 미러 지정 권장
+# ─────────────────────────────────────────────────────────────
+cilium_offline_install: false
+
+# ─────────────────────────────────────────────────────────────
+# cilium_image_repository
+# 설명: Cilium 컨테이너 이미지 저장소 오버라이드 (internal mirror)
+# Description: Override repository for Cilium container images
+# 타입 / Type:        string
+# 유효값 / Valid:     레지스트리 경로 또는 빈 문자열 (기본 사용)
+# 기본값 / Default:   ""  (예: "harbor.example.com/cilium")
+# 의존성 / Depends:   cilium_offline_install=true 일 때 권장
+# 적용 시점 / When:   tags=cilium
+# 관련 Role / Role:   install_cilium
+# 변경 시기 / Change when: 오프라인 / 인하우스 미러
+# ─────────────────────────────────────────────────────────────
+cilium_image_repository: ""
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 5. 시스템 / Sysctl / NTP / System / Sysctl / NTP
+# 타임존, 호스트명, 커널 파라미터, 시간 동기화, 병렬 실행
+# Timezone, hostname, kernel params, time sync, parallel execution
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────
+# set_timezone
+# 설명: 모든 노드의 타임존 설정
+# Description: System timezone for all nodes
+# 타입 / Type:        string (IANA TZ database)
+# 유효값 / Valid:     "Asia/Seoul", "UTC", "America/New_York" 등
+# 기본값 / Default:   "Asia/Seoul"
+# 의존성 / Depends:   none
+# 적용 시점 / When:   tags=base,packages
+# 관련 Role / Role:   install_os_package
+# 변경 시기 / Change when: 글로벌 운영 / 로그 일관성
+# ─────────────────────────────────────────────────────────────
+set_timezone: Asia/Seoul
+
+# ─────────────────────────────────────────────────────────────
+# configure_etc_hosts
+# 설명: /etc/hosts에 inventory 호스트 + registry_hosts + custom_hosts 추가
+# Description: Populate /etc/hosts with inventory hosts + registry_hosts + custom_hosts
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   true
+# 의존성 / Depends:   inventory.ini, registry_hosts, custom_hosts
+# 적용 시점 / When:   tags=etc-hosts,base
+# 관련 Role / Role:   configure_etc_hosts
+# 변경 시기 / Change when: DNS가 모든 매핑을 처리하면 false 가능
+# ─────────────────────────────────────────────────────────────
+configure_etc_hosts: true
+
+# ─────────────────────────────────────────────────────────────
+# set_hostname_from_inventory
+# 설명: inventory의 호스트명을 노드 hostname에 적용 (`hostnamectl set-hostname`)
+# Description: Set OS hostname from inventory_hostname
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   true
+# 의존성 / Depends:   inventory.ini의 호스트명이 의도한 값
+# 적용 시점 / When:   tags=set-hostname,base
+# 관련 Role / Role:   set_hostname
+# 변경 시기 / Change when: 이미 OS에서 호스트명 관리 중이면 false
+# ─────────────────────────────────────────────────────────────
+set_hostname_from_inventory: true
+
+# ─────────────────────────────────────────────────────────────
+# k8s_sysctl_params (dict)
+# 설명: K8s 동작에 필요한 커널 파라미터 (IP forward, bridge netfilter, swap 등)
+# Description: Kernel sysctl params required by Kubernetes
+# 타입 / Type:        dict[string, int]
+# 유효값 / Valid:     커널 sysctl 키와 정수 값
+# 기본값 / Default:   아래 항목 (대부분 그대로 권장)
+# 의존성 / Depends:   none
+# 적용 시점 / When:   tags=sysctl,base
+# 관련 Role / Role:   configure_sysctl
+# 변경 시기 / Change when: vm.max_map_count는 ES/OpenSearch 사용 시 상향, conntrack은 고부하 환경
+# 주의 / Caveats:     vm.swappiness=0과 swap off는 K8s 권장사항
+# ─────────────────────────────────────────────────────────────
+k8s_sysctl_params:
+  net.ipv4.ip_forward: 1
+  net.bridge.bridge-nf-call-iptables: 1
+  net.bridge.bridge-nf-call-ip6tables: 1
+  vm.swappiness: 0
+  fs.file-max: 2097152
+  fs.inotify.max_user_watches: 524288
+  fs.inotify.max_user_instances: 512
+  net.netfilter.nf_conntrack_max: 1048576
+  net.ipv4.tcp_max_syn_backlog: 8096
+  net.core.netdev_max_backlog: 16384
+  net.core.somaxconn: 32768
+  vm.max_map_count: 262144
+
+# ─────────────────────────────────────────────────────────────
+# use_local_ntp
+# 설명: master1을 NTP 서버로 사용. 다른 노드는 master1과 동기화
+# Description: Use master1 as the local NTP server; other nodes sync to it
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   true
+# 의존성 / Depends:   cluster_network (NTP 클라이언트 허용 대역)
+# 적용 시점 / When:   tags=base,packages
+# 관련 Role / Role:   install_os_package
+# 변경 시기 / Change when: 외부 NTP 사용 가능하면 false + external_ntp_servers 설정
+# ─────────────────────────────────────────────────────────────
+use_local_ntp: true
+
+# ─────────────────────────────────────────────────────────────
+# external_ntp_servers (list)
+# 설명: 외부 NTP 서버 목록 (use_local_ntp=false 일 때 사용)
+# Description: External NTP servers (used when use_local_ntp=false)
+# 타입 / Type:        list[string] (또는 빈 dict)
+# 유효값 / Valid:     호스트명 또는 IP
+# 기본값 / Default:   {}  (빈 dict — local NTP 사용)
+# 의존성 / Depends:   use_local_ntp=false
+# 적용 시점 / When:   tags=base,packages
+# 관련 Role / Role:   install_os_package
+# 변경 시기 / Change when: 외부 시간 서버 정책 적용
+# ─────────────────────────────────────────────────────────────
+external_ntp_servers: {}
+  # - "pool.ntp.org"
+  # - "time.google.com"
+
+# ─────────────────────────────────────────────────────────────
+# cluster_network
+# 설명: 로컬 NTP 서버에서 시간 동기화를 허용할 클라이언트 대역
+# Description: Network range allowed to query the local NTP server
+# 타입 / Type:        string (CIDR)
+# 유효값 / Valid:     RFC-1918 사설 대역
+# 기본값 / Default:   "192.168.0.0/16"
+# 의존성 / Depends:   use_local_ntp=true
+# 적용 시점 / When:   tags=base
+# 관련 Role / Role:   install_os_package (chrony.conf 템플릿)
+# 변경 시기 / Change when: 다른 사설 대역 사용 시
+# ─────────────────────────────────────────────────────────────
+cluster_network: "192.168.0.0/16"
+
+# ─────────────────────────────────────────────────────────────
+# chrony_service_name / chrony_config_path
+# 설명: 배포판별 chrony 서비스명 및 설정 파일 경로 (자동 분기)
+# Description: Distribution-specific chrony service name & config path (auto-derived)
+# 타입 / Type:        string (Ansible 표현식)
+# 기본값 / Default:   ansible_os_family에 따라 자동 결정
+# 의존성 / Depends:   ansible_os_family
+# 적용 시점 / When:   tags=base
+# 관련 Role / Role:   install_os_package
+# 변경 시기 / Change when: 거의 변경 불필요 (특수 배포판일 때만)
+# ─────────────────────────────────────────────────────────────
+chrony_service_name: "{{ 'chronyd' if ansible_os_family == 'RedHat' else 'chrony' }}"
+chrony_config_path: "{{ '/etc/chrony.conf' if ansible_os_family == 'RedHat' else '/etc/chrony/chrony.conf' }}"
+
+# ─────────────────────────────────────────────────────────────
+# parallel_execution (dict)
+# 설명: 단계별 병렬 실행 호스트 수 (1=직렬, 0=전체 병렬)
+# Description: Hosts in parallel per phase (1=serial, 0=all parallel)
+# 타입 / Type:        dict[string, int]
+# 유효값 / Valid:     0 (전체 병렬) | 1 (직렬) | 2~N
+# 기본값 / Default:   모든 단계 0 (병렬). 안정성 우선이면 1
+# 의존성 / Depends:   서버 안정성, 패키지 미러 부하
+# 적용 시점 / When:   tags=base,kubernetes (Phase 1, 2)
+# 관련 Role / Role:   site.yml의 strategy 결정
+# 변경 시기 / Change when: 동시 패키지 설치 시 미러 부하 / 디스크 IO 한계
+# ─────────────────────────────────────────────────────────────
+parallel_execution:
+  system_preparation: 0
+  package_installation: 0
+  kubernetes_installation: 0
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 6. 패키지 / 저장소 / Packages & Repositories
+# 오프라인/온라인 저장소, OS별 패키지 목록
+# Online/offline repositories, OS-specific package lists
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────
+# repo_url (dict)
+# 설명: 오프라인 저장소 URL (centos, ubuntu)
+# Description: Offline repository URLs per distribution
+# 타입 / Type:        dict[string, string]
+# 유효값 / Valid:     HTTP(S) URL
+# 기본값 / Default:   사내 미러 예시
+# 의존성 / Depends:   enable_ubuntu_repo / enable_rhel_repos
+# 적용 시점 / When:   tags=ubuntu-repo,rhel-repo
+# 관련 Role / Role:   setup_ubuntu_repo, setup_rhel_repo
+# 변경 시기 / Change when: 사내 미러 호스트 변경
+# ─────────────────────────────────────────────────────────────
+repo_url:
+  centos: "http://mirror.example.com/repo/"
+  ubuntu: "http://mirror.example.com/ubuntu_22.04.5"
+
+# ─────────────────────────────────────────────────────────────
+# enable_ubuntu_repo / ubuntu_repo_*
+# 설명: Ubuntu 사용자 정의 APT 저장소 (로컬 또는 HTTP)
+# Description: Custom Ubuntu APT repository (local or HTTP)
+# 타입 / Type:        bool / string
+# 기본값 / Default:   false / 빈 값
+# 의존성 / Depends:   ansible_os_family == 'Debian'
+# 적용 시점 / When:   tags=ubuntu-repo,packages
+# 관련 Role / Role:   setup_ubuntu_repo
+# 변경 시기 / Change when: 사내 Apache로 패키지 호스팅 시
+# ─────────────────────────────────────────────────────────────
+enable_ubuntu_repo: false
+ubuntu_repo_url: ""                                          # 사용자 정의 APT URL / Custom APT URL
+ubuntu_repo_components: "./"                                 # APT components (보통 "./") / APT components
+ubuntu_repo_trusted: true                                    # 서명 검증 건너뛰기 / Skip signature verification
+ubuntu_repo_update_cache: true                               # 추가 후 apt update 실행 / Run apt update after
+
+# ─────────────────────────────────────────────────────────────
+# enable_rhel_repos / rhel_repos (list of dict)
+# 설명: RHEL/CentOS 사용자 정의 YUM 저장소 (다중 가능, 우선순위)
+# Description: Custom RHEL/CentOS YUM repositories (multiple, with priority)
+# 타입 / Type:        bool / list[dict]
+# 유효값 / Valid:     dict 키: name, id, url, type (single|baseos_appstream), enabled, gpgcheck, priority
+# 기본값 / Default:   true / 예시 2개 (필요시 비워두기)
+# 의존성 / Depends:   ansible_os_family == 'RedHat'
+# 적용 시점 / When:   tags=rhel-repo
+# 관련 Role / Role:   setup_rhel_repo
+# 변경 시기 / Change when: 사내 미러 추가 / 우선순위 조정
+# ─────────────────────────────────────────────────────────────
+enable_rhel_repos: false
+rhel_repos: []
+  # - name: "rhel-iso-repo"
+  #   id: "rhel-iso-repo"
+  #   url: "http://mirror.example.com/rhel-repo"
+  #   type: "baseos_appstream"   # "single" | "baseos_appstream"
+  #   enabled: 1
+  #   gpgcheck: 0
+  #   priority: 1
+
+# ─────────────────────────────────────────────────────────────
+# OS 패키지 목록 / OS Package Lists
+# 설명: 배포판별 설치할 패키지 목록
+# Description: Distribution-specific package lists
+# 적용 시점 / When:   tags=packages,base
+# 관련 Role / Role:   install_os_package
+# 변경 시기 / Change when: 추가 도구 필요 (예: htop, tcpdump 같이)
+# ─────────────────────────────────────────────────────────────
+ubuntu_packages:
+  - bash-completion
+  - dnsmasq
+  - jq
+  - openssh-server
+  - ca-certificates
+  - nfs-common
+  - nfs-kernel-server
+  - net-tools
+  - chrony
+  - curl
+  - wget
+  - k9s
+
+# ─────────────────────────────────────────────────────────────
+# enable_nerdctl_buildkit / ubuntu_optional_packages
+# 설명: nerdctl + buildkit 선택적 설치 (이미지 빌드 도구)
+# Description: Optionally install nerdctl + buildkit (image build tooling)
+# 타입 / Type:        bool / list
+# 기본값 / Default:   false / [nerdctl, buildkit]
+# 의존성 / Depends:   ansible_os_family == 'Debian'
+# 적용 시점 / When:   tags=packages
+# 관련 Role / Role:   install_os_package
+# 변경 시기 / Change when: 노드에서 직접 이미지 빌드 필요할 때
+# ─────────────────────────────────────────────────────────────
+enable_nerdctl_buildkit: false
+ubuntu_optional_packages:
+  - nerdctl
+  - buildkit
+
+# ─────────────────────────────────────────────────────────────
+# enable_helmfile
+# 설명: master 노드에 helmfile 설치
+# Description: Install helmfile on master nodes
+# 타입 / Type:        bool
+# 기본값 / Default:   false
+# 적용 시점 / When:   tags=packages
+# 관련 Role / Role:   install_os_package
+# 변경 시기 / Change when: helmfile 기반 GitOps 사용 시
+# ─────────────────────────────────────────────────────────────
+enable_helmfile: false
+
+# Ubuntu master 노드에만 설치할 패키지 / Master-only packages (Ubuntu)
+ubuntu_master_only_packages:
+  - make
+
+# RHEL/CentOS 필수 패키지 / RHEL/CentOS required packages (모든 노드 / all nodes)
+rhel_packages:
+  - bash-completion
+  - dnsmasq
+  - jq
+  - openssh-server
+  - ca-certificates
+  - tree
+  - device-mapper-persistent-data
+  - lvm2
+  - chrony
+  - curl
+  - wget
+  - which
+  - k9s
+
+# RHEL 선택적 패키지 / RHEL optional packages (없으면 무시 / errors ignored)
+rhel_optional_packages:
+  - nfs-utils
+  - yum-utils
+
+# RHEL master 노드 전용 패키지 / Master-only packages (RHEL)
+rhel_master_only_packages:
+  - make
+
+# ─────────────────────────────────────────────────────────────
+# package_name_map (dict of dict)
+# 설명: 배포판별 패키지명 매핑 테이블 (Debian ↔ RedHat)
+# Description: Distribution-specific package name mapping table
+# 타입 / Type:        dict[string, dict[string, string]]
+# 기본값 / Default:   nfs/network/time/helmfile 매핑
+# 적용 시점 / When:   tags=packages
+# 관련 Role / Role:   install_os_package
+# 변경 시기 / Change when: 신규 패키지 추가 시
+# ─────────────────────────────────────────────────────────────
+package_name_map:
+  nfs_client:
+    Debian: nfs-common
+    RedHat: nfs-utils
+  nfs_server:
+    Debian: nfs-kernel-server
+    RedHat: nfs-utils
+  network_tools:
+    Debian: net-tools
+    RedHat: net-tools
+  time_sync:
+    Debian: chrony
+    RedHat: chrony
+  helmfile:
+    Debian: helmfile
+    RedHat: helmfile-bundle
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 7. 인증 / 보안 / Authentication & Security
+# CA 인증서, OIDC, 레지스트리 자격증명, PodNodeSelector
+# CA certificates, OIDC, registry credentials, PodNodeSelector
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────
+# enable_ca_certificates / ca_certificates (list of dict)
+# 설명: 시스템 신뢰 저장소에 사용자 CA 인증서 설치 (3가지 입력 방식)
+# Description: Install custom CA certs into system trust store (3 input modes)
+# 타입 / Type:        bool / list[dict]
+# 유효값 / Valid:     각 항목은 name + (content | url | path) 중 하나
+# 기본값 / Default:   false / []
+# 의존성 / Depends:   none
+# 적용 시점 / When:   tags=ca-certificates
+# 관련 Role / Role:   install_ca_certificates
+# 변경 시기 / Change when: 사설 CA로 서명한 Harbor/registry 사용 시
+# 주의 / Caveats:     name이 파일명(.crt)으로 사용됨, OS별로 update-ca-trust 자동 호출
+# ─────────────────────────────────────────────────────────────
+enable_ca_certificates: false
+ca_certificates: []
+  # - name: "internal-ca"
+  #   content: |
+  #     -----BEGIN CERTIFICATE-----
+  #     MIIDxTCCAq2g...
+  #     -----END CERTIFICATE-----
+  # - name: "harbor-ca"
+  #   url: "https://harbor.example.com/ca.crt"
+  # - name: "registry-ca"
+  #   path: "/root/certs/my-ca.crt"
+
+# ─────────────────────────────────────────────────────────────
+# enable_oidc_apiserver
+# 설명: kube-apiserver에 OIDC 인증 활성화 (Keycloak 등 외부 IdP 연동)
+# Description: Enable OIDC auth on kube-apiserver (e.g., Keycloak integration)
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   oidc_* 변수, kube-apiserver 실행 중
+# 적용 시점 / When:   tags=oidc-apiserver
+# 관련 Role / Role:   configure_oidc_apiserver
+# 변경 시기 / Change when: 사내 SSO 통합
+# 주의 / Caveats:     manifest 백업이 자동 생성됨 (kube-apiserver.yaml.backup-<epoch>)
+# ─────────────────────────────────────────────────────────────
+enable_oidc_apiserver: false
+domain_host: "example.com"                                   # OIDC issuer URL의 베이스 도메인 / Base domain for OIDC issuer
+
+oidc_client_id: "kubernetes"                                 # IdP에 등록된 클라이언트 ID / Client ID registered in IdP
+oidc_username_claim: "preferred_username"                    # 사용자명 JWT claim / JWT claim for username
+oidc_groups_claim: "client_roles"                            # 그룹 JWT claim / JWT claim for groups
+oidc_issuer_url: "https://keycloak.{{ domain_host }}/realms/example"  # OIDC issuer URL
+# oidc_username_prefix: ""           # 예: "oidc:"
+# oidc_groups_prefix: ""             # 예: "oidc:"
+# oidc_ca_file: ""                   # self-signed IdP 사용 시 CA 파일 경로
+# oidc_required_claim: ""            # 예: "groups=admins"
+
+# ─────────────────────────────────────────────────────────────
+# enable_pod_node_selector
+# 설명: PodNodeSelector admission plugin 활성화 (네임스페이스별 Pod 노드 제약)
+# Description: Enable PodNodeSelector admission plugin
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   enable_oidc_apiserver=true (둘 다 같은 role에서 처리)
+# 적용 시점 / When:   tags=oidc-apiserver
+# 관련 Role / Role:   configure_oidc_apiserver
+# 변경 시기 / Change when: 멀티 테넌트 환경에서 노드 격리 필요
+# ─────────────────────────────────────────────────────────────
+enable_pod_node_selector: false
+
+# ─────────────────────────────────────────────────────────────
+# docker_login_required / docker_registries (list of dict)
+# 설명: 사설 레지스트리 자격증명 (containerd config + nerdctl login 양쪽 적용)
+# Description: Private registry credentials (applied to both containerd config and nerdctl login)
+# 타입 / Type:        bool / list[dict]
+# 유효값 / Valid:     각 항목: registry, protocol(https|http), username, password
+# 기본값 / Default:   false / []  (예시 주석 참조)
+# 의존성 / Depends:   none
+# 적용 시점 / When:   tags=docker-credentials,nerdctl-login,containerd-config
+# 관련 Role / Role:   setup-docker-credentials
+# 변경 시기 / Change when: Harbor/Nexus/외부 레지스트리 자격증명 변경 시
+# 주의 / Caveats:     ⚠️ 비밀번호 평문 저장. 외부 공유 금지. group_vars/all.yml은 .gitignore 처리됨
+# ─────────────────────────────────────────────────────────────
+docker_login_required: false
+docker_registries: []
+  # - registry: "harbor.example.com"
+  #   protocol: "https"             # https (기본) | http
+  #   username: "<your-username>"
+  #   password: "<your-password>"
+  # - registry: "harbor-internal.example.com"
+  #   protocol: "http"              # 비보안 레지스트리
+  #   username: "admin"
+  #   password: "<your-password>"
+
+# ─────────────────────────────────────────────────────────────
+# insecure_registries (list)
+# 설명: HTTP 또는 self-signed HTTPS 레지스트리 목록 (containerd skip_verify)
+# Description: HTTP or self-signed HTTPS registries (containerd insecure_skip_verify)
+# 타입 / Type:        list[string]
+# 유효값 / Valid:     호스트:포트 또는 호스트
+# 기본값 / Default:   []
+# 의존성 / Depends:   none
+# 적용 시점 / When:   tags=container,docker-credentials
+# 관련 Role / Role:   install_containerd, setup-docker-credentials
+# 변경 시기 / Change when: 내부 self-signed 레지스트리 사용 시
+# ─────────────────────────────────────────────────────────────
+insecure_registries: []
+  # - "192.168.1.10:5000"
+  # - "harbor.example.com"
+
+# ─────────────────────────────────────────────────────────────
+# docker_log_max_size
+# 설명: 컨테이너 로그 파일 최대 크기 (containerd json-file driver)
+# Description: Container log file max size (containerd json-file driver)
+# 타입 / Type:        string
+# 유효값 / Valid:     "100m", "500m", "1g" 등
+# 기본값 / Default:   "100m"
+# 의존성 / Depends:   none
+# 적용 시점 / When:   tags=container
+# 관련 Role / Role:   install_containerd
+# 변경 시기 / Change when: 로그가 많은 워크로드 (관측성 우선)
+# ─────────────────────────────────────────────────────────────
+docker_log_max_size: "100m"
+
+# ─────────────────────────────────────────────────────────────
+# containerd_registry_auth (list of dict)
+# 설명: containerd config.toml에 직접 등록되는 레지스트리 인증 (docker_registries 보완)
+# Description: Registry auth embedded directly in containerd config.toml
+# 타입 / Type:        list[dict]
+# 유효값 / Valid:     registry, insecure_skip_verify, username, password, auth, identitytoken
+# 기본값 / Default:   []
+# 의존성 / Depends:   none (보통 docker_registries로 충분)
+# 적용 시점 / When:   tags=containerd-config
+# 관련 Role / Role:   install_containerd, setup-docker-credentials
+# 변경 시기 / Change when: token 인증 / 추가 옵션 필요 시
+# ─────────────────────────────────────────────────────────────
+containerd_registry_auth: []
+  # - registry: "harbor.example.com"
+  #   insecure_skip_verify: false
+  #   username: "<user>"
+  #   password: "<password>"
+  #   auth: ""                # base64(user:password) — 선택
+  #   identitytoken: ""       # 토큰 인증 — 선택
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 8. GPU / NVIDIA
+# NVIDIA 드라이버 자동 설치, toolkit 경로 보정, containerd 런타임, 노드 레이블
+# NVIDIA driver auto-install, toolkit path fix, containerd runtime, node labels
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────
+# enable_nvidia_driver_install
+# 설명: NVIDIA 드라이버 .run 파일을 노드에 자동 설치
+# Description: Auto-install NVIDIA driver via .run file
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   nvidia_driver_*, GPU 하드웨어 존재
+# 적용 시점 / When:   tags=install-nvidia-driver,nvidia
+# 관련 Role / Role:   install_nvidia_driver
+# 변경 시기 / Change when: GPU 노드에 드라이버 미설치 + 자동화 원할 때
+# 주의 / Caveats:     리부팅 필요할 수 있음. 운영 환경은 OS 이미지에 사전 통합 권장
+# ─────────────────────────────────────────────────────────────
+enable_nvidia_driver_install: false
+nvidia_driver_version: "570.124.06"                          # 설치할 NVIDIA 드라이버 버전 / NVIDIA driver version
+nvidia_driver_download_url: "http://mirror.example.com/nvidia-drivers"  # .run 파일 다운로드 URL / Download URL
+nvidia_driver_filename: "NVIDIA-Linux-x86_64-{{ nvidia_driver_version }}.run"  # 다운로드 파일명 / Filename
+nvidia_driver_install_options: "--silent --no-questions --ui=none --disable-nouveau"  # 설치 옵션 / Install opts
+
+# ─────────────────────────────────────────────────────────────
+# fix_nvidia_toolkit_path
+# 설명: .run 파일 설치 시 /usr/local/nvidia/toolkit → /usr/bin 심볼릭 링크 보정
+# Description: Fix NVIDIA toolkit path for containerd (when installed via .run file)
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   .run 파일로 드라이버 설치한 환경
+# 적용 시점 / When:   tags=fix-nvidia-toolkit-path,nvidia
+# 관련 Role / Role:   fix_nvidia_toolkit_path
+# 변경 시기 / Change when: containerd가 nvidia 런타임 못 찾을 때
+# ─────────────────────────────────────────────────────────────
+fix_nvidia_toolkit_path: false
+
+# ─────────────────────────────────────────────────────────────
+# enable_nvidia_containerd_config
+# 설명: containerd 설정에 NVIDIA 런타임 추가 (자동 GPU 감지 후 적용)
+# Description: Add NVIDIA runtime to containerd config (auto-detected via lspci)
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   GPU 하드웨어, nvidia-container-toolkit 설치
+# 적용 시점 / When:   tags=container,nvidia
+# 관련 Role / Role:   install_containerd
+# 변경 시기 / Change when: GPU 워크로드 운영 환경
+# ─────────────────────────────────────────────────────────────
+enable_nvidia_containerd_config: false
+
+# ─────────────────────────────────────────────────────────────
+# enable_gpu_node_labels
+# 설명: NVIDIA GPU 감지된 노드에 자동 `gpu=on` 레이블 부착
+# Description: Auto-label nodes with `gpu=on` if NVIDIA GPU detected
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   true
+# 의존성 / Depends:   K8s 클러스터 형성 후
+# 적용 시점 / When:   tags=label-gpu-nodes,kubernetes
+# 관련 Role / Role:   label_gpu_nodes
+# 변경 시기 / Change when: GPU 스케줄링 위해 nodeSelector 사용 계획
+# ─────────────────────────────────────────────────────────────
+enable_gpu_node_labels: true
+
+# ─────────────────────────────────────────────────────────────
+# enable_gpu_operator (실험적 / Experimental)
+# 설명: NVIDIA GPU Operator 설치 (Helm 차트)
+# Description: Install NVIDIA GPU Operator via Helm
+# 타입 / Type:        bool
+# 기본값 / Default:   false
+# 의존성 / Depends:   gpu_operator_chart_path (로컬 차트)
+# 적용 시점 / When:   tags=gpu
+# 변경 시기 / Change when: GPU Operator로 드라이버/플러그인 통합 관리 시
+# 주의 / Caveats:     gpu_operator_driver_enabled=false면 노드에 드라이버 사전 설치 필수
+# ─────────────────────────────────────────────────────────────
+enable_gpu_operator: false
+gpu_operator_namespace: "gpu-operator"
+gpu_operator_chart_path: "./gpu-operator"
+gpu_operator_driver_enabled: false
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 9. 레지스트리 미러 / Registry Mirror
+# containerd 레지스트리 미러 (외부 → 내부 매핑)
+# containerd registry mirror (external → internal mapping)
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────
+# enable_registry_mirror
+# 설명: 외부 레지스트리(docker.io, quay.io 등) 요청을 내부 미러로 우회
+# Description: Redirect external registry pulls (docker.io, quay.io, etc.) to internal mirror
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   registry_mirror_host, _user, _password, _mappings
+# 적용 시점 / When:   tags=registry-mirror,base
+# 관련 Role / Role:   configure_registry_mirror
+# 변경 시기 / Change when: 외부 registry rate-limit / 격리 환경 / 캐시 운용
+# 주의 / Caveats:     /etc/containerd/certs.d/<host>/hosts.toml 자동 생성, containerd 재시작
+# ─────────────────────────────────────────────────────────────
+enable_registry_mirror: false
+
+# ─────────────────────────────────────────────────────────────
+# registry_mirror_host / _user / _password / _path_prefix
+# 설명: 내부 미러 호스트와 자격증명
+# Description: Internal mirror host and credentials
+# 타입 / Type:        string
+# 기본값 / Default:   예시값
+# 의존성 / Depends:   enable_registry_mirror=true
+# 적용 시점 / When:   tags=registry-mirror
+# 관련 Role / Role:   configure_registry_mirror
+# 주의 / Caveats:     ⚠️ 비밀번호 평문 저장. group_vars/all.yml은 .gitignore 처리됨
+# ─────────────────────────────────────────────────────────────
+registry_mirror_host: "harbor.example.com"
+registry_mirror_user: "<your-username>"
+registry_mirror_password: "<your-password>"
+registry_mirror_path_prefix: ""        # 예: "myproject"
+
+# ─────────────────────────────────────────────────────────────
+# registry_mirror_mappings (dict)
+# 설명: 외부 레지스트리 → 내부 저장소명 매핑 테이블
+# Description: External registry → internal repository name mapping
+# 타입 / Type:        dict[string, string]
+# 기본값 / Default:   주요 외부 레지스트리 10종 매핑
+# 의존성 / Depends:   enable_registry_mirror=true
+# 적용 시점 / When:   tags=registry-mirror
+# 관련 Role / Role:   configure_registry_mirror
+# 변경 시기 / Change when: 추가 외부 레지스트리 추적 필요 시
+# ─────────────────────────────────────────────────────────────
+registry_mirror_mappings:
+  "docker.io": "docker-io"
+  "cr.fluentbit.io": "cr-fluentbit-io"
+  "docker.getcollate.io": "docker-getcollate-io"
+  "docker.gitea.com": "docker-gitea-com"
+  "ecr-public.aws.com": "ecr-public-aws-com"
+  "ghcr.io": "ghcr-io"
+  "nvcr.io": "nvcr-io"
+  "quay.io": "quay-io"
+  "registry.cn-hangzhou.aliyuncs.com": "registry-cn-hangzhou-aliyuncs-com"
+  "registry.k8s.io": "registry-k8s-io"
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 10. 인증서 / 스케줄링 / Certificates & Scheduling
+# 인증서 10년 연장, 마스터 노드 워크로드 스케줄 허용
+# 10-year cert extension, allow scheduling on master
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────
+# allow_master_scheduling
+# 설명: 마스터 노드의 NoSchedule taint 제거 → Pod 스케줄 허용
+# Description: Remove NoSchedule taint from master nodes (allow workloads)
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   true (단일 노드 클러스터 가정)
+# 의존성 / Depends:   none
+# 적용 시점 / When:   tags=scheduling,kubernetes
+# 관련 Role / Role:   remove_master_taint
+# 변경 시기 / Change when: 운영 멀티 노드 클러스터는 false 권장 (마스터 분리)
+# ─────────────────────────────────────────────────────────────
+allow_master_scheduling: true
+
+# ─────────────────────────────────────────────────────────────
+# extend_k8s_certificates
+# 설명: kubeadm 인증서 만료 1년 → 10년으로 연장
+# Description: Extend kubeadm certificate validity from 1 year to 10 years
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   true
+# 의존성 / Depends:   K8s 설치 후 마스터 노드에서 실행
+# 적용 시점 / When:   tags=k8s-certs,certificates
+# 관련 Role / Role:   extend_k8s_certs
+# 변경 시기 / Change when: 보안 정책상 짧은 만료 원하면 false
+# 주의 / Caveats:     인증서 재생성으로 API 서버 재시작됨 (수 초 다운타임)
+# ─────────────────────────────────────────────────────────────
+extend_k8s_certificates: true
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 11. 디스크 / 스토리지 / Disk & Storage
+# containerd 전용 디스크, rook-ceph 정리
+# Dedicated containerd disk, rook-ceph cleanup
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────
+# enable_containerd_disk
+# 설명: ⚠️ 별도 디스크를 포맷하여 /var/lib/containerd에 마운트
+# Description: ⚠️ Format a dedicated disk and mount at /var/lib/containerd
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   containerd_disk_device 가 실제 비어있는 디스크
+# 적용 시점 / When:   tags=setup-containerd-disk
+# 관련 Role / Role:   setup_containerd_disk
+# 변경 시기 / Change when: 컨테이너 데이터 볼륨을 루트 디스크에서 분리
+# 주의 / Caveats:     ⚠️ 디스크가 포맷됩니다 (기존 FS가 없을 때만)! 잘못된 장치 지정 시 데이터 손실!
+#                    role은 force=no라 기존 FS면 건너뛰지만, 디스크 지정은 매우 신중히
+# ─────────────────────────────────────────────────────────────
+enable_containerd_disk: false
+containerd_disk_device: "/dev/sdb"                           # ⚠️ 사용할 디스크 (환경별 필수 변경) / Disk device — must override
+containerd_disk_fstype: "xfs"                                # 파일시스템 / Filesystem: "xfs" | "ext4"
+containerd_disk_mount_point: "/var/lib/containerd"           # 마운트 위치 / Mount point
+containerd_disk_mount_options: "defaults,noatime"            # /etc/fstab 마운트 옵션 / fstab mount options
+
+# ─────────────────────────────────────────────────────────────
+# enable_rook_ceph_cleanup
+# 설명: 클러스터 reset 시 rook-ceph 리소스 사전 정리 (CRD 삭제는 API 살아있을 때만)
+# Description: Cleanup rook-ceph resources BEFORE cluster reset (needs live API for CRD deletion)
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   false
+# 의존성 / Depends:   rook-ceph 설치된 클러스터
+# 적용 시점 / When:   reset_cluster.yml 실행 시
+# 관련 Role / Role:   cleanup_rook_ceph
+# 변경 시기 / Change when: 스토리지 클러스터 사용 중 + 깨끗한 reset 원할 때
+# ─────────────────────────────────────────────────────────────
+enable_rook_ceph_cleanup: false
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 12. CoreDNS / Hosts / CoreDNS & Hosts
+# /etc/hosts 매핑, CoreDNS 호스트 항목
+# /etc/hosts mappings, CoreDNS hosts entries
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────
+# registry_hosts (dict)
+# 설명: /etc/hosts에 추가할 레지스트리 도메인 → IP 매핑
+# Description: Registry domain → IP mappings added to /etc/hosts
+# 타입 / Type:        dict[string, string]
+# 유효값 / Valid:     도메인 → IPv4 형식
+# 기본값 / Default:   예시 1개
+# 의존성 / Depends:   configure_etc_hosts=true
+# 적용 시점 / When:   tags=etc-hosts,hosts-config,common
+# 관련 Role / Role:   configure_etc_hosts
+# 변경 시기 / Change when: DNS 미운영 환경에서 레지스트리 접근
+# ─────────────────────────────────────────────────────────────
+registry_hosts:
+  # "harbor.example.com": "192.168.1.10"
+
+# ─────────────────────────────────────────────────────────────
+# custom_hosts (dict)
+# 설명: /etc/hosts에 추가할 임의의 호스트명 → IP 매핑
+# Description: Arbitrary hostname → IP mappings for /etc/hosts
+# 타입 / Type:        dict[string, string]
+# 기본값 / Default:   {}
+# 의존성 / Depends:   configure_etc_hosts=true
+# 적용 시점 / When:   tags=etc-hosts
+# 관련 Role / Role:   configure_etc_hosts
+# 변경 시기 / Change when: api_domain → LB IP 매핑 / 외부 서비스 정적 매핑
+# ─────────────────────────────────────────────────────────────
+custom_hosts: {}
+  # "api.example.com": "10.0.0.100"
+  # "db.example.com":  "10.0.0.101"
+
+# ─────────────────────────────────────────────────────────────
+# configure_coredns_hosts
+# 설명: CoreDNS ConfigMap의 hosts 플러그인에 registry_hosts 항목 추가
+# Description: Add registry_hosts to CoreDNS ConfigMap hosts plugin
+# 타입 / Type:        bool
+# 유효값 / Valid:     true | false
+# 기본값 / Default:   true
+# 의존성 / Depends:   K8s 클러스터 형성 후, registry_hosts
+# 적용 시점 / When:   tags=coredns-hosts
+# 관련 Role / Role:   configure_coredns_hosts
+# 변경 시기 / Change when: Pod에서도 레지스트리 도메인 해석 필요할 때
+# 주의 / Caveats:     변수명이 같은 이름의 role 변수 (configure_etc_hosts) 와 다름 — 혼동 주의
+# ─────────────────────────────────────────────────────────────
+configure_coredns_hosts: true

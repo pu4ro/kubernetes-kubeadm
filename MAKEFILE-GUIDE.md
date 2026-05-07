@@ -1,5 +1,8 @@
 # Makefile 사용 가이드
 
+> 📘 **Deep-dive doc**: 자주 쓰는 Makefile target 요약은 [`README.md § Makefile 명령어`](./README.md) 에 있습니다. 이 문서는 모든 target의 상세 설명용으로 보존됩니다.
+> **Frequently-used Makefile targets are summarized in [`README.en.md § Makefile Commands`](./README.en.md). This document is preserved as detailed reference for all targets.**
+
 이 문서는 Kubernetes 클러스터 설치를 위한 Makefile 사용법을 설명합니다.
 
 ## 📋 목차

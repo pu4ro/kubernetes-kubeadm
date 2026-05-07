@@ -17,6 +17,7 @@
 .PHONY: httpd-repo-install-iso httpd-repo-install-directory httpd-repo-start httpd-repo-stop httpd-repo-restart httpd-repo-status httpd-repo-remove-iso httpd-repo-remove-directory
 .PHONY: update-ip update-ip-with-certs update-ip-full
 .PHONY: update-ha-ip update-ha-ip-with-certs check-etcd-health check-etcd-members
+.PHONY: validate show-variables-example tag-ca-certificates tag-setup-containerd-disk
 
 .DEFAULT_GOAL := help
 
@@ -72,6 +73,20 @@ check-cluster: ## 클러스터 노드 및 Pod 상태 확인 (nodes, pods -A)
 	@echo ""
 	@echo "==> 시스템 Pod 상태:"
 	ansible masters -i $(INVENTORY) -m shell -a "kubectl get pods -A"
+
+validate: ## 클러스터 종합 검증 (validation.yml: 노드/시스템 Pod/DNS/Pod간 통신/외부 연결)
+	@echo "==> 클러스터 종합 검증 시작..."
+	@echo "    (검증 항목: 노드 Ready, kube-system Pod, DNS, Pod-to-Pod, 외부 연결)"
+	ansible-playbook -i $(INVENTORY) validation.yml
+
+tag-ca-certificates: ## CA 인증서만 설치 (--tags ca-certificates)
+	@echo "==> CA 인증서 설치..."
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags ca-certificates
+
+tag-setup-containerd-disk: ## containerd 전용 디스크 설정 (--tags setup-containerd-disk)
+	@echo "==> Containerd 전용 디스크 설정..."
+	@echo "    ⚠️  enable_containerd_disk=true 인 경우만 적용됨"
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags setup-containerd-disk
 
 ##@ 설치 명령어
 
@@ -379,9 +394,14 @@ show-inventory: ## 인벤토리 호스트 트리 구조 표시
 	@echo "==> 인벤토리 호스트 목록:"
 	@ansible-inventory -i $(INVENTORY) --graph
 
-show-variables: ## 전역 변수 출력 (group_vars/all.yml)
+show-variables: ## 전역 변수 출력 (group_vars/all.yml — 자격증명 포함, 외부 공유 금지)
+	@echo "==> ⚠️  주의: 이 파일에는 비밀번호가 포함될 수 있습니다. 외부 공유 금지."
 	@echo "==> 전역 변수 (group_vars/all.yml):"
 	@cat group_vars/all.yml
+
+show-variables-example: ## 예시 변수 파일 출력 (group_vars/all.yml.example — 안전, 공유 가능)
+	@echo "==> 예시 전역 변수 (group_vars/all.yml.example):"
+	@cat group_vars/all.yml.example
 
 lint: ## Playbook YAML 문법 검사 (--syntax-check)
 	@echo "==> Playbook 문법 검사 중..."

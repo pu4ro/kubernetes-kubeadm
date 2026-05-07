@@ -31,3 +31,6 @@ install_sh/.env
 .env.rhel-repo
 .env.rhel-repo-iso
 .env.rhel-repo-directory
+
+# Local configuration with credentials (use group_vars/all.yml.example as template)
+group_vars/all.yml

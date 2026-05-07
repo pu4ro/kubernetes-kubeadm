@@ -1,5 +1,8 @@
 # Containerd 사용자 지정 데이터 경로 설정 가이드
 
+> 📘 **Deep-dive doc**: 최신 README는 `containerd_data_base_dir` 변수를 [`group_vars/all.yml.example`](./group_vars/all.yml.example) 에서 다룹니다. 이 문서는 추가 deep-dive 자료로 보존됩니다.
+> **The current README covers `containerd_data_base_dir` in [`group_vars/all.yml.example`](./group_vars/all.yml.example). This document is preserved as additional deep-dive reference.**
+
 이 문서는 containerd의 데이터 디렉토리를 호스트별로 분리하여 관리하는 방법을 설명합니다.
 
 ## 📋 목차

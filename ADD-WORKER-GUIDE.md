@@ -1,5 +1,8 @@
 # Kubernetes Worker Node 추가 가이드
 
+> ⚠️ **Legacy doc**: 최신 절차는 [`runbooks/02-add-worker.md`](./runbooks/02-add-worker.md) 를 사용하세요. 이 문서는 상세 detail 보존용입니다.
+> **For current procedure, see [`runbooks/02-add-worker.en.md`](./runbooks/02-add-worker.en.md). This document is preserved for historical detail.**
+
 이 문서는 기존 Kubernetes 클러스터에 새로운 Worker 노드를 추가하는 방법을 설명합니다.
 
 ## 📋 목차

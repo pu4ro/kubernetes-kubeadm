@@ -1,5 +1,8 @@
 # Kubernetes Setup Script (Bash 단독 설치)
 
+> ⚠️ **Legacy doc**: 최신 설치 절차는 [`runbooks/01-day0-install.md`](./runbooks/01-day0-install.md) (Ansible 기반) 를 사용하세요. 이 문서는 Bash-only 단독 설치의 historical 자료입니다.
+> **For current install procedure, see [`runbooks/01-day0-install.en.md`](./runbooks/01-day0-install.en.md) (Ansible-based). This document covers a Bash-only standalone option, preserved for historical reference.**
+
 Ansible 없이 순수 Bash 스크립트만으로 Kubernetes 클러스터 설치를 위한 사전 작업을 수행하는 스크립트입니다.
 
 ## 특징

@@ -1,38 +1,79 @@
 # Kubernetes 클러스터 자동 설치 (Ansible)
 
-Ansible을 사용한 Kubernetes 클러스터 자동 배포 도구입니다.
+> **언어 / Language:** [한국어](./README.md) · [English](./README.en.md)
 
-[English](./README.en.md) | 한국어
+Ansible을 사용한 Kubernetes 클러스터 자동 배포 도구. Flannel/Cilium CNI, HA, OIDC 인증, 레지스트리 미러, GPU, 오프라인 설치 등 운영 환경 기능을 모두 지원합니다.
 
 ## 📋 목차
 
 - [개요](#개요)
+- [📂 문서 맵](#-문서-맵)
+- [호환성 매트릭스](#호환성-매트릭스)
 - [시스템 요구사항](#시스템-요구사항)
-- [지원 플랫폼](#지원-플랫폼)
-- [빠른 시작](#빠른-시작)
-- [설정](#설정)
-- [설치](#설치)
+- [빠른 시작](#빠른-시작) (단일 / 오프라인 / HA)
+- [CNI 선택 (Flannel vs Cilium)](#cni-선택-flannel-vs-cilium)
+- [설정 (group_vars/all.yml)](#설정-group_varsallyml)
+- [신규 기능 섹션](#신규-기능-섹션)
+  - [OIDC 인증](#oidc-인증)
+  - [Registry Mirror](#registry-mirror)
+  - [사용자 CA 인증서](#사용자-ca-인증서)
+  - [전용 Containerd 디스크](#전용-containerd-디스크)
+  - [GPU 자동 설정](#gpu-자동-설정)
+  - [클러스터 검증 (`validation.yml`)](#클러스터-검증-validationyml)
 - [Makefile 명령어](#makefile-명령어)
 - [Ansible Tags](#ansible-tags)
-- [설치 후 작업](#설치-후-작업)
+- [Runbook 링크](#runbook-링크)
 - [문제 해결](#문제-해결)
-- [추가 기능](#추가-기능)
 - [HA 클러스터 IP 변경](#ha-클러스터-ip-변경)
+- [추가 리소스](#추가-리소스)
 
-## 🎯 개요
+## 개요
 
-이 Ansible 플레이북은 다음을 포함한 Kubernetes 클러스터를 자동으로 배포합니다:
+이 Ansible 플레이북은 다음을 포함한 Kubernetes 클러스터를 자동 배포합니다:
 
-- **Kubernetes 코어**: Kubernetes 1.27.14 클러스터 설치
-- **컨테이너 런타임**: containerd 구성 (NVIDIA GPU 자동 감지 지원)
-- **네트워크 플러그인**: Flannel CNI
-- **시스템 준비**: OS 패키지, 커널 모듈, sysctl 설정
-- **레지스트리 인증**: Private registry 인증 지원 (containerd 네이티브 설정)
-- **고가용성**: Multi-master 구성 지원 (kube-vip)
-- **크로스 플랫폼**: Ubuntu 및 RHEL/CentOS 지원
-- **로컬 레지스트리**: 독립 실행형 스크립트로 관리
+- **Kubernetes 코어**: 1.27.x – 1.34.x 지원 (kubeadm v1beta3 ↔ v1beta4 자동 분기)
+- **컨테이너 런타임**: containerd 1.7.x – 2.2.x (config v2 ↔ v3 자동 감지)
+- **CNI 플러그인**: Flannel 또는 Cilium 선택, **오프라인 Cilium 설치 지원**
+- **시스템 준비**: OS 패키지, 커널 모듈, sysctl, NTP 설정
+- **레지스트리 인증**: containerd 네이티브 (`/etc/containerd/certs.d`) + nerdctl login
+- **레지스트리 미러**: 외부 레지스트리(docker.io, quay.io 등) 내부 미러로 자동 우회
+- **OIDC 인증**: kube-apiserver + 외부 IdP (Keycloak 등) 통합
+- **고가용성**: kube-vip 또는 도메인 기반 HA, Multi-master
+- **GPU 지원**: NVIDIA 드라이버 자동 설치, containerd 런타임 설정, 노드 자동 라벨링
+- **사용자 CA 인증서**: 시스템 신뢰 저장소에 자동 설치 (3가지 입력 방식)
+- **전용 디스크**: containerd 데이터를 별도 디스크에 격리 (선택)
+- **인증서 관리**: 1년 표준 또는 10년 자동 연장
+- **클러스터 검증**: 5단계 자동 헬스체크 (`make validate`)
+- **크로스 플랫폼**: Ubuntu 20.04+, RHEL/Rocky/CentOS 8+
+- **오프라인 설치**: APT/YUM 사내 미러, Cilium 사전 다운로드 지원
 
-## 💻 시스템 요구사항
+## 📂 문서 맵
+
+| 목적 | 문서 |
+|---|---|
+| **빠른 시작** | 이 README의 [빠른 시작](#빠른-시작) 섹션 |
+| **모든 변수 상세 설명** | [`group_vars/all.yml.example`](./group_vars/all.yml.example) (변수당 10줄 주석, 이중언어) |
+| **운영 시나리오 (설치/IP변경/장애대응 등)** | [`runbooks/`](./runbooks/README.md) ([인덱스](./runbooks/README.md)) |
+| **Worker 추가 상세** | [`runbooks/02-add-worker.md`](./runbooks/02-add-worker.md) (legacy: [`ADD-WORKER-GUIDE.md`](./ADD-WORKER-GUIDE.md)) |
+| **Containerd 데이터 디렉토리 커스터마이징** | [`CONTAINERD-CUSTOM-PATH.md`](./CONTAINERD-CUSTOM-PATH.md) (legacy detail) |
+| **Makefile target 상세 설명** | [`MAKEFILE-GUIDE.md`](./MAKEFILE-GUIDE.md) (legacy detail) |
+| **레거시 설치 가이드** | [`k8s-setup-README.md`](./k8s-setup-README.md) (legacy — 신규 절차는 [`runbooks/01-day0-install.md`](./runbooks/01-day0-install.md)) |
+
+## 호환성 매트릭스
+
+| 컴포넌트 | 지원 범위 | 테스트된 기본값 | 비고 |
+|---|---|---|---|
+| **Kubernetes** | 1.27.x – 1.34.x | `1.34.1` | ≤1.30 → kubeadm v1beta3, ≥1.31 → v1beta4 (자동 분기) |
+| **containerd** | 1.7.x – 2.2.x | `2.2.0` | <2.2 → config v2, ≥2.2 → config v3 (자동 감지) |
+| **CNI** | Flannel, Cilium 1.15.x | `flannel` | `network_plugin` 변수로 선택 |
+| **OS (Ubuntu)** | 20.04 LTS, 22.04 LTS, 24.04 LTS | 22.04 | |
+| **OS (RHEL/Rocky/CentOS)** | 8.x, 9.x | 8.x | |
+| **kube-vip** | 0.7.x+ | latest | HA + VIP 사용 시 |
+| **OIDC IdP** | 표준 OIDC 호환 | Keycloak 23+ | 선택 |
+
+> **버전 변경 방법**: `group_vars/all.yml`에서 `kubernetes_version: "1.27.14"` 또는 `containerd_version: "1.7.6"` 등으로 설정. 모든 K8s 1.27.x – 1.34.x 버전이 동일한 플레이북에서 동작합니다.
+
+## 시스템 요구사항
 
 ### 최소 하드웨어 요구사항
 
@@ -52,281 +93,653 @@ Ansible을 사용한 Kubernetes 클러스터 자동 배포 도구입니다.
 | **스토리지** | 100+ GB SSD | 50+ GB SSD |
 | **네트워크** | 1Gbps+ | 1Gbps+ |
 
-## 🐧 지원 플랫폼
+### 필수 포트
 
-### 운영체제
-- **Ubuntu**: 20.04 LTS, 22.04 LTS, 24.04 LTS (Noble)
-- **RHEL/CentOS**: 8.x, 9.x
-- **Rocky Linux**: 8.x, 9.x
+| 포트 | 프로토콜 | 출처 | 용도 |
+|------|----------|------|------|
+| 6443 | TCP | 전체 | Kubernetes API |
+| 2379-2380 | TCP | Master | etcd |
+| 10250 | TCP | 전체 | kubelet |
+| 10257 | TCP | Master | kube-controller-manager (1.20+) |
+| 10259 | TCP | Master | kube-scheduler (1.20+) |
+| 8472 | UDP | 전체 | Flannel VXLAN (CNI=flannel) |
+| 4240 | TCP | 전체 | Cilium health (CNI=cilium) |
+| 4244 | TCP | 전체 | Cilium Hubble (CNI=cilium, optional) |
+| 8443 | TCP | Master | kube-vip (HA 사용 시) |
 
-### Kubernetes 버전
-- **기본**: 1.27.14
-- **지원**: 1.25.x - 1.28.x
+## 빠른 시작
 
-## 🚀 빠른 시작
-
-### 1. 사전 요구사항
+### 사전 요구사항
 
 **제어 노드 설정** (Ansible 실행 노드):
 
 ```bash
-# Ansible 설치 (Ubuntu/Debian)
+# Ubuntu/Debian
 sudo apt update
-sudo apt install ansible python3-pip sshpass
+sudo apt install -y ansible python3-pip sshpass
 
-# Ansible 설치 (RHEL/CentOS)
-sudo yum install epel-release
-sudo yum install ansible python3-pip sshpass
+# RHEL/CentOS
+sudo yum install -y epel-release
+sudo yum install -y ansible python3-pip sshpass
 ```
 
-### 2. SSH 키 설정
+**SSH 키 설정**:
 
 ```bash
-# SSH 키 쌍 생성
 ssh-keygen -t rsa -b 4096 -C "ansible@kubernetes"
-
-# 공개 키를 모든 대상 노드에 복사
 ssh-copy-id root@<master-node-ip>
 ssh-copy-id root@<worker-node-ip>
-
-# 연결 테스트
-ssh root@<node-ip> "uptime"
+ssh root@<node-ip> "uptime"   # 연결 테스트
 ```
 
-### 3. 설치 과정
+**저장소 클론 + 설정**:
 
 ```bash
-# 1. 저장소 클론
 git clone <repository-url>
 cd kubernetes-kubeadm
 
-# 2. 설정 파일 편집
+# 1. 인벤토리 작성
 vim inventory.ini
+
+# 2. ⚠️ 변수 파일은 .example을 복사해서 시작 (실제 자격증명을 담은 파일은 .gitignore 처리됨)
+cp group_vars/all.yml.example group_vars/all.yml
 vim group_vars/all.yml
-
-# 3. 연결 테스트
-make ping
-
-# 4. 전체 클러스터 설치
-make install
-
-# 또는 Ansible 직접 실행
-ansible-playbook -i inventory.ini site.yml
 ```
 
-## ⚙️ 설정
+> **첫 사용자 안내**: `group_vars/all.yml.example`에는 110개 변수 모두에 한국어 + 영어 상세 주석이 포함되어 있습니다. 위에서부터 읽으며 자기 환경에 필요한 부분만 수정하면 됩니다.
 
-### 1. 인벤토리 설정
+### 시나리오 A — 단일 마스터 (가장 간단, ~15분)
 
-`inventory.ini`를 인프라에 맞게 편집:
+가장 빠르게 클러스터를 띄우고 싶을 때.
+
+#### 1. 사전 점검
+```bash
+make ping
+# 예상 출력: 모든 호스트 SUCCESS / pong
+```
+> 실패 시: SSH 키, inventory.ini의 ansible_host/ansible_user 확인.
+
+#### 2. 변수 편집 (`group_vars/all.yml`)
+```yaml
+master_ha: false                      # 단일 마스터
+network_plugin: "flannel"             # 또는 "cilium"
+allow_master_scheduling: true         # 단일 노드면 true
+enable_domain_communication: false    # 단일 마스터는 불필요
+docker_login_required: false          # 사설 레지스트리 미사용 시 false
+enable_registry_mirror: false         # 외부 인터넷 직접 사용
+```
+
+#### 3. 설치
+```bash
+make install
+# 또는 단계별: make install-step1 && make install-step2 && make install-step3
+# 소요: ~15분 (네트워크 + 노드 사양에 따라 다름)
+```
+> 예상 출력 끝부분:
+> ```
+> PLAY RECAP *********************************************************************
+> master1 : ok=42  changed=18  unreachable=0  failed=0  skipped=5
+> ```
+
+#### 4. 검증
+```bash
+make validate
+# 5단계 검증: 노드 Ready / kube-system Pod / DNS / Pod-to-Pod / 외부 연결
+# 예상 출력 끝부분:
+#   "  Cluster Validation: ALL CHECKS PASSED  "
+```
+> 실패 시: [`runbooks/05-incident-response.md`](./runbooks/05-incident-response.md) 참조.
+
+### 시나리오 B — 오프라인 설치 (인터넷 차단, ~30분)
+
+격리된 환경에서 설치할 때. 사내 미러 서버 사전 구성 필요.
+
+#### 사전 준비 (인터넷 가능한 별도 호스트에서)
+- Ubuntu APT / RHEL YUM 미러 서버 (사내 Apache/Nginx로 호스팅)
+- Cilium CLI 사전 다운로드: `cilium-linux-amd64.tar.gz` → `roles/install_cilium/files/`
+- 컨테이너 이미지: 사내 Harbor/Registry로 push (`harbor.example.com/external-hub/...`)
+
+#### 변수 편집 (`group_vars/all.yml`)
+```yaml
+# 오프라인 K8s + containerd 저장소
+enable_official_k8s_repo: false
+enable_official_containerd_repo: false
+
+# Ubuntu
+enable_ubuntu_repo: true
+ubuntu_repo_url: "http://mirror.example.com/ubuntu-repo"
+
+# RHEL
+enable_rhel_repos: true
+rhel_repos:
+  - name: "rhel-iso-repo"
+    id: "rhel-iso-repo"
+    url: "http://mirror.example.com/rhel-repo"
+    type: "baseos_appstream"
+    enabled: 1
+    gpgcheck: 0
+    priority: 1
+
+# K8s 컴포넌트 이미지 사내 미러
+enable_custom_image_repository: true
+k8s_image_repository: "harbor.example.com/external-hub/kubernetes"
+coredns_image_repository: "harbor.example.com/external-hub/kubernetes/coredns"
+pause_image: "harbor.example.com/external-hub/kubernetes/pause:3.10"
+
+# Cilium (사용 시) 오프라인
+network_plugin: "cilium"
+cilium_offline_install: true
+cilium_image_repository: "harbor.example.com/cilium"
+
+# 외부 레지스트리 미러 (선택)
+enable_registry_mirror: true
+registry_mirror_host: "harbor.example.com"
+registry_mirror_user: "<your-username>"
+registry_mirror_password: "<your-password>"
+
+# 검증 외부 URL은 사내 호스트로 변경
+# (validation.yml 실행 시 외부 google.com 접근이 막혔으면 실패함)
+```
+
+> ⚠️ `validation.yml`의 외부 연결 검사는 기본 `http://google.com`을 사용합니다. 격리 환경에서는 `roles/validate_cluster/defaults/main.yml`의 `validation_external_url`을 사내 호스트로 오버라이드하세요. 또는 `make validate` 대신 `make check-cluster`만 사용.
+
+#### 설치 + 검증
+```bash
+make install
+make check-cluster   # 사내 환경에서는 validation의 외부 검사가 실패할 수 있음
+```
+
+### 시나리오 C — HA 3-마스터 (~45분)
+
+운영 환경. kube-vip 또는 도메인 기반 HA 선택.
+
+#### 옵션 1: kube-vip (VIP 사용)
+```yaml
+# group_vars/all.yml
+master_ha: true
+kube_vip_address: 192.168.1.30        # 미사용 VIP (마스터와 같은 서브넷)
+kube_vip_port: 6443
+kube_vip_interface: ens18              # 실제 NIC 이름! `ip link show`로 확인
+```
+
+#### 옵션 2: 도메인 기반 (외부 LB 또는 단일 IP)
+```yaml
+# group_vars/all.yml
+master_ha: true
+enable_domain_communication: true
+domain_suffix: "k8s.local"
+api_domain: "k8s-api.internal"
+# kube_vip_address는 정의하지 않음
+
+# /etc/hosts 또는 외부 DNS에서 api_domain → 첫 마스터(or LB) IP 매핑 필수
+custom_hosts:
+  "k8s-api.internal": "192.168.1.31"  # 또는 외부 LB IP
+```
 
 ```ini
+# inventory.ini
 [masters]
-master1 ansible_host=192.168.135.31
-# master2 ansible_host=192.168.135.32  # HA 구성 시
-# master3 ansible_host=192.168.135.33
+master1 ansible_host=192.168.1.31
+master2 ansible_host=192.168.1.32
+master3 ansible_host=192.168.1.33
 
 [workers]
-worker1 ansible_host=192.168.135.41
-worker2 ansible_host=192.168.135.42
+worker1 ansible_host=192.168.1.41
+worker2 ansible_host=192.168.1.42
 
 [installs]
-master1 ansible_host=192.168.135.31
+master1 ansible_host=192.168.1.31
 
 [all:vars]
 ansible_user=root
 ansible_become=true
-ansible_become_method=sudo
 ansible_ssh_common_args='-o StrictHostKeyChecking=no'
 ```
 
-### 2. 전역 변수 설정
+#### 설치 + 검증
+```bash
+make install               # site.yml은 마스터를 serial:1로 순차 설치 (etcd race 회피)
+make check-etcd-health     # HA 전용: 3/3 노드 정상 확인
+make check-etcd-members
+make validate
+```
 
-`group_vars/all.yml`을 환경에 맞게 편집:
+> 자세한 HA 설치 절차는 [`runbooks/01-day0-install.md`](./runbooks/01-day0-install.md) (시나리오 C) 참조.
+
+## CNI 선택 (Flannel vs Cilium)
+
+`network_plugin` 변수로 선택:
 
 ```yaml
-# Kubernetes 기본 설정
-kubernetes_version: '1.27.14'
+# group_vars/all.yml
+network_plugin: "flannel"   # 또는 "cilium"
+```
+
+### 선택 가이드
+
+| 요구사항 | 권장 |
+|---|---|
+| **단순한 L3 라우팅, 최소 자원** | Flannel |
+| **NetworkPolicy 강제** | Cilium |
+| **eBPF 기반 데이터 평면, 관측성 (Hubble)** | Cilium |
+| **kube-proxy 대체 (eBPF로)** | Cilium (`cilium_kube_proxy_replacement: strict`) |
+| **WireGuard 암호화** | Cilium (`cilium_encryption_enabled: true`) |
+| **단순 PoC, 빠른 시작** | Flannel |
+
+### Flannel 설정
+
+```yaml
+network_plugin: "flannel"
+pod_subnet: 10.244.0.0/16   # Flannel 기본값과 일치
+```
+
+### Cilium 설정 (온라인)
+
+```yaml
+network_plugin: "cilium"
+cilium_version: "1.15.5"
+cilium_cli_version: "v0.16.8"
+cilium_arch: "amd64"        # 또는 "arm64"
+cilium_offline_install: false
+```
+
+### Cilium 오프라인 설치
+
+```yaml
+network_plugin: "cilium"
+cilium_offline_install: true                       # GitHub 다운로드 건너뜀
+cilium_image_repository: "harbor.example.com/cilium"  # 내부 미러
+```
+
+추가로 `roles/install_cilium/files/cilium-linux-amd64.tar.gz`에 사전 다운로드한 CLI 바이너리 배치 필요.
+
+```bash
+# 사전 다운로드 (인터넷 가능한 호스트에서)
+curl -LO https://github.com/cilium/cilium-cli/releases/download/v0.16.8/cilium-linux-amd64.tar.gz
+mv cilium-linux-amd64.tar.gz roles/install_cilium/files/
+```
+
+## 설정 (group_vars/all.yml)
+
+> **상세 변수 설명**은 [`group_vars/all.yml.example`](./group_vars/all.yml.example)에 있습니다 (110개 변수, 변수당 10줄 주석, 이중언어). 이 섹션은 자주 편집하는 변수의 요약입니다.
+
+### 빠른 편집 가이드
+
+```yaml
+# ── 1. Kubernetes 기본 ──
+kubernetes_version: "1.34.1"          # 1.27.x ~ 1.34.x 지원
 dns_domain: cluster.local
 service_subnet: 10.96.0.0/12
 pod_subnet: 10.244.0.0/16
 
-# 컨테이너 런타임
-containerd_version: "1.7.6"
-containerd_data_base_dir: "/data/containerd"  # 호스트별: /data/containerd/{hostname}
+# ── 2. HA / 도메인 ──
+master_ha: true                        # 다중 마스터
+# kube_vip_address: 192.168.1.30      # VIP 방식
+enable_domain_communication: true     # 도메인 방식
+api_domain: "k8s-api.internal"
 
-# NVIDIA GPU 지원 (자동 감지)
-has_nvidia_gpu: auto  # auto: 자동 감지, true/false: 수동 설정
+# ── 3. 컨테이너 런타임 ──
+containerd_version: "2.2.0"           # 1.7.x ~ 2.2.x
+containerd_data_base_dir: ""          # 비우면 /var/lib/containerd
 
-# 레지스트리 설정
-insecure_registries:
-  - "harbor.example.com"
+# ── 4. CNI ──
+network_plugin: "flannel"             # 또는 "cilium"
 
-# Containerd 레지스트리 인증 (containerd config.toml에 직접 설정)
-docker_registries:
-  - registry: "harbor.example.com"
-    protocol: "https"  # or "http"
-    username: "admin"
-    password: "Harbor12345"
+# ── 5. 시스템 ──
+set_timezone: Asia/Seoul
+set_hostname_from_inventory: true
+parallel_execution:
+  system_preparation: 0               # 0=병렬, 1=직렬
+  package_installation: 0
+  kubernetes_installation: 0
 
-# 마스터 노드 스케줄링 (단일 노드 클러스터용)
-allow_master_scheduling: true
+# ── 6. 패키지/저장소 ──
+enable_ubuntu_repo: false
+enable_rhel_repos: false
 
-# 인증서 연장
-extend_k8s_certificates: true
+# ── 7. 인증/보안 ──
+docker_login_required: false
+docker_registries: []
+enable_oidc_apiserver: false
+enable_pod_node_selector: false
+enable_ca_certificates: false
 
-# CoreDNS 호스트 설정
-configure_coredns_hosts: true
-registry_hosts:
-  "harbor.example.com": "192.168.135.100"
+# ── 8. GPU ──
+enable_nvidia_driver_install: false
+enable_nvidia_containerd_config: false
+enable_gpu_node_labels: true
+
+# ── 9. Registry Mirror ──
+enable_registry_mirror: false
+
+# ── 10. 인증서 ──
+extend_k8s_certificates: true         # 10년 연장
+allow_master_scheduling: true         # 단일 노드는 true
+
+# ── 11. 디스크 ──
+enable_containerd_disk: false         # ⚠️ true면 디스크 포맷됨
 ```
 
-## 🔧 Makefile 명령어
+## 신규 기능 섹션
 
-프로젝트에 포함된 Makefile로 간편하게 클러스터를 관리할 수 있습니다.
+### OIDC 인증
 
-### 일반 명령어
+kube-apiserver에 OIDC 인증을 추가하여 Keycloak 등 외부 IdP와 통합합니다. `configure_oidc_apiserver` role이 `/etc/kubernetes/manifests/kube-apiserver.yaml`을 자동 백업 후 수정합니다.
+
+```yaml
+enable_oidc_apiserver: true
+domain_host: "example.com"                                              # OIDC issuer 베이스 도메인
+oidc_client_id: "kubernetes"
+oidc_username_claim: "preferred_username"
+oidc_groups_claim: "client_roles"
+oidc_issuer_url: "https://keycloak.{{ domain_host }}/realms/example"
+# oidc_ca_file: "/etc/kubernetes/pki/idp-ca.crt"                         # self-signed IdP일 때
+```
 
 ```bash
-make help                    # 사용 가능한 모든 명령어 확인
-make ping                    # 모든 호스트 연결 테스트
-make check-cluster           # 클러스터 상태 확인
+make tag-oidc-apiserver           # OIDC만 적용 (기존 클러스터에 추가)
 ```
 
-### 설치 명령어
+**적용 후**:
+- 백업 파일: `/etc/kubernetes/kube-apiserver.yaml.backup-<epoch>`
+- API 서버 자동 재시작 (Pod 재생성 ~30초)
+- 검증: `kubectl --kubeconfig /etc/kubernetes/admin.conf -n kube-system get pod -l component=kube-apiserver -o yaml | grep oidc-issuer-url`
+
+**롤백**:
+```bash
+ssh master1
+sudo cp /etc/kubernetes/kube-apiserver.yaml.backup-<epoch> /etc/kubernetes/manifests/kube-apiserver.yaml
+# kubelet이 자동으로 Pod 재시작
+```
+
+자세한 운영 절차는 [`runbooks/05-incident-response.md § OIDC 인증 실패`](./runbooks/05-incident-response.md) 참조.
+
+### Registry Mirror
+
+containerd가 외부 레지스트리(docker.io, quay.io, registry.k8s.io 등) 요청을 사내 미러로 자동 우회합니다. `configure_registry_mirror` role이 `/etc/containerd/certs.d/<host>/hosts.toml`을 자동 생성합니다.
+
+```yaml
+enable_registry_mirror: true
+registry_mirror_host: "harbor.example.com"
+registry_mirror_user: "<your-username>"
+registry_mirror_password: "<your-password>"
+registry_mirror_path_prefix: ""
+
+registry_mirror_mappings:
+  "docker.io": "docker-io"
+  "quay.io": "quay-io"
+  "ghcr.io": "ghcr-io"
+  "nvcr.io": "nvcr-io"
+  "registry.k8s.io": "registry-k8s-io"
+  # 더 추가
+```
 
 ```bash
-make install                 # 전체 클러스터 설치
-make install-step1           # Phase 1: 시스템 준비
-make install-step2           # Phase 2: Kubernetes 설치
-make install-step3           # Phase 3: 네트워크 플러그인
-make install-all             # 단계별 전체 설치
-make install-minimal         # 최소 구성 설치
-make install-production      # 프로덕션 전체 설치
+make tag-registry-mirror      # 기존 클러스터에 미러 설정 추가
 ```
 
-### Tag 기반 설치
+**적용 결과**:
+- 모든 외부 레지스트리 pull이 `harbor.example.com/<mapped-name>/<image>`로 우회
+- containerd 자동 재시작
+- `docker.io`는 특별 처리 (`registry-1.docker.io` 사용)
+
+**검증**:
+```bash
+ansible all -i inventory.ini -m shell -a "ls /etc/containerd/certs.d/"
+ansible all -i inventory.ini -m shell -a "cat /etc/containerd/certs.d/docker.io/hosts.toml"
+```
+
+### 사용자 CA 인증서
+
+자체 서명 Harbor / 사내 PKI 등을 시스템 신뢰 저장소에 설치합니다. 3가지 입력 방식 지원:
+
+```yaml
+enable_ca_certificates: true
+ca_certificates:
+  # 방식 1: 인라인 PEM 콘텐츠
+  - name: "internal-ca"
+    content: |
+      -----BEGIN CERTIFICATE-----
+      MIIDxTCCAq2g...
+      -----END CERTIFICATE-----
+
+  # 방식 2: URL 다운로드
+  - name: "harbor-ca"
+    url: "https://harbor.example.com/ca.crt"
+
+  # 방식 3: 로컬 파일 복사
+  - name: "registry-ca"
+    path: "/root/certs/my-ca.crt"
+```
 
 ```bash
-make tag-sysctl              # Sysctl 설정
-make tag-packages            # OS 패키지 설치
-make tag-container           # 컨테이너 런타임
-make tag-docker-credentials  # 레지스트리 인증
-make tag-kubernetes          # Kubernetes 설치
-make tag-networking          # CNI 플러그인
-make tag-certs               # 인증서 10년 연장
-make tag-coredns             # CoreDNS 설정
-make tag-harbor              # Harbor 프로젝트
+make tag-docker-credentials   # CA + docker-credentials 함께 설치
 ```
 
-### 호스트별 설치
+OS별 설치 위치:
+- **Debian/Ubuntu**: `/usr/local/share/ca-certificates/<name>.crt` + `update-ca-certificates`
+- **RHEL/CentOS**: `/etc/pki/ca-trust/source/anchors/<name>.crt` + `update-ca-trust extract`
+
+### 전용 Containerd 디스크
+
+> ⚠️ **데이터 손실 경고**: `enable_containerd_disk: true`로 설정하면 지정한 디스크가 **포맷**됩니다 (기존 파일시스템이 없을 때만; role은 `force: no`로 안전 장치 있음). 잘못된 디바이스 지정 시 데이터 손실 가능. **반드시 디바이스 경로를 두 번 확인하세요.**
+
+```yaml
+enable_containerd_disk: true
+containerd_disk_device: "/dev/sdb"             # ⚠️ 비어있는 디스크
+containerd_disk_fstype: "xfs"                  # "xfs" | "ext4"
+containerd_disk_mount_point: "/var/lib/containerd"
+containerd_disk_mount_options: "defaults,noatime"
+```
 
 ```bash
-make limit-master            # Master 노드만
-make limit-workers           # Worker 노드만
-make limit-master1           # master1만
+make tag-setup-containerd-disk    # 사전 디스크 준비 (containerd 설치 전 실행 권장)
+# 또는 dry-run으로 확인 먼저
+make dry-run
 ```
+
+role 동작 (13단계):
+1. 디바이스 존재 확인
+2. 기존 마운트/blkid 확인
+3. **기존 FS가 없으면만** 포맷 (`force: no`)
+4. UUID로 fstab 항목 추가 (영구 마운트)
+5. containerd 재시작
+
+### GPU 자동 설정
+
+세 가지 단계가 분리되어 있어 환경에 맞게 조합 가능합니다.
+
+```yaml
+# 1. NVIDIA 드라이버 자동 설치 (.run 파일)
+enable_nvidia_driver_install: true
+nvidia_driver_version: "570.124.06"
+nvidia_driver_download_url: "http://mirror.example.com/nvidia-drivers"
+
+# 2. .run 설치 후 toolkit 경로 보정 (필요 시)
+fix_nvidia_toolkit_path: true
+
+# 3. containerd 설정에 NVIDIA 런타임 추가
+enable_nvidia_containerd_config: true
+
+# 4. GPU 노드 자동 라벨링 (gpu=on)
+enable_gpu_node_labels: true   # 기본 true
+```
+
+```bash
+make configure-gpu-full         # 위 4단계를 한 번에 실행
+make check-nvidia-gpu           # GPU 감지 확인 (lspci)
+make check-nvidia-driver        # 드라이버 설치 상태 확인
+```
+
+GPU 워크로드 스케줄링 예시:
+```yaml
+spec:
+  nodeSelector:
+    gpu: "on"
+  containers:
+  - name: app
+    image: nvidia/cuda:12.0-base
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+```
+
+### 클러스터 검증 (`validation.yml`)
+
+설치 후 또는 변경 후 클러스터 종합 헬스체크:
+
+```bash
+make validate
+```
+
+**5단계 검증**:
+1. **Node Status** — 모든 노드 `Ready` 확인
+2. **System Pods** — `kube-system` Pod 모두 Running/Completed 확인
+3. **DNS Resolution** — busybox Pod에서 `nslookup kubernetes.default`
+4. **Pod-to-Pod Communication** — 두 nginx Pod 간 HTTP 200 확인
+5. **External Connectivity** — Pod에서 `http://google.com` (또는 `validation_external_url`) 접근
+
+**격리 환경 주의**: 외부 검사는 `roles/validate_cluster/defaults/main.yml`의 `validation_external_url`로 오버라이드:
+```yaml
+# group_vars/all.yml에 추가
+validation_external_url: "http://harbor.example.com/health"
+```
+
+성공 출력:
+```
+=========================================
+  Cluster Validation: ALL CHECKS PASSED
+=========================================
+  - Node Status:           OK
+  - System Pods:           OK
+  - DNS Resolution:        OK
+  - Pod-to-Pod Comms:      OK
+  - External Connectivity: OK
+=========================================
+```
+
+실패 시: [`runbooks/05-incident-response.md`](./runbooks/05-incident-response.md) 참조.
+
+## Makefile 명령어
+
+전체 target 목록은 `make help` 또는 [`MAKEFILE-GUIDE.md`](./MAKEFILE-GUIDE.md). 가장 자주 쓰는 것들만 여기에 정리합니다.
+
+### 일반
+
+| 명령 | 설명 | 빈도 |
+|---|---|---|
+| `make help` | 전체 target 목록 | 자주 |
+| `make ping` | 모든 호스트 SSH 연결 테스트 | 자주 |
+| `make check-cluster` | 노드 + Pod 상태 확인 | 자주 |
+| `make validate` | 5단계 클러스터 검증 | 자주 |
+| `make check-versions` | 설치된 버전 확인 | 가끔 |
+| `make show-variables-example` | 안전한 변수 파일 출력 (자격증명 제외) | 가끔 |
+
+### 설치
+
+| 명령 | 설명 |
+|---|---|
+| `make install` | 전체 클러스터 설치 (`site.yml` 전체) |
+| `make install-step1` | Phase 1: 시스템 준비 (sysctl + packages + containerd) |
+| `make install-step2` | Phase 2: K8s 설치 (kubeadm) |
+| `make install-step3` | Phase 3: CNI 플러그인 |
+| `make install-all` | step1 → step2 → step3 순차 |
+| `make install-minimal` | 최소 구성 |
+| `make install-production` | 프로덕션 권장 구성 |
+
+### Tag 기반 부분 적용
+
+| 명령 | 적용 대상 | 자주 쓰는 이유 |
+|---|---|---|
+| `make tag-sysctl` | 커널 파라미터만 | 신규 노드 동기화 |
+| `make tag-packages` | OS 패키지만 | 패키지 업데이트 |
+| `make tag-container` | containerd만 | runtime 재설정 |
+| `make tag-docker-credentials` | 레지스트리 인증 + CA | 자격증명 갱신 |
+| `make tag-kubernetes` | K8s 컴포넌트만 | 인증서/노드 재구성 |
+| `make tag-networking` | CNI 재설치 | CNI 변경 |
+| `make tag-certs` | 인증서 10년 연장 | 인증서 갱신 |
+| `make tag-coredns` | CoreDNS hosts | hosts 동기화 |
+| `make tag-oidc-apiserver` | OIDC 설정 추가 | 인증 정책 변경 |
+| `make tag-registry-mirror` | 레지스트리 미러 | 미러 추가 |
+| `make tag-label-gpu-nodes` | GPU 노드 라벨 | GPU 추가 |
 
 ### Worker 노드 관리
 
 ```bash
-make check-workers           # Worker 상태 확인
-make add-workers             # Worker 노드 추가
-make check-and-add-workers   # 자동 감지 후 추가
+make check-workers              # Worker 상태 확인
+make add-workers                # Worker 노드 추가 (수동)
+make check-and-add-workers      # 인벤토리 비교 후 자동 감지+추가
+make get-join-command           # 새 join 명령 출력
 ```
 
-### 커스텀 명령어 실행
+### 호스트별 / 명령 실행
 
 ```bash
-# 모든 호스트에서 명령어 실행 (자세한 출력)
+make limit-master               # Master만
+make limit-master1              # master1만
+make limit-workers              # Worker만
+
 make cmd-all CMD="uptime"
-make cmd-all CMD="df -h"
-
-# Master 노드에서만 실행
 make cmd-masters CMD="kubectl get nodes"
-make cmd-masters CMD="kubectl get pods -A"
-
-# Worker 노드에서만 실행
 make cmd-workers CMD="free -h"
-make cmd-workers CMD="nerdctl images"
-
-# Installs 노드에서만 실행
-make cmd-installs CMD="systemctl status containerd"
-
-# 특정 호스트 지정 실행
-make cmd-host HOST="master1" CMD="uptime"
-make cmd-host HOST="worker1" CMD="df -h"
-
-# HOST 없이 실행하면 사용 가능한 호스트 목록 표시
-make cmd-host
+make cmd-host HOST="master1" CMD="systemctl status kubelet"
 ```
 
-### 로컬 레지스트리 관리
-
-로컬 Docker 레지스트리는 Ansible 없이 독립 실행형 스크립트로 관리됩니다.
+### IP 변경 / 인증서
 
 ```bash
-# 설정 파일 초기화
-make registry-init           # .env.registry 생성
+# 단일 마스터 IP 변경
+make update-ip OLD_IP=192.168.1.41 NEW_IP=192.168.1.100 HOST=master1
+make update-ip-with-certs OLD_IP=... NEW_IP=... HOST=...   # 인증서 SAN 포함
 
-# 레지스트리 관리
-make registry-start          # 레지스트리 시작
-make registry-stop           # 레지스트리 중지
-make registry-restart        # 레지스트리 재시작
-make registry-status         # 상태 확인
-make registry-logs           # 로그 확인
-make registry-remove         # 컨테이너 제거
+# HA 클러스터 (한 번에 1개 마스터씩)
+make update-ha-ip OLD_IP=... NEW_IP=... HOST=master1
+make check-etcd-health
+make check-etcd-members
 ```
 
-**로컬 레지스트리 설정 (.env.registry)**:
-```bash
-# 설정 파일 생성
-make registry-init
-
-# .env.registry 편집
-vim .env.registry
-
-# 레지스트리 시작
-make registry-start
-```
-
-### 리셋 및 정리
+### 리셋 / 정리
 
 ```bash
-make reset                   # 전체 클러스터 초기화
-make reset-workers           # Worker 노드만 초기화
+make reset                      # 전체 클러스터 초기화 (⚠️ 데이터 손실)
+make reset-workers              # Worker만 초기화
+make reset-and-reboot           # 리셋 후 재부팅
+make reset-rook-ceph            # rook-ceph 사전 정리
 ```
 
-### 유틸리티
+### 로컬 레지스트리 / NFS
 
 ```bash
-make show-inventory          # 인벤토리 확인
-make show-variables          # 전역 변수 확인
-make lint                    # 문법 검사
-make list-tags               # 사용 가능한 tags
-make list-tasks              # 모든 tasks
-make dry-run                 # Dry run 모드
-make test-connection         # 그룹별 연결 테스트
-make get-join-command        # Worker join 명령어
-make check-versions          # 설치된 버전 확인
+make registry-init / registry-start / registry-stop / registry-status
+make nfs-init / nfs-install / nfs-start / nfs-status / nfs-show-exports
 ```
 
-## 🏷️ Ansible Tags
+### 사내 저장소 (오프라인 환경)
 
-### 주요 Phase Tags
+```bash
+make ubuntu-repo-init / ubuntu-repo-setup / ubuntu-repo-status
+make rhel-repo-init-iso / rhel-repo-setup-directory
+make apache-repo-install / apache-repo-status
+make httpd-repo-install-iso / httpd-repo-status
+```
 
-| Tag | 설명 | 적용 대상 |
-|-----|------|-----------|
-| `base`, `sysctl` | Sysctl 및 커널 모듈 설정 | 모든 노드 |
-| `base`, `packages` | OS 패키지 설치 | 모든 노드 |
-| `container` | 컨테이너 런타임 (containerd) | 모든 노드 |
-| `docker-credentials` | 레지스트리 인증 | 모든 노드 |
-| `kubernetes`, `cluster` | Kubernetes 설치 | 모든 노드 |
-| `networking` | CNI 플러그인 (Flannel) | Master 노드 |
-| `scheduling` | Master 스케줄링 허용 | Master 노드 |
-| `certificates`, `k8s-certs` | 인증서 10년 연장 | Master 노드 |
-| `coredns-hosts` | CoreDNS 호스트 설정 | Master 노드 |
-| `harbor-setup` | Harbor 프로젝트 설정 | 모든 노드 |
+## Ansible Tags
+
+### Phase별 주요 tag
+
+| Phase | Tag | 적용 대상 |
+|---|---|---|
+| 1. 시스템 준비 | `base`, `sysctl`, `packages`, `set-hostname`, `etc-hosts` | 모든 노드 |
+| 1. 컨테이너 | `container`, `containerd-config`, `containerd-binary-install`, `registry-mirror`, `docker-credentials`, `nerdctl-login`, `ca-certificates` | 모든 노드 |
+| 1. 저장소 | `rhel-repo`, `ubuntu-repo`, `k8s-official-repo` | 모든 노드 |
+| 1. GPU | `nvidia`, `install-nvidia-driver`, `fix-nvidia-toolkit-path`, `gpu` | GPU 노드 |
+| 1. 디스크 | `setup-containerd-disk` | 모든 노드 (선택) |
+| 2. K8s | `kubernetes`, `cluster` | Master + Worker |
+| 3. 네트워크 | `networking`, `flannel`, `cilium` | Master |
+| 4. 스케줄링 | `scheduling`, `label-gpu-nodes` | Master |
+| 5. 인증서 | `certificates`, `k8s-certs` | Master |
+| 6. CoreDNS | `coredns-hosts` | Master |
+| 7. OIDC | `oidc-apiserver` | Master |
 
 ### 사용 예시
 
@@ -334,17 +747,14 @@ make check-versions          # 설치된 버전 확인
 # Sysctl 설정만
 ansible-playbook -i inventory.ini site.yml --tags sysctl
 
-# 시스템 준비 (Kubernetes 제외)
+# 시스템 준비 (K8s 제외)
 ansible-playbook -i inventory.ini site.yml --tags sysctl,packages,container
 
-# Kubernetes만 설치
+# K8s만 재설치
 ansible-playbook -i inventory.ini site.yml --tags kubernetes,networking
 
 # 인증서 연장
 ansible-playbook -i inventory.ini site.yml --tags k8s-certs
-
-# 레지스트리 인증 설정
-ansible-playbook -i inventory.ini site.yml --tags docker-credentials
 
 # 여러 tag 조합
 ansible-playbook -i inventory.ini site.yml --tags "sysctl,container,kubernetes"
@@ -353,413 +763,107 @@ ansible-playbook -i inventory.ini site.yml --tags "sysctl,container,kubernetes"
 ansible-playbook -i inventory.ini site.yml --tags kubernetes --limit master1
 ```
 
-## 🔧 설치 후 작업
+전체 태그 목록: `make list-tags`
 
-### 1. 클러스터 상태 확인
+## Runbook 링크
 
+운영자가 시나리오별로 따라갈 수 있는 SOP는 [`runbooks/`](./runbooks/README.md):
+
+| # | Runbook | 위험도 | 소요시간 |
+|---|---|---|---|
+| 00 | [사전 준비](./runbooks/00-prerequisites.md) | Low | 30–60분 |
+| 01 | [Day-0 클러스터 설치](./runbooks/01-day0-install.md) (Online / Offline / HA) | Medium | 30–90분 |
+| 02 | [Worker 노드 추가/제거](./runbooks/02-add-worker.md) | Medium | 15–30분 |
+| 03 | [인증서 갱신](./runbooks/03-cert-renewal.md) (10년 연장 / 1년 갱신) | High | 15–30분 |
+| 04 | [노드 IP 변경](./runbooks/04-node-ip-change.md) (단일 / HA) | High | 30–90분 |
+| 05 | [장애 대응](./runbooks/05-incident-response.md) (NotReady / etcd / CNI / 레지스트리) | varies | 즉시 |
+| 06 | [클러스터 리셋·재배포](./runbooks/06-cluster-reset.md) | High | 15–60분 |
+
+## 문제 해결
+
+### 노드 NotReady
+
+#### 증상
 ```bash
-# Makefile 사용
-make check-cluster
-
-# 또는 수동으로
-ssh root@<master-ip>
-kubectl get nodes -o wide
-kubectl get pods -A
-kubectl cluster-info
+kubectl get nodes
+# NAME      STATUS     ROLES           AGE   VERSION
+# master1   NotReady   control-plane   10m   v1.34.1
 ```
 
-### 2. kubectl 설정 (일반 사용자)
-
+#### 진단
 ```bash
-mkdir -p $HOME/.kube
-sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/config
-
-# kubectl alias (자동 설정됨)
-k get nodes          # kubectl get nodes
-kgp                  # kubectl get pods
-kgn                  # kubectl get nodes
-```
-
-### 3. 샘플 애플리케이션 배포
-
-```bash
-# nginx 배포
-kubectl create deployment nginx --image=nginx
-kubectl expose deployment nginx --port=80 --type=NodePort
-
-# 서비스 확인
-kubectl get svc nginx
-NODE_PORT=$(kubectl get svc nginx -o jsonpath='{.spec.ports[0].nodePort}')
-curl http://<node-ip>:$NODE_PORT
-```
-
-## 🔍 문제 해결
-
-### 일반적인 문제
-
-#### 1. 노드 NotReady 상태
-
-```bash
-# kubelet 로그 확인
+# kubelet 로그
+ssh master1
 sudo journalctl -u kubelet -f
 
-# CNI (Flannel) 확인
-kubectl get pods -n kube-system | grep flannel
-kubectl logs -n kube-system -l app=flannel
+# CNI 상태 (Flannel)
+kubectl get pods -n kube-flannel
+kubectl logs -n kube-flannel -l app=flannel
+
+# CNI 상태 (Cilium)
+cilium status
+cilium connectivity test
 ```
 
-#### 2. Worker 노드 Join 실패
+#### 자주 발생하는 원인
+- **swap이 켜져 있음**: `swapoff -a` (자동 처리되지만 재부팅 후 다시 켜질 수 있음)
+- **containerd 미시작**: `systemctl status containerd`
+- **CNI 이미지 pull 실패**: 다음 섹션 참조
 
+자세한 절차: [`runbooks/05-incident-response.md § 노드 NotReady`](./runbooks/05-incident-response.md).
+
+### 이미지 pull 실패 (`ErrImagePull` / `ImagePullBackOff`)
+
+#### 진단
 ```bash
-# Makefile 사용
-make get-join-command
+# 이벤트 확인
+kubectl describe pod <pod>
 
-# 또는 수동으로
-kubeadm token create --print-join-command
-```
-
-#### 3. 레지스트리 인증 문제
-
-```bash
-# containerd 설정 확인
-sudo cat /etc/containerd/config.toml | grep -A 10 registry
-
-# 이미지 pull 테스트
+# 노드에서 직접 pull 테스트
+ssh worker1
 sudo nerdctl pull harbor.example.com/library/nginx:latest
 
-# kubelet 로그
-sudo journalctl -u kubelet -f | grep -i "pull"
+# containerd 인증 설정 확인
+sudo cat /etc/containerd/config.toml | grep -A 5 registry
+sudo ls /etc/containerd/certs.d/
 ```
 
-#### 4. 원격 명령 실행
+#### 해결
+- **자격증명 오류**: `group_vars/all.yml`의 `docker_registries` 확인 → `make tag-docker-credentials` 재실행
+- **CA 신뢰 부족**: `enable_ca_certificates: true` + `ca_certificates` 추가 → `make tag-ca-certificates`
+- **레지스트리 미러 설정 오류**: `make tag-registry-mirror` 재실행, `/etc/containerd/certs.d/` 확인
+
+### Worker join 실패
 
 ```bash
-# Makefile 사용 (자세한 출력)
+make get-join-command
+# 또는
+ssh master1
+sudo kubeadm token create --print-join-command
+```
+
+### etcd 쿼럼 상실 (HA)
+
+```bash
+make check-etcd-health
+make check-etcd-members
+```
+
+3/3 정상이 아니면 [`runbooks/05-incident-response.md § etcd 쿼럼 상실`](./runbooks/05-incident-response.md) 참조.
+
+### 원격 명령 실행 (디버깅 용도)
+
+```bash
 make cmd-all CMD="systemctl status kubelet"
 make cmd-masters CMD="kubectl get nodes"
 make cmd-host HOST="worker1" CMD="nerdctl ps"
-
-# 또는 Ansible 직접 사용
-ansible all -i inventory.ini -m shell -a "uptime"
-ansible masters -i inventory.ini -m shell -a "kubectl get pods -A"
 ```
 
-### 필수 포트
+## HA 클러스터 IP 변경
 
-| 포트 | 프로토콜 | 출처 | 용도 |
-|------|----------|------|------|
-| 6443 | TCP | 전체 | Kubernetes API |
-| 2379-2380 | TCP | Master | etcd |
-| 10250 | TCP | 전체 | kubelet |
-| 10251 | TCP | Master | kube-scheduler |
-| 10252 | TCP | Master | kube-controller |
-| 8472 | UDP | 전체 | Flannel VXLAN |
+3중화 HA 클러스터에서 마스터 IP를 변경하는 절차입니다. 자세한 시나리오는 [`runbooks/04-node-ip-change.md`](./runbooks/04-node-ip-change.md) 참조.
 
-## 🎯 추가 기능
-
-### 클러스터 초기화
-
-```bash
-# Makefile 사용
-make reset                   # 전체 클러스터
-make reset-workers           # Worker만
-
-# 또는 Ansible 직접 사용
-ansible-playbook -i inventory.ini reset_cluster.yml
-ansible-playbook -i inventory.ini reset_cluster.yml --limit worker1
-```
-
-### Worker 노드 자동 추가
-
-```bash
-# 인벤토리에 없는 Worker 자동 감지 및 추가
-make check-and-add-workers
-
-# Worker 상태 확인
-make check-workers
-
-# 수동으로 Worker 추가
-make add-workers
-```
-
-### 인증서 10년 연장
-
-```bash
-# Makefile 사용
-make tag-certs
-
-# 또는 Ansible 직접 사용
-ansible-playbook -i inventory.ini site.yml --tags k8s-certs
-```
-
-### GPU 지원 (자동 감지)
-
-GPU는 자동으로 감지되며, containerd가 NVIDIA 런타임으로 자동 설정됩니다.
-
-```yaml
-# group_vars/all.yml
-has_nvidia_gpu: auto  # 자동 감지
-# has_nvidia_gpu: true   # 강제 활성화
-# has_nvidia_gpu: false  # 비활성화
-```
-
-**참고**: NVIDIA driver는 노드에 미리 설치되어 있어야 합니다.
-
-```bash
-# GPU 감지 확인
-make cmd-all CMD="lspci | grep -i nvidia"
-
-# containerd 설정 확인
-make cmd-all CMD="cat /etc/containerd/config.toml | grep nvidia"
-```
-
-### 로컬 Docker 레지스트리
-
-독립 실행형 스크립트로 관리되며, `.env.registry` 파일로 설정합니다.
-
-```bash
-# 1. 설정 파일 생성
-make registry-init
-
-# 2. 설정 편집 (.env.registry)
-vim .env.registry
-```
-
-**설정 예시 (.env.registry)**:
-```bash
-REGISTRY_IMAGE=registry:2
-REGISTRY_IMAGE_TAR=/root/docker.tar.gz
-REGISTRY_CONTAINER_NAME=local-registry
-REGISTRY_HOST_PORT=80
-REGISTRY_CONTAINER_PORT=5000
-REGISTRY_DATA_DIR=/opt/local-registry/data
-REGISTRY_ADDITIONAL_ARGS="--env REGISTRY_STORAGE_DELETE_ENABLED=true"
-```
-
-```bash
-# 3. 레지스트리 시작
-make registry-start
-
-# 4. 상태 확인
-make registry-status
-
-# 5. 레지스트리 사용
-nerdctl push localhost:80/myimage:latest
-```
-
-### NFS 서버 구성
-
-NFS 서버도 독립 실행형 스크립트로 관리되며, `.env.nfs` 파일로 설정합니다.
-
-```bash
-# 1. 설정 파일 생성
-make nfs-init
-
-# 2. 설정 편집 (.env.nfs)
-vim .env.nfs
-```
-
-**설정 예시 (.env.nfs)**:
-```bash
-# NFS export 경로 (쉼표로 구분)
-NFS_EXPORT_PATHS="/data/nfs/share1,/data/nfs/share2,/opt/kubernetes-storage"
-
-# 각 경로별 export 옵션 (쉼표로 구분, 경로 순서와 동일)
-NFS_EXPORT_OPTIONS="*(rw,sync,no_subtree_check,no_root_squash),192.168.0.0/16(rw,sync,no_subtree_check),10.0.0.0/8(rw,sync,no_subtree_check)"
-
-# 디렉토리 소유자 및 권한
-NFS_EXPORT_OWNER="root"
-NFS_EXPORT_GROUP="root"
-NFS_EXPORT_MODE="0777"
-
-# 부팅 시 자동 시작
-NFS_ENABLE_ON_BOOT="true"
-```
-
-**간단한 예제 (Kubernetes PV용)**:
-```bash
-# 단일 공유 디렉토리
-NFS_EXPORT_PATHS="/data/kubernetes-pvs"
-NFS_EXPORT_OPTIONS="*(rw,sync,no_subtree_check,no_root_squash)"
-NFS_EXPORT_MODE="0777"
-```
-
-**보안 강화 예제**:
-```bash
-# 특정 서브넷만 허용
-NFS_EXPORT_PATHS="/data/secure"
-NFS_EXPORT_OPTIONS="192.168.135.0/24(rw,sync,no_subtree_check,root_squash)"
-NFS_EXPORT_OWNER="nobody"
-NFS_EXPORT_GROUP="nogroup"
-NFS_EXPORT_MODE="0755"
-```
-
-```bash
-# 3. NFS 서버 설치 및 시작
-make nfs-install
-
-# 4. 상태 확인
-make nfs-status
-
-# 5. exports 확인
-make nfs-show-exports
-
-# 6. exports 재로드 (설정 변경 후)
-make nfs-reload
-```
-
-**Makefile 명령어**:
-```bash
-make nfs-init          # 설정 파일 초기화
-make nfs-install       # NFS 서버 설치 및 시작
-make nfs-start         # NFS 서버 시작
-make nfs-stop          # NFS 서버 중지
-make nfs-restart       # NFS 서버 재시작
-make nfs-status        # 상태 확인
-make nfs-reload        # exports 재로드
-make nfs-show-exports  # /etc/exports 내용 표시
-make nfs-add-export    # exports 추가 및 적용
-make nfs-remove        # NFS 설정 제거
-```
-
-**Kubernetes에서 NFS 사용**:
-```yaml
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: nfs-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteMany
-  nfs:
-    server: 192.168.135.31  # NFS 서버 IP
-    path: /data/kubernetes-pvs
-  persistentVolumeReclaimPolicy: Retain
-```
-
-### High Availability (HA) 구성
-
-```yaml
-# group_vars/all.yml
-master_ha: true
-kube_vip_address: 192.168.135.30
-kube_vip_interface: ens18
-```
-
-```ini
-# inventory.ini
-[masters]
-master1 ansible_host=192.168.135.31
-master2 ansible_host=192.168.135.32
-master3 ansible_host=192.168.135.33
-```
-
-### 도메인 기반 통신 (IP 변경 없이 클러스터 구성)
-
-IP 주소를 매번 변경하지 않고 도메인 이름 기반으로 클러스터를 구성할 수 있습니다.
-
-```yaml
-# group_vars/all.yml
-enable_domain_communication: true     # 도메인 기반 통신 활성화
-domain_suffix: "k8s.local"            # 노드 도메인 접미사 (예: master1.k8s.local)
-api_domain: "k8s-api.internal"        # API 서버 도메인
-```
-
-#### 사용 시나리오
-
-**1. 단일 마스터 + 도메인 기반 통신**
-```yaml
-# kube_vip_address를 설정하지 않음
-enable_domain_communication: true
-api_domain: "k8s-api.internal"
-```
-- `/etc/hosts`에 자동으로 `api_domain -> 첫 번째 마스터 IP` 매핑 추가
-- 외부 DNS 서버 설정 시 `api_domain`을 마스터 IP로 해석하도록 구성
-
-**2. HA + kube-vip (기존 방식)**
-```yaml
-master_ha: true
-kube_vip_address: 192.168.135.30    # VIP 설정
-enable_domain_communication: true   # 선택적
-```
-- kube-vip가 VIP를 관리
-- `controlPlaneEndpoint`에 VIP 사용
-
-**3. HA + 외부 로드밸런서**
-```yaml
-master_ha: true
-# kube_vip_address는 설정하지 않음
-enable_domain_communication: true
-api_domain: "k8s-api.internal"
-```
-- 외부 로드밸런서 구성 필요
-- DNS에서 `api_domain`을 로드밸런서 IP로 해석하도록 설정
-- `/etc/hosts` 또는 `custom_hosts`로 로드밸런서 IP 매핑:
-```yaml
-custom_hosts:
-  "k8s-api.internal": "192.168.135.100"  # 로드밸런서 IP
-```
-
-#### 장점
-- 환경 변경 시 IP 주소 수정 불필요
-- DNS 기반 유연한 엔드포인트 관리
-- VM 마이그레이션, 클라우드 환경에 적합
-
-### Containerd 데이터 디렉토리 커스터마이징
-
-```yaml
-# group_vars/all.yml
-containerd_data_base_dir: "/data/containerd"  # 호스트별: /data/containerd/{hostname}
-```
-
-```bash
-# 데이터 디렉토리 확인
-make cmd-all CMD="ls -la /data/containerd/"
-```
-
-### 노드 IP 변경 (update_node_ip Role)
-
-노드의 IP가 변경되었을 때 Kubernetes 설정 파일을 자동으로 업데이트합니다.
-
-**업데이트 대상 파일:**
-- `/etc/kubernetes/manifests/etcd.yaml`
-- `/etc/kubernetes/manifests/kube-apiserver.yaml`
-- `/etc/kubernetes/manifests/kube-controller-manager.yaml`
-- `/etc/kubernetes/manifests/kube-scheduler.yaml`
-- `/etc/kubernetes/*.conf` (admin, kubelet, controller-manager, scheduler)
-- `/etc/hosts`
-- `~/.kube/config`
-
-**사용 방법:**
-
-```bash
-# 기본 사용
-make update-ip OLD_IP=192.168.135.41 NEW_IP=192.168.135.100 HOST=master1
-
-# 인증서 재생성 포함
-make update-ip-with-certs OLD_IP=192.168.135.41 NEW_IP=192.168.135.100 HOST=master1
-
-# Ansible 직접 실행
-ansible-playbook -i inventory.ini update-node-ip.yml \
-  -e 'old_ip=192.168.135.41' \
-  -e 'new_ip=192.168.135.100' \
-  --limit master1
-```
-
-**주요 기능:**
-- kubelet 중지 → 파일 수정 → kubelet 시작
-- 자동 백업 (`.bak` 파일)
-- 선택적 인증서 재생성 (`regenerate_certs=true`)
-- 변경 후 클러스터 상태 확인
-
-### HA 클러스터 IP 변경
-
-3중화 HA 클러스터에서 마스터 노드의 IP를 변경하는 방법입니다.
-
-**단일 마스터 vs HA 클러스터 차이점:**
+### 단일 마스터 vs HA 차이점
 
 | 항목 | 단일 마스터 | HA (3중화) |
 |------|------------|-----------|
@@ -767,134 +871,72 @@ ansible-playbook -i inventory.ini update-node-ip.yml \
 | 쿼럼 | 불필요 | 2/3 유지 필요 |
 | 실행 방식 | 단일 호스트 | 순차적 (한 번에 하나씩) |
 
-**Makefile 명령어:**
+### 명령 요약
 
 ```bash
-# HA 클러스터 단일 마스터 IP 변경
-make update-ha-ip OLD_IP=192.168.135.71 NEW_IP=192.168.135.81 HOST=master1
-
-# HA IP 변경 + 인증서 재생성
-make update-ha-ip-with-certs OLD_IP=192.168.135.71 NEW_IP=192.168.135.81 HOST=master1
-
-# etcd 상태 확인
-make check-etcd-health
-make check-etcd-members
-```
-
-**여러 마스터 IP 변경 절차:**
-
-```bash
-# 0. 변경 전 상태 확인
+# 사전 확인
 make check-etcd-health
 make check-etcd-members
 
 # === Master 1 변경 ===
-# 1. inventory.ini에서 master1의 IP를 새 IP로 수정
+vi inventory.ini    # master1 ansible_host=192.168.1.81 (새 IP)
+make update-ha-ip OLD_IP=192.168.1.71 NEW_IP=192.168.1.81 HOST=master1
+make check-etcd-health      # 2/3 정상 확인 후 다음 master로 진행
+
+# === Master 2 ===
 vi inventory.ini
-# master1 ansible_host=192.168.135.81  (새 IP)
-
-# 2. master1 IP 변경 실행
-make update-ha-ip OLD_IP=192.168.135.71 NEW_IP=192.168.135.81 HOST=master1
-
-# 3. 클러스터 상태 확인 (2/3 정상 확인)
+make update-ha-ip OLD_IP=192.168.1.72 NEW_IP=192.168.1.82 HOST=master2
 make check-etcd-health
 
-# === Master 2 변경 ===
-# 4. inventory.ini에서 master2의 IP 수정
+# === Master 3 ===
 vi inventory.ini
-# master2 ansible_host=192.168.135.82
-
-# 5. master2 IP 변경 실행
-make update-ha-ip OLD_IP=192.168.135.72 NEW_IP=192.168.135.82 HOST=master2
-
-# 6. 클러스터 상태 확인
-make check-etcd-health
-
-# === Master 3 변경 ===
-# 7. inventory.ini에서 master3의 IP 수정
-vi inventory.ini
-# master3 ansible_host=192.168.135.83
-
-# 8. master3 IP 변경 실행
-make update-ha-ip OLD_IP=192.168.135.73 NEW_IP=192.168.135.83 HOST=master3
-
-# 9. 최종 확인
+make update-ha-ip OLD_IP=192.168.1.73 NEW_IP=192.168.1.83 HOST=master3
 make check-etcd-health
 make check-etcd-members
 kubectl get nodes
 ```
 
-**도메인 통신 사용 시 (권장):**
+### 도메인 통신 사용 시 (권장)
 
-`enable_domain_communication: true` 설정 시:
-- etcd가 `master1.k8s.local` 같은 호스트명 사용
-- IP 변경 시 `/etc/hosts`만 업데이트됨
-- etcd 멤버 URL 변경 불필요 → 더 안전하고 빠름
+`enable_domain_communication: true` 설정 시 etcd가 호스트명 기반이라 IP 변경 시 `/etc/hosts`만 업데이트됨 → 더 안전·빠름.
 
-**주의사항:**
+### 주의사항
+
 - 각 마스터 변경 후 30초 이상 대기 (etcd 안정화)
-- 항상 2개 마스터가 정상 상태여야 함
-- 실패 시 old_ip로 다시 복구 가능
+- **항상 2/3 마스터가 정상**이어야 다음 변경 진행
+- 실패 시 `OLD_IP`로 다시 복구 가능
 - IP가 인증서 SAN에 포함된 경우 `update-ha-ip-with-certs` 사용
 
-## 📁 프로젝트 구조
-
-```
-kubernetes-kubeadm/
-├── group_vars/
-│   └── all.yml                       # 전역 변수
-├── inventory.ini                     # 인벤토리 파일
-├── roles/                            # Ansible 역할
-│   ├── configure_sysctl/             # Sysctl 설정
-│   ├── install_os_package/           # OS 패키지
-│   ├── install_containerd/           # 컨테이너 런타임
-│   ├── setup-docker-credentials/     # 레지스트리 인증
-│   ├── install_kubernetes/           # K8s 설치
-│   ├── install_flannel/              # CNI 플러그인
-│   ├── extend_k8s_certs/             # 인증서 연장
-│   └── configure_coredns_hosts/      # CoreDNS 설정
-├── scripts/
-│   └── manage-registry.sh            # 로컬 레지스트리 관리 스크립트
-├── site.yml                          # 메인 플레이북
-├── reset_cluster.yml                 # 클러스터 리셋
-├── add-worker.yml                    # Worker 추가
-├── check-and-add-workers.yml         # Worker 자동 추가
-├── Makefile                          # 편의 명령어
-├── .env.registry.example             # 레지스트리 설정 템플릿
-└── README.md                         # 이 문서
-```
-
-## 📚 추가 리소스
+## 추가 리소스
 
 - [Kubernetes 공식 문서](https://kubernetes.io/ko/docs/)
 - [kubectl 치트시트](https://kubernetes.io/ko/docs/reference/kubectl/cheatsheet/)
-- [Ansible 문서](https://docs.ansible.com/)
+- [kubeadm 문서](https://kubernetes.io/ko/docs/reference/setup-tools/kubeadm/)
+- [Cilium 문서](https://docs.cilium.io/)
 - [Flannel 문서](https://github.com/flannel-io/flannel)
 - [containerd 문서](https://containerd.io/)
+- [Ansible 문서](https://docs.ansible.com/)
 
 ## ✨ 주요 특징
 
 - ✅ **완전 자동화**: 한 번의 명령으로 전체 클러스터 배포
-- ✅ **크로스 플랫폼**: Ubuntu/RHEL/CentOS 지원
-- ✅ **고가용성**: Multi-master 구성 지원 (kube-vip)
-- ✅ **병렬 실행**: 빠른 설치를 위한 병렬 작업
-- ✅ **유연한 Tag**: 원하는 구성 요소만 선택 설치
-- ✅ **인증서 관리**: 10년 인증서 자동 연장
-- ✅ **GPU 지원**: NVIDIA GPU 자동 감지
-- ✅ **레지스트리 통합**: containerd 네이티브 인증 설정
-- ✅ **로컬 레지스트리**: 독립 실행형 스크립트로 관리
-- ✅ **Worker 자동 추가**: 미등록 노드 자동 감지 및 추가
-- ✅ **원격 명령 실행**: Makefile을 통한 편리한 원격 명령 실행
-- ✅ **Makefile 통합**: 간편한 클러스터 관리 명령어
-- ✅ **모듈화**: 재사용 가능한 Ansible 역할
+- ✅ **버전 호환**: K8s 1.27.x – 1.34.x, containerd 1.7.x – 2.2.x
+- ✅ **CNI 선택**: Flannel 또는 Cilium (오프라인 설치 지원)
+- ✅ **고가용성**: kube-vip 또는 도메인 기반 HA
+- ✅ **OIDC 통합**: kube-apiserver + Keycloak 등 외부 IdP
+- ✅ **레지스트리 미러**: 외부 레지스트리 사내 미러 자동 우회
+- ✅ **GPU 지원**: 드라이버 자동 설치 + 노드 라벨링
+- ✅ **사용자 CA**: 자체 서명 인증서 시스템 신뢰 저장소 설치
+- ✅ **인증서 관리**: 10년 자동 연장
+- ✅ **클러스터 검증**: 5단계 자동 헬스체크
+- ✅ **오프라인 설치**: APT/YUM/Cilium 사내 미러 지원
+- ✅ **크로스 플랫폼**: Ubuntu / RHEL / Rocky / CentOS
+- ✅ **Worker 자동 추가**: 미등록 노드 자동 감지
+- ✅ **Runbook**: 7개 시나리오별 단계별 SOP (KO/EN)
 
-## 🤝 기여
+## 기여 / 라이선스
 
-이슈 및 풀 리퀘스트를 환영합니다!
-
-## 📝 라이선스
-
-MIT License
+이슈 및 풀 리퀘스트를 환영합니다. MIT License.
 
 ---
 
