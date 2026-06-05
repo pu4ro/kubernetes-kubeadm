@@ -20,17 +20,33 @@
         msg: "Node {{ inventory_hostname }} is already part of the cluster"
       when: node_already_joined.stat.exists
 
-    - name: Stop if node already joined (unless force_rejoin is set)
+    - name: Stop if node already joined unless force_rejoin is set
       fail:
         msg: "Node is already joined. Use -e 'force_rejoin=true' to reset and rejoin"
       when:
         - node_already_joined.stat.exists
         - not (force_rejoin | default(false))
 
-  roles:
-    - { role: install_os_package, tags: ['packages'], when: not node_already_joined.stat.exists or (force_rejoin | default(false)) }
-    - { role: install_containerd, tags: ['container'], when: not node_already_joined.stat.exists or (force_rejoin | default(false)) }
-    - { role: setup-docker-credentials, tags: ['docker-credentials'], when: not node_already_joined.stat.exists or (force_rejoin | default(false)) }
+    - name: Install OS packages
+      include_role:
+        name: install_os_package
+      when: not node_already_joined.stat.exists or (force_rejoin | default(false))
+      tags:
+        - packages
+
+    - name: Install containerd
+      include_role:
+        name: install_containerd
+      when: not node_already_joined.stat.exists or (force_rejoin | default(false))
+      tags:
+        - container
+
+    - name: Setup docker credentials
+      include_role:
+        name: setup-docker-credentials
+      when: not node_already_joined.stat.exists or (force_rejoin | default(false))
+      tags:
+        - docker-credentials
 
 # Phase 2: Generate Join Token from Master
 - name: Generate Join Token
@@ -84,7 +100,9 @@
     - name: Skip if already joined
       debug:
         msg: "Node {{ inventory_hostname }} is already joined, skipping package installation"
-      when: node_status.stat.exists and not (force_rejoin | default(false))
+      when:
+        - node_status.stat.exists
+        - not (force_rejoin | default(false))
 
     - name: Reset node if force_rejoin is enabled
       block:
@@ -98,7 +116,7 @@
           command: kubeadm reset -f
           ignore_errors: yes
 
-        - name: Clean up CNI
+        - name: Clean up CNI and Kubernetes directories
           file:
             path: "{{ item }}"
             state: absent
@@ -118,7 +136,7 @@
         - node_status.stat.exists
         - force_rejoin | default(false)
 
-    - name: Install Kubernetes packages (RedHat/CentOS)
+    - name: Install Kubernetes packages on RedHat or CentOS
       block:
         - name: Install kubeadm, kubelet, and kubectl
           yum:
@@ -139,7 +157,7 @@
         - ansible_os_family == "RedHat"
         - not node_status.stat.exists or (force_rejoin | default(false))
 
-    - name: Install Kubernetes packages (Ubuntu/Debian)
+    - name: Install Kubernetes packages on Ubuntu or Debian
       block:
         - name: Install kubeadm, kubelet, and kubectl
           apt:
@@ -194,10 +212,9 @@
   gather_facts: no
 
   tasks:
-    - name: Wait for nodes to be ready
+    - name: Wait for nodes to be registered
       command: kubectl get nodes {{ item }}
       register: node_status
-      delegate_to: master1
       with_items: "{{ groups['workers'] }}"
       retries: 10
       delay: 10
