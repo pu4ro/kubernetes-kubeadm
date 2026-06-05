@@ -9,7 +9,7 @@
   gather_facts: yes
   serial: "{{ worker_add_serial | default('100%') }}"
 
-  tasks:
+  pre_tasks:
     - name: Check if node is already joined
       stat:
         path: /etc/kubernetes/kubelet.conf
@@ -27,10 +27,64 @@
         - node_already_joined.stat.exists
         - not (force_rejoin | default(false))
 
+  # Mirror site.yml Phase 1 (System Preparation) so newly added workers go
+  # through the exact same install path. Each role keeps its original flag gate
+  # from site.yml, plus a guard so it only runs when the node is not yet joined
+  # (or force_rejoin is set).
   roles:
-    - { role: install_os_package, tags: ['packages'], when: not node_already_joined.stat.exists or (force_rejoin | default(false)) }
-    - { role: install_containerd, tags: ['container'], when: not node_already_joined.stat.exists or (force_rejoin | default(false)) }
-    - { role: setup-docker-credentials, tags: ['docker-credentials'], when: not node_already_joined.stat.exists or (force_rejoin | default(false)) }
+    - role: setup_rhel_repo
+      tags: ['rhel-repo']
+      when: not node_already_joined.stat.exists or (force_rejoin | default(false))
+    - role: setup_ubuntu_repo
+      tags: ['ubuntu-repo']
+      when: not node_already_joined.stat.exists or (force_rejoin | default(false))
+    - role: set_hostname
+      tags: ['set-hostname']
+      when:
+        - set_hostname_from_inventory | default(false)
+        - not node_already_joined.stat.exists or (force_rejoin | default(false))
+    - role: configure_etc_hosts
+      tags: ['etc-hosts']
+      when:
+        - configure_etc_hosts | default(false)
+        - not node_already_joined.stat.exists or (force_rejoin | default(false))
+    - role: install_ca_certificates
+      tags: ['ca-certificates']
+      when:
+        - enable_ca_certificates | default(false)
+        - not node_already_joined.stat.exists or (force_rejoin | default(false))
+    - role: configure_sysctl
+      tags: ['base', 'sysctl']
+      when: not node_already_joined.stat.exists or (force_rejoin | default(false))
+    - role: install_os_package
+      tags: ['base', 'packages']
+      when: not node_already_joined.stat.exists or (force_rejoin | default(false))
+    - role: setup_containerd_disk
+      tags: ['setup-containerd-disk']
+      when:
+        - enable_containerd_disk | default(false)
+        - not node_already_joined.stat.exists or (force_rejoin | default(false))
+    - role: install_containerd
+      tags: ['base', 'container']
+      when: not node_already_joined.stat.exists or (force_rejoin | default(false))
+    - role: configure_registry_mirror
+      tags: ['registry-mirror']
+      when:
+        - enable_registry_mirror | default(false)
+        - not node_already_joined.stat.exists or (force_rejoin | default(false))
+    - role: install_nvidia_driver
+      tags: ['nvidia', 'install-nvidia-driver']
+      when:
+        - enable_nvidia_driver_install | default(false)
+        - not node_already_joined.stat.exists or (force_rejoin | default(false))
+    - role: fix_nvidia_toolkit_path
+      tags: ['nvidia', 'fix-nvidia-toolkit-path']
+      when:
+        - enable_fix_nvidia_toolkit_path | default(false)
+        - not node_already_joined.stat.exists or (force_rejoin | default(false))
+    - role: setup-docker-credentials
+      tags: ['docker-credentials']
+      when: not node_already_joined.stat.exists or (force_rejoin | default(false))
 
 # Phase 2: Generate Join Token from Master
 - name: Generate Join Token
