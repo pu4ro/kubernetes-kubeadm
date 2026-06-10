@@ -22,10 +22,12 @@
 # Remove all containers to clear kubelet cache
 - name: Remove all containers (crictl rm)
   shell: crictl rm -af 2>/dev/null || true
+  changed_when: false
   when: restart_services | default(true)
 
 - name: Remove all pods (crictl rmp)
   shell: crictl rmp -af 2>/dev/null || true
+  changed_when: false
   when: restart_services | default(true)
 
 # Update manifest files
@@ -80,6 +82,7 @@
 # Remove backup files from manifests directory
 - name: Remove backup files from manifests directory
   shell: rm -f /etc/kubernetes/manifests/*~
+  changed_when: false
   ignore_errors: yes
 
 # Regenerate certificates if required
@@ -209,11 +212,6 @@
         state: started
       when: etcd_member_dir.stat.exists
 
-    - name: Wait for etcd to start with new cluster
-      pause:
-        seconds: 30
-      when: etcd_member_dir.stat.exists
-
     - name: Wait for etcd container to be running
       shell: |
         for i in $(seq 1 30); do
@@ -236,8 +234,12 @@
           --cacert=/etc/kubernetes/pki/etcd/ca.crt \
           --cert=/etc/kubernetes/pki/etcd/server.crt \
           --key=/etc/kubernetes/pki/etcd/server.key \
-          endpoint health 2>&1 || echo "etcd health check failed"
+          endpoint health 2>&1
       register: etcd_health
+      changed_when: false
+      retries: 10
+      delay: 5
+      until: etcd_health.rc == 0
       failed_when: false
       when: etcd_member_dir.stat.exists
 

@@ -108,7 +108,7 @@
     group: root
     mode: '0644'
   when: containerd_major_minor is version('2.2', '<')
-  notify: restart containerd
+  register: containerd_config_v2_result
   tags: ['container', 'containerd-config']
 
 - name: Deploy containerd configuration (version >= 2.2)
@@ -119,7 +119,7 @@
     group: root
     mode: '0644'
   when: containerd_major_minor is version('2.2', '>=')
-  notify: restart containerd
+  register: containerd_config_v3_result
   tags: ['container', 'containerd-config']
 
 # Note: All configuration (root path, NVIDIA runtime, pause image, registry settings for v2)
@@ -138,6 +138,14 @@
     state: restarted
     enabled: yes
     daemon_reload: yes
+  when: containerd_config_v2_result is changed or containerd_config_v3_result is changed
+  tags: ['container', 'containerd-config']
+
+- name: Ensure containerd service is enabled and started
+  systemd:
+    name: containerd
+    state: started
+    enabled: yes
   tags: ['container', 'containerd-config']
 
 - name: Set CONTAINERD_NAMESPACE environment variable globally
@@ -191,9 +199,10 @@
   when: crictl_version.rc != 0
   tags: ['container', 'containerd-config']
 
-- name: Wait after forced restart
-  pause:
-    seconds: 10
+- name: Wait for containerd socket after forced restart
+  wait_for:
+    path: /run/containerd/containerd.sock
+    timeout: 30
   when: crictl_version.rc != 0
   tags: ['container', 'containerd-config']
 

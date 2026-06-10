@@ -101,9 +101,11 @@
 
 - name: "[HA] Remove all containers"
   shell: crictl rm -af 2>/dev/null || true
+  changed_when: false
 
 - name: "[HA] Remove all pods"
   shell: crictl rmp -af 2>/dev/null || true
+  changed_when: false
 
 - name: "[HA] Wait for containers to stop"
   pause:
@@ -171,6 +173,7 @@
 # Remove backup files from manifests directory
 - name: "[HA] Remove backup files from manifests directory"
   shell: rm -f /etc/kubernetes/manifests/*~
+  changed_when: false
   ignore_errors: yes
 
 # ========================================
@@ -306,10 +309,6 @@
   debug:
     msg: "{{ etcd_container_check.stdout }}"
 
-- name: "[HA] Wait for etcd to stabilize"
-  pause:
-    seconds: "{{ ha_operation_delay | default(30) }}"
-
 - name: "[HA] Verify local etcd health"
   shell: |
     crictl exec $(crictl ps -q --name etcd 2>/dev/null | head -1) etcdctl \
@@ -319,7 +318,8 @@
       --key=/etc/kubernetes/pki/etcd/server.key \
       endpoint health
   register: local_etcd_health
-  retries: 5
+  changed_when: false
+  retries: 8
   delay: 10
   until: local_etcd_health.rc == 0
   ignore_errors: yes

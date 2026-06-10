@@ -25,8 +25,11 @@
   command: kubectl taint nodes {{ item }} node-role.kubernetes.io/control-plane:NoSchedule- --overwrite
   loop: "{{ master_node_list }}"
   when: master_node_list | length > 0
-  ignore_errors: true
   register: taint_removal_result
+  changed_when: "'untainted' in taint_removal_result.stdout"
+  failed_when:
+    - taint_removal_result.rc != 0
+    - "'not found' not in taint_removal_result.stderr"
 
 - name: Display taint removal results
   debug:
@@ -37,8 +40,8 @@
   command: kubectl label node {{ item }} node-role.kubernetes.io/worker= --overwrite
   loop: "{{ master_node_list }}"
   when: master_node_list | length > 0
-  ignore_errors: true
   register: label_addition_result
+  changed_when: "'not labeled' not in label_addition_result.stdout"
 
 - name: Display worker label addition results
   debug:

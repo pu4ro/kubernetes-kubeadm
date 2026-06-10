@@ -22,23 +22,44 @@
     msg: "Current API server certificate expires: {{ current_cert_expiration.stdout }}"
   when: k8s_pki_exists.stat.exists and current_cert_expiration.stdout != "Certificate not found"
 
+- name: Get certificate expiration as epoch
+  shell: |
+    if [[ -f "/etc/kubernetes/pki/apiserver.crt" ]]; then
+      date -d "$(openssl x509 -enddate -noout -in /etc/kubernetes/pki/apiserver.crt | cut -d= -f2)" +%s
+    else
+      echo 0
+    fi
+  register: cert_expiry_epoch
+  changed_when: false
+  when: k8s_pki_exists.stat.exists
+
+- name: Determine if certificates need extension
+  set_fact:
+    certs_need_extension: "{{ ((cert_expiry_epoch.stdout | int) - (ansible_date_time.epoch | int)) < (cert_extend_threshold_days | default(3285) | int * 86400) }}"
+  when: k8s_pki_exists.stat.exists
+
+- name: Skip notice when certificates already extended
+  debug:
+    msg: "Certificates already valid beyond {{ cert_extend_threshold_days | default(3285) }} days. Skipping extension."
+  when: k8s_pki_exists.stat.exists and not (certs_need_extension | default(false) | bool)
+
 - name: Create certificate extension script
   template:
     src: k8s_cert_extend.sh.j2
     dest: /tmp/k8s_cert_extend.sh
     mode: '0755'
-  when: k8s_pki_exists.stat.exists
+  when: k8s_pki_exists.stat.exists and certs_need_extension | bool
 
 - name: Backup current kubernetes configuration
   command: cp -rp /etc/kubernetes /etc/kubernetes.backup-{{ ansible_date_time.date }}
   args:
     creates: /etc/kubernetes.backup-{{ ansible_date_time.date }}
-  when: k8s_pki_exists.stat.exists
+  when: k8s_pki_exists.stat.exists and certs_need_extension | bool
 
 - name: Extend kubernetes certificates to 10 years
   shell: /tmp/k8s_cert_extend.sh {{ cert_extend_mode | default('master') }}
   register: cert_extend_result
-  when: k8s_pki_exists.stat.exists
+  when: k8s_pki_exists.stat.exists and certs_need_extension | bool
   notify:
     - restart kubelet
     - restart kubernetes components
@@ -46,7 +67,7 @@
 - name: Display certificate extension results
   debug:
     var: cert_extend_result.stdout_lines
-  when: k8s_pki_exists.stat.exists
+  when: k8s_pki_exists.stat.exists and certs_need_extension | bool
 
 - name: Verify new certificate expiration
   shell: |

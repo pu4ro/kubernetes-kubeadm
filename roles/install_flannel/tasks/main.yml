@@ -8,6 +8,7 @@
 - name: Check if kube-apiserver container is running
   shell: crictl ps | grep kube-apiserver
   register: kube_apiserver_status
+  changed_when: false
   retries: 30               # 최대 30번 재시도
   delay: 10                 # 각 재시도 사이에 10초 대기
   until: kube_apiserver_status.rc == 0
@@ -40,11 +41,11 @@
     - inventory_hostname == groups['masters'][0]
     - flannel_ds_exists.stdout | default('0') | int > 0
 
-- name: Wait for all flannel pods to be ready
-  shell: >
-    kubectl get pods -n kube-system -o custom-columns=:status.phase --no-headers | grep -v Running || true
-  register: not_running_flannel_pods
-  until: not_running_flannel_pods.stdout == ""
-  retries: 12
-  delay: 10
+- name: Wait for flannel DaemonSet rollout to complete
+  command: kubectl rollout status daemonset/kube-flannel-ds -n kube-flannel --timeout=120s
+  register: flannel_rollout
+  changed_when: false
+  when:
+    - inventory_hostname == groups['masters'][0]
+    - kube_apiserver_status.rc == 0
   become: true

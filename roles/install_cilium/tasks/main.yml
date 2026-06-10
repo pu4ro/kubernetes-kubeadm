@@ -50,6 +50,7 @@
 - name: Check if kube-apiserver container is running
   shell: crictl ps | grep kube-apiserver
   register: kube_apiserver_status
+  changed_when: false
   retries: 30
   delay: 10
   until: kube_apiserver_status.rc == 0
@@ -107,6 +108,7 @@
 - name: Wait for Cilium to be ready
   shell: cilium status --wait
   register: cilium_status_result
+  changed_when: false
   retries: 30
   delay: 10
   until: cilium_status_result.rc == 0

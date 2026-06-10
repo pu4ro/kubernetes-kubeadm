@@ -57,6 +57,10 @@
 # =============================================================================
 # Step 3: DNS Resolution Check
 # =============================================================================
+- name: "[DNS] Remove leftover DNS test pod from previous runs"
+  command: kubectl delete pod validate-dns --ignore-not-found --grace-period=0 --force
+  changed_when: false
+
 - name: "[DNS] Create busybox pod for DNS test"
   command: >
     kubectl run validate-dns --image={{ validation_busybox_image }}
@@ -86,12 +90,16 @@
     success_msg: "Internal DNS resolution is working"
 
 - name: "[DNS] Cleanup busybox pod"
-  command: kubectl delete pod validate-dns --grace-period=0 --force
-  changed_when: true
+  command: kubectl delete pod validate-dns --ignore-not-found --grace-period=0 --force
+  changed_when: false
 
 # =============================================================================
 # Step 4: Pod-to-Pod Communication
 # =============================================================================
+- name: "[Pod-to-Pod] Remove leftover nginx test pods from previous runs"
+  command: kubectl delete pod validate-nginx-1 validate-nginx-2 --ignore-not-found --grace-period=0 --force
+  changed_when: false
+
 - name: "[Pod-to-Pod] Deploy first nginx pod"
   command: >
     kubectl run validate-nginx-1 --image={{ validation_nginx_image }}
@@ -138,12 +146,16 @@
     success_msg: "Pod-to-pod communication is working (HTTP 200)"
 
 - name: "[Pod-to-Pod] Cleanup nginx pods"
-  command: kubectl delete pod validate-nginx-1 validate-nginx-2 --grace-period=0 --force
-  changed_when: true
+  command: kubectl delete pod validate-nginx-1 validate-nginx-2 --ignore-not-found --grace-period=0 --force
+  changed_when: false
 
 # =============================================================================
 # Step 5: External Connectivity Check
 # =============================================================================
+- name: "[External] Remove leftover egress test pod from previous runs"
+  command: kubectl delete pod validate-egress --ignore-not-found --grace-period=0 --force
+  changed_when: false
+
 - name: "[External] Create busybox pod for egress test"
   command: >
     kubectl run validate-egress --image={{ validation_busybox_image }}
@@ -170,8 +182,8 @@
     success_msg: "External connectivity is working ({{ validation_external_url }} reachable)"
 
 - name: "[External] Cleanup egress test pod"
-  command: kubectl delete pod validate-egress --grace-period=0 --force
-  changed_when: true
+  command: kubectl delete pod validate-egress --ignore-not-found --grace-period=0 --force
+  changed_when: false
 
 # =============================================================================
 # Summary

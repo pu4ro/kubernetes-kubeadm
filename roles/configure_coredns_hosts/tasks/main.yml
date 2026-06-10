@@ -44,9 +44,9 @@
           all_hosts: {{ all_hosts }}
           all_hosts length: {{ all_hosts | length }}
 
-    - name: Write new Corefile to temporary file
-      copy:
-        content: |
+    - name: Render desired Corefile content
+      set_fact:
+        desired_corefile: |
           .:53 {
               errors
               health {
@@ -75,7 +75,12 @@
               reload
               loadbalance
           }
+
+    - name: Write new Corefile to temporary file
+      copy:
+        content: "{{ desired_corefile }}"
         dest: /tmp/new-corefile-content
+      when: current_corefile | trim != desired_corefile | trim
 
     - name: Update CoreDNS ConfigMap using file replacement
       shell: |
@@ -85,6 +90,7 @@
         sed -i 's/{{ coredns_configmap_name }}-temp/{{ coredns_configmap_name }}/' /tmp/new-configmap.yaml
         kubectl replace -f /tmp/new-configmap.yaml
       register: configmap_update
+      when: current_corefile | trim != desired_corefile | trim
 
     - name: Clean up temporary files
       file:
@@ -97,12 +103,12 @@
 
     - name: Restart CoreDNS pods to apply new configuration
       command: kubectl delete pods -n {{ coredns_namespace }} -l k8s-app=kube-dns
-      when: configmap_update is succeeded
+      when: configmap_update is changed
       register: pod_restart
 
     - name: Wait for CoreDNS pods to be ready
       command: kubectl wait --for=condition=ready pod -l k8s-app=kube-dns -n {{ coredns_namespace }} --timeout={{ kubectl_timeout }}
-      when: configmap_update is succeeded
+      when: configmap_update is changed
       register: wait_result
       until: wait_result.rc == 0
       retries: 6

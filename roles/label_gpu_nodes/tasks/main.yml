@@ -30,8 +30,8 @@
   when:
     - has_nvidia_gpu | default(false) | bool
     - enable_gpu_node_labels | default(true) | bool
-  changed_when: true
   register: label_result
+  changed_when: "'not labeled' not in label_result.stdout"
 
 - name: Display label result
   debug:

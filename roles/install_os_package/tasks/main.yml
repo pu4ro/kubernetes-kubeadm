@@ -180,6 +180,7 @@
         src: "/tmp/containerd-{{ containerd_version }}-linux-{{ containerd_binary_arch }}.tar.gz"
         dest: /usr/local
         remote_src: yes
+        creates: /usr/local/bin/containerd
 
     - name: Download runc binary
       get_url:
@@ -384,10 +385,19 @@
   ignore_errors: true
 
 # Remove helm secrets plugin after helm/helmfile installation
+- name: Check installed helm plugins
+  shell: helm plugin list
+  register: helm_plugin_list
+  changed_when: false
+  failed_when: false
+  when: inventory_hostname in groups['installs']
+  become_user: root
+
 - name: Remove helm secrets plugin
   shell: helm plugin remove secrets
-  when: inventory_hostname in groups['installs']
-  ignore_errors: true
+  when:
+    - inventory_hostname in groups['installs']
+    - "'secrets' in helm_plugin_list.stdout | default('')"
   become_user: root
 
 # GPU Detection (no driver installation)
