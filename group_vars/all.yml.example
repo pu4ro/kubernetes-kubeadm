@@ -81,14 +81,6 @@ containerd_limit_nofile: 100000         # systemd LimitNOFILE
 containerd_data_base_dir: ""            # containerd data 디렉토리 (빈 값=기본 /var/lib/containerd)
 
 # 로컬 레지스트리 (단순 registry:2 컨테이너)
-enable_local_registry: false            # 로컬 registry:2 컨테이너 실행
-local_registry_image: "registry:2"      # registry 이미지 태그
-local_registry_image_tar: "/root/docker.tar.gz"  # 오프라인 시 사전 다운로드된 tar 경로
-local_registry_container_name: "local-registry"  # 컨테이너 이름
-local_registry_host_port: 80            # 호스트 포트
-local_registry_container_port: 5000     # 컨테이너 포트
-local_registry_data_dir: "/opt/local-registry/data"  # 레지스트리 데이터 경로
-local_registry_additional_args: []      # 추가 nerdctl run 인자
 
 # 비안전(insecure) 레지스트리 (HTTP 또는 self-signed)
 insecure_registries: []
@@ -226,7 +218,7 @@ nvidia_driver_version: "570.124.06"     # 드라이버 버전
 nvidia_driver_download_url: "http://repo.example.com/rhel-repo2"  # .run 파일 호스팅 URL
 nvidia_driver_filename: "NVIDIA-Linux-x86_64-{{ nvidia_driver_version }}.run"
 nvidia_driver_install_options: "--silent --no-questions --ui=none --disable-nouveau"
-fix_nvidia_toolkit_path: false          # .run 설치 시 toolkit 경로 보정 (/usr/local/nvidia/toolkit → /usr/bin)
+enable_fix_nvidia_toolkit_path: false          # .run 설치 시 toolkit 경로 보정 (/usr/local/nvidia/toolkit → /usr/bin)
 enable_nvidia_containerd_config: false  # containerd에 NVIDIA runtime 등록 (GPU 자동 감지)
 enable_gpu_node_labels: true            # GPU 감지 노드에 gpu=on 라벨 자동 부여
 
@@ -269,9 +261,6 @@ ca_certificates: []
 # 다중 RHEL 저장소(rhel_repos)는 priority로 우선순위 제어.
 # ════════════════════════════════════════════════════════════════
 # 오프라인 미러 URL (origin 변경 시 사용)
-repo_url:
-  centos: "http://repo.example.com/repo/"
-  ubuntu: "http://repo.example.com/ubuntu_22.04.5"
 
 # Ubuntu APT 커스텀 저장소
 enable_ubuntu_repo: false               # 커스텀 Ubuntu APT 저장소 사용

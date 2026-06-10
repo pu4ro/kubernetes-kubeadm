@@ -48,14 +48,6 @@ kube_vip_svc_enable: false         # Enable/disable kube-vip service load balanc
 containerd_version: "2.2.0"          # Used for package version pinning and binary install
 containerd_limit_nproc: 100000      # systemd LimitNPROC for containerd.service
 containerd_limit_nofile: 100000     # systemd LimitNOFILE for containerd.service
-enable_local_registry: false
-local_registry_image: "registry:2"
-local_registry_image_tar: "/root/docker.tar.gz"
-local_registry_container_name: "local-registry"
-local_registry_host_port: 80
-local_registry_container_port: 5000
-local_registry_data_dir: "/opt/local-registry/data"
-local_registry_additional_args: []
 
 # Containerd Data Directory Configuration
 # Set custom data directory for containerd (default: /var/lib/containerd)
@@ -63,7 +55,6 @@ local_registry_additional_args: []
 # Example: /data/containerd/worker1, /data/containerd/worker2
 # Leave empty or comment out to use default /var/lib/containerd
 containerd_data_base_dir: ""  # Base directory for containerd data
-# containerd_data_base_dir: ""  # Use this to disable custom path and use default
 
 # System Configuration
 set_timezone: Asia/Seoul
@@ -139,6 +130,9 @@ parallel_execution:
   package_installation: 0   # How many hosts for apt/yum operations simultaneously
   kubernetes_installation: 0  # How many hosts for kubernetes installation (0 = all parallel)
 
+# Throttle expression reused by install_os_package apt tasks (package_installation=0 => unlimited)
+package_install_throttle: "{{ 999 if (parallel_execution | default({})).package_installation | default(1) == 0 else (parallel_execution | default({})).package_installation | default(1) }}"
+
 # Example configurations:
 # For fast installation on reliable network (all parallel):
 # parallel_execution:
@@ -157,11 +151,6 @@ parallel_execution:
 #   system_preparation: 1
 #   package_installation: 1
 #   kubernetes_installation: 1
-
-# Package Repository URLs (for offline installation)
-repo_url:
-  centos: "http://192.168.1.10:8080/repo/"
-  ubuntu: "http://192.168.134.102/ubuntu_22.04.5"
 
 # Ubuntu APT Repository Configuration
 # Enable this to use custom Ubuntu repository (local or HTTP)
@@ -295,7 +284,7 @@ nvidia_driver_install_options: "--silent --no-questions --ui=none --disable-nouv
 # Or with Makefile:
 #   make fix-nvidia-toolkit-path
 #
-fix_nvidia_toolkit_path: false  # Enable to fix NVIDIA toolkit path (needed for .run file installs)
+enable_fix_nvidia_toolkit_path: false  # Enable to fix NVIDIA toolkit path (needed for .run file installs)
 
 # GPU Operator Configuration (optional, for Kubernetes GPU support)
 enable_gpu_operator: false
@@ -408,9 +397,10 @@ enable_pod_node_selector: true                        # Enable/disable PodNodeSe
 #   ansible-playbook site.yml --tags registry-mirror    # Configure mirrors
 #
 enable_registry_mirror: true                          # Enable/disable registry mirror configuration
-registry_mirror_host: "cr.makina.rocks"                # Internal registry host
-registry_mirror_user: "mrx.dev"                        # Registry username
-registry_mirror_password: "GMflzHdAeR3KhGgXoecXR3lTKO0lSX5O"  # Registry password
+registry_mirror_host: "cr.makina.rocks"                # Internal registry host (must match a docker_registries entry)
+# Credentials derived from the matching docker_registries entry to avoid duplicating secrets
+registry_mirror_user: "{{ (docker_registries | selectattr('registry', 'equalto', registry_mirror_host) | map(attribute='username') | first) }}"
+registry_mirror_password: "{{ (docker_registries | selectattr('registry', 'equalto', registry_mirror_host) | map(attribute='password') | first) }}"
 registry_mirror_path_prefix: ""                        # Optional path prefix (e.g., "myproject")
 
 # Registry Mappings (External Registry -> Internal Repository)

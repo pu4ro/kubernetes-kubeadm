@@ -62,9 +62,10 @@
     state: restarted
   when: hosts_toml_deployed is changed
 
-- name: Wait for containerd to be ready
-  pause:
-    seconds: 5
+- name: Wait for containerd socket to be ready
+  wait_for:
+    path: /run/containerd/containerd.sock
+    timeout: 30
   when: hosts_toml_deployed is changed
 
 - name: Verify containerd is running

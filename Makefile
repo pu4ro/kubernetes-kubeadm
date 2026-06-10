@@ -239,7 +239,6 @@ tag-k8s-repo: ## 공식 K8s/containerd 패키지 리포지토리 설정 (pkgs.k8
 tag-containerd-binary: ## containerd 바이너리 직접 설치 (GitHub releases에서 다운로드)
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags containerd-binary-install
 
-tag-local-registry: registry-start ## [DEPRECATED] registry-start 사용 권장
 
 ##@ 호스트별 설치
 
@@ -445,7 +444,7 @@ check-nvidia-driver: ## NVIDIA 드라이버 설치 확인 (nvidia-smi)
 
 fix-nvidia-toolkit-path: ## NVIDIA toolkit 경로 수정 (/usr/local/nvidia/toolkit -> /usr/bin)
 	@echo "==> NVIDIA toolkit 경로 수정 중..."
-	@echo "주의: group_vars/all.yml에서 fix_nvidia_toolkit_path: true 설정 확인"
+	@echo "주의: group_vars/all.yml에서 enable_fix_nvidia_toolkit_path: true 설정 확인"
 	ansible-playbook -i $(INVENTORY) $(PLAYBOOK) --tags fix-nvidia-toolkit-path
 
 reboot-gpu-nodes: ## GPU 노드 재부팅 (NVIDIA 드라이버 활성화)

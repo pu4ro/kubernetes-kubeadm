@@ -20,7 +20,7 @@
     - { role: install_containerd, tags: ['base', 'container'] }
     - { role: configure_registry_mirror, tags: ['registry-mirror'], when: enable_registry_mirror | default(false) }
     - { role: install_nvidia_driver, tags: ['nvidia', 'install-nvidia-driver'], when: enable_nvidia_driver_install | default(false) }
-    - { role: fix_nvidia_toolkit_path, tags: ['nvidia', 'fix-nvidia-toolkit-path'], when: fix_nvidia_toolkit_path | default(false) }
+    - { role: fix_nvidia_toolkit_path, tags: ['nvidia', 'fix-nvidia-toolkit-path'], when: enable_fix_nvidia_toolkit_path | default(false) }
     - { role: setup-docker-credentials, tags: ['docker-credentials'] }
 
 # Phase 2: Kubernetes Installation
@@ -91,11 +91,3 @@
   serial: 1  # Execute one master at a time to avoid API server downtime
   roles:
     - { role: configure_oidc_apiserver, tags: ['oidc-apiserver'], when: enable_oidc_apiserver | default(false) }
-
-# Phase 8: Harbor Project Setup (Final)
-# Disabled: Harbor is not available in this environment
-# - name: Harbor Project Setup
-#   hosts: all
-#   become: yes
-#   roles:
-#     - { role: harbor-project-setup, tags: ['harbor-setup'] }

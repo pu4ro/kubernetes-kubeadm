@@ -140,11 +140,6 @@
     daemon_reload: yes
   tags: ['container', 'containerd-config']
 
-- name: Wait for containerd to be ready after restart
-  pause:
-    seconds: 5
-  tags: ['container', 'containerd-config']
-
 - name: Set CONTAINERD_NAMESPACE environment variable globally
   lineinfile:
     path: /etc/environment

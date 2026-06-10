@@ -556,7 +556,7 @@ nvidia_driver_version: "570.124.06"
 nvidia_driver_download_url: "http://mirror.example.com/nvidia-drivers"
 
 # 2. Toolkit path fix (after .run install, if needed)
-fix_nvidia_toolkit_path: true
+enable_fix_nvidia_toolkit_path: true
 
 # 3. Add NVIDIA runtime to containerd config
 enable_nvidia_containerd_config: true

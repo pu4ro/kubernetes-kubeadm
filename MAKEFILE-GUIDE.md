@@ -119,7 +119,6 @@ make tag-networking
 | `make tag-coredns` | Master | CoreDNS 설정 |
 | `make tag-harbor` | 모든 노드 | Harbor 설정 |
 | `make tag-scheduling` | Master | Master 스케줄링 |
-| `make tag-local-registry` | Installs | 로컬 레지스트리 |
 
 ### 호스트별 명령어
 
@@ -292,17 +291,6 @@ make install-ha
 make check-cluster
 ```
 
-### 예제 9: 로컬 레지스트리 배포
-
-```bash
-# group_vars/all.yml:
-#   enable_local_registry: true
-
-make tag-local-registry
-
-# 확인
-ssh master1 "nerdctl ps | grep registry"
-```
 
 ### 예제 10: GPU 노드 설정
 

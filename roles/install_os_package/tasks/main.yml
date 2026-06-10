@@ -84,15 +84,18 @@
       ansible.builtin.set_fact:
         k8s_minor_version: "{{ kubernetes_version | regex_replace('^v?(\\d+\\.\\d+).*', '\\1') }}"
 
+    - name: Create /etc/apt/keyrings directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+      when:
+        - ansible_os_family == "Debian"
+        - (enable_official_k8s_repo | bool) or (enable_official_containerd_repo | bool)
+
     # Block A: K8s repo (Ubuntu/Debian)
     - name: Add official Kubernetes APT repository (Debian/Ubuntu)
       block:
-        - name: Create /etc/apt/keyrings directory
-          ansible.builtin.file:
-            path: /etc/apt/keyrings
-            state: directory
-            mode: '0755'
-
         - name: Download Kubernetes APT GPG key
           ansible.builtin.get_url:
             url: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_minor_version }}/deb/Release.key"
@@ -123,12 +126,6 @@
     # Block C: containerd repo (Ubuntu/Debian)
     - name: Add official containerd APT repository (Debian/Ubuntu)
       block:
-        - name: Create /etc/apt/keyrings directory for Docker
-          ansible.builtin.file:
-            path: /etc/apt/keyrings
-            state: directory
-            mode: '0755'
-
         - name: Download Docker APT GPG key
           ansible.builtin.get_url:
             url: "https://download.docker.com/linux/ubuntu/gpg"
@@ -168,7 +165,7 @@
   retries: 5
   delay: 30
   until: apt_cache_result is succeeded
-  throttle: "{{ 999 if (parallel_execution | default({})).package_installation | default(1) == 0 else (parallel_execution | default({})).package_installation | default(1) }}"
+  throttle: "{{ package_install_throttle }}"
 
 # Containerd binary direct install from GitHub releases
 - block:
@@ -261,7 +258,7 @@
   retries: 5
   delay: 30
   until: apt_install_result is succeeded
-  throttle: "{{ 999 if (parallel_execution | default({})).package_installation | default(1) == 0 else (parallel_execution | default({})).package_installation | default(1) }}"
+  throttle: "{{ package_install_throttle }}"
 
 - name: Install optional packages on Debian/Ubuntu (nerdctl, buildkit)
   apt:
@@ -275,7 +272,7 @@
   delay: 30
   until: apt_optional_install_result is succeeded
   ignore_errors: yes
-  throttle: "{{ 999 if (parallel_execution | default({})).package_installation | default(1) == 0 else (parallel_execution | default({})).package_installation | default(1) }}"
+  throttle: "{{ package_install_throttle }}"
 
 - name: Install Kubernetes packages with version pin (RHEL)
   yum:

@@ -20,7 +20,7 @@ This role is **only needed** when:
 
 ## Variables
 
-### `fix_nvidia_toolkit_path`
+### `enable_fix_nvidia_toolkit_path`
 
 Enable or disable fixing NVIDIA toolkit path in containerd config.
 
@@ -28,7 +28,7 @@ Enable or disable fixing NVIDIA toolkit path in containerd config.
 
 ```yaml
 # In group_vars/all.yml
-fix_nvidia_toolkit_path: true  # Enable to fix NVIDIA toolkit path
+enable_fix_nvidia_toolkit_path: true  # Enable to fix NVIDIA toolkit path
 ```
 
 ## Usage
@@ -51,7 +51,7 @@ ansible-playbook -i inventory.ini site.yml --tags fix-nvidia-toolkit-path
 
 1. Enable in `group_vars/all.yml`:
    ```yaml
-   fix_nvidia_toolkit_path: true
+   enable_fix_nvidia_toolkit_path: true
    ```
 
 2. Run the full playbook:
