@@ -35,7 +35,7 @@
   register: containerd_config_v2
   when:
     - docker_registries is defined
-    - containerd_major_minor_creds is version('2.2', '<')
+    - containerd_major_minor_creds is version('2.1', '<')
   tags:
     - docker-credentials
     - containerd-restore
@@ -51,7 +51,7 @@
   register: containerd_config_v3
   when:
     - docker_registries is defined
-    - containerd_major_minor_creds is version('2.2', '>=')
+    - containerd_major_minor_creds is version('2.1', '>=')
   tags:
     - docker-credentials
     - containerd-restore

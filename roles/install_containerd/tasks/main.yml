@@ -100,25 +100,26 @@
   tags: ['container', 'containerd-config']
 
 # Generate containerd configuration using templates
-- name: Deploy containerd configuration (version < 2.2)
+- name: Deploy containerd configuration (containerd < 2.1, legacy grpc.v1.cri)
   template:
     src: config_v2.toml.j2
     dest: /etc/containerd/config.toml
     owner: root
     group: root
     mode: '0644'
-  when: containerd_major_minor is version('2.2', '<')
+  when: containerd_major_minor is version('2.1', '<')
   register: containerd_config_v2_result
   tags: ['container', 'containerd-config']
 
-- name: Deploy containerd configuration (version >= 2.2)
+# containerd 2.1+ uses the cri.v1 plugin with certs.d (config_path) registry hosts.
+- name: Deploy containerd configuration (containerd >= 2.1, certs.d / cri.v1)
   template:
     src: config_v3.toml.j2
     dest: /etc/containerd/config.toml
     owner: root
     group: root
     mode: '0644'
-  when: containerd_major_minor is version('2.2', '>=')
+  when: containerd_major_minor is version('2.1', '>=')
   register: containerd_config_v3_result
   tags: ['container', 'containerd-config']
 

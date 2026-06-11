@@ -67,9 +67,11 @@
               }
           {% endif %}
               prometheus :9153
+          {% if coredns_enable_forward | default(false) %}
               forward . /etc/resolv.conf {
                  max_concurrent 1000
               }
+          {% endif %}
               cache 30
               loop
               reload
