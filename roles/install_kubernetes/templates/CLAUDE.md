@@ -7,5 +7,6 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #910 | 10:54 AM | 🔵 | Cluster validation role behavior documented for README and runbook references | ~795 |
+| #905 | 10:52 AM | 🔵 | Kubeadm API version auto-detection mechanism verified in initialization template | ~623 |
+| #892 | 10:38 AM | 🔵 | Kubeadm API version auto-detection confirmed in initialization template | ~362 |
 </claude-mem-context>
