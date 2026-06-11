@@ -217,7 +217,7 @@ version = 2
       [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
 {% if containerd_registry_auth is defined and containerd_registry_auth is not none and containerd_registry_auth | length > 0 %}
 {% for registry_config in containerd_registry_auth %}
-{% if registry_config.insecure_skip_verify | default(true) %}
+{% if registry_config.plain_http | default(false) %}
       [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{ registry_config.registry }}"]
         endpoint = ["http://{{ registry_config.registry }}"]
 {% else %}

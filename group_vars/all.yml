@@ -506,8 +506,13 @@ package_name_map:
 # Usage with tags:
 #   ansible-playbook site.yml --tags ca-certificates    # Install CA certificates
 #
-enable_ca_certificates: false                          # Enable/disable CA certificate installation
-ca_certificates: []
+enable_ca_certificates: true                           # Enable/disable CA certificate installation
+# CA pulled from the registry host's /data/cert/ca.crt (read on the Ansible controller),
+# then distributed to every node's trust store as cr.makina.rocks.crt.
+ca_certificates:
+  - name: cr.makina.rocks
+    content: "{{ lookup('file', registry_ca_cert_path) }}"
+registry_ca_cert_path: "/data/cert/ca.crt"             # Controller-local path to the registry root CA
   # Example configurations:
   # - name: "internal-ca"                              # Certificate name (used for filename)
   #   content: |                                        # Inline PEM certificate content
