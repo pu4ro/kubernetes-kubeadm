@@ -1,0 +1,7 @@
+{
+  "auths": {
+{% for r in docker_registries | selectattr('username', 'defined') | rejectattr('username', 'equalto', '') | list %}
+    "{{ r.registry }}": { "auth": "{{ (r.username ~ ':' ~ r.password) | b64encode }}" }{{ "," if not loop.last }}
+{% endfor %}
+  }
+}

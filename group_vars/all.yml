@@ -245,7 +245,7 @@ containerd_registry_auth:
 #
 enable_custom_image_repository: true                   # Enable/disable custom image repository
 k8s_image_repository: "cr.makina.rocks/external-hub/kubernetes"           # Custom registry for k8s components
-coredns_image_repository: "cr.makina.rocks/external-hub/kubernetes/coredns"  # Custom registry for CoreDNS
+coredns_image_repository: "cr.makina.rocks/external-hub/kubernetes"  # CoreDNS parent path; kubeadm appends /coredns
 
 # Kubernetes Pause Container Image
 # Pause container versions by Kubernetes version:
@@ -437,12 +437,11 @@ ubuntu_packages:
   - wget
   - k9s
 
-# Ubuntu/Debian Optional Packages (installed when enabled)
-# Enable with: enable_nerdctl_buildkit: true
-enable_nerdctl_buildkit: false  # Enable/disable nerdctl and buildkit installation
-ubuntu_optional_packages:
-  - nerdctl
-  - buildkit
+# Container tooling
+# nerdctl is a required runtime/debug CLI (always installed by default).
+# buildkit is optional (only needed for in-cluster image building).
+enable_nerdctl: true   # nerdctl: required (set false only to skip)
+enable_buildkit: false # buildkit: optional
 
 # Helmfile Installation (optional, master nodes only)
 # Enable with: enable_helmfile: true

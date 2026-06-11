@@ -68,31 +68,6 @@
     - docker-credentials
     - restart-containerd
 
-- name: Perform nerdctl login for HTTPS registries
-  shell: |
-    echo "{{ item.password }}" | nerdctl login {{ item.registry }} --username "{{ item.username }}" --password-stdin
-  loop: "{{ docker_registries }}"
-  when: 
-    - docker_registries is defined
-    - item.protocol | default('https') == 'https'
-  no_log: true
-  tags:
-    - docker-credentials
-    - nerdctl-login
-
-- name: Perform nerdctl login for HTTP registries (insecure)
-  shell: |
-    nerdctl login -u "{{ item.username }}" -p "{{ item.password }}" {{ item.registry }} --insecure-registry
-  loop: "{{ docker_registries }}"
-  when: 
-    - docker_registries is defined
-    - item.protocol | default('https') == 'http'
-  no_log: true
-  ignore_errors: true
-  tags:
-    - docker-credentials
-    - nerdctl-login
-
 - name: Check if kubelet service exists
   stat:
     path: /usr/lib/systemd/system/kubelet.service
@@ -107,16 +82,18 @@
   tags:
     - docker-credentials
 
-- name: Copy nerdctl config.json to kubelet directory
-  copy:
-    src: ~/.docker/config.json
+- name: Deploy kubelet image-pull credentials (config.json)
+  template:
+    src: kubelet-config.json.j2
     dest: /var/lib/kubelet/config.json
     owner: root
     group: root
     mode: '0600'
-    remote_src: yes
   register: kubelet_config_copy
-  when: kubelet_directory.stat.exists
+  no_log: true
+  when:
+    - docker_registries is defined
+    - kubelet_directory.stat.exists
   tags:
     - docker-credentials
 
