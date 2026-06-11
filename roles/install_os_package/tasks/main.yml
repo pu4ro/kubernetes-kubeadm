@@ -456,3 +456,19 @@
     line: 'export PATH="/usr/local/bin:$PATH"'
     state: present
     create: yes
+
+- name: Add current directory (.) to PATH in bashrc
+  lineinfile:
+    path: /root/.bashrc
+    line: 'export PATH="$PATH:."'
+    state: present
+    create: yes
+
+- name: Add current directory (.) to PATH system-wide (profile.d)
+  copy:
+    dest: /etc/profile.d/99-current-dir-path.sh
+    content: |
+      export PATH="$PATH:."
+    owner: root
+    group: root
+    mode: '0644'
