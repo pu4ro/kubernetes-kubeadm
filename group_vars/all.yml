@@ -510,8 +510,11 @@ enable_ca_certificates: true                           # Enable/disable CA certi
 # then distributed to every node's trust store as cr.makina.rocks.crt.
 ca_certificates:
   - name: cr.makina.rocks
-    content: "{{ lookup('file', registry_ca_cert_path) }}"
-registry_ca_cert_path: "/data/cert/ca.crt"             # Controller-local path to the registry root CA
+    # errors='ignore' makes this optional: if the CA file is absent on the
+    # controller the lookup returns "" instead of failing the play, and the
+    # install_ca_certificates role skips entries with empty content.
+    content: "{{ lookup('file', registry_ca_cert_path, errors='ignore') }}"
+registry_ca_cert_path: "/data/cert/ca.crt"             # Controller-local path to the registry root CA (optional)
   # Example configurations:
   # - name: "internal-ca"                              # Certificate name (used for filename)
   #   content: |                                        # Inline PEM certificate content

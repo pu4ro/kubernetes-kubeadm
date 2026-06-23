@@ -24,7 +24,7 @@
     owner: root
     group: root
     mode: '0644'
-  loop: "{{ ca_certificates | selectattr('content', 'defined') | list }}"
+  loop: "{{ ca_certificates | selectattr('content', 'defined') | rejectattr('content', 'equalto', '') | list }}"
   loop_control:
     label: "{{ item.name }}"
   register: ca_installed_debian_content
@@ -37,7 +37,7 @@
     owner: root
     group: root
     mode: '0644'
-  loop: "{{ ca_certificates | selectattr('content', 'defined') | list }}"
+  loop: "{{ ca_certificates | selectattr('content', 'defined') | rejectattr('content', 'equalto', '') | list }}"
   loop_control:
     label: "{{ item.name }}"
   register: ca_installed_redhat_content
